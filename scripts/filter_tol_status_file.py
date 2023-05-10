@@ -33,16 +33,11 @@ def fixup_status_tsv_file(file):
         row = line.rstrip("\r\n").split("\t")
         row[0] = str(row_n)
 
-        row_cols = len(row)
-        if row_cols != col_count:
+        if len(row) != col_count:
             raise ValueError(
-                f"Row {row_n} has {row_cols} columns,"
+                f"Row {row_n} has {len(row)} columns,"
                 f" but header has {col_count} columns"
             )
-
-        # Pad row to the same length as the header to
-        # silence warnings when importing into SQLite
-        row.extend([""] * (col_count - row_cols))
 
         fixed_io.write("\t".join(row) + "\n")
 
