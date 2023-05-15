@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
+import inspect
 from subprocess import Popen, PIPE
-from pathlib import Path
 
 
 def main():
-    lucidchart_sql = """
+    lucidchart_sql = inspect.cleandoc(
+        """
         SELECT 'postgresql' AS dbms
           , t.table_catalog
           , t.table_schema
@@ -36,7 +37,8 @@ def main():
           AND r.unique_constraint_name = k2.constraint_name
         WHERE t.TABLE_TYPE = 'BASE TABLE'
           AND t.table_schema NOT IN('information_schema', 'pg_catalog')
-    """
+        """
+    )
 
     # Rename data types for more compact text in ERD
     data_type_rename = {
@@ -46,17 +48,36 @@ def main():
     }
 
     # Not interested in audit log columns in diagram
-    skip_column = {"created_by", "created_at", "last_modified_by", "last_modified_at", "history"}
+    skip_column = {
+        "created_by",
+        "created_at",
+        "last_modified_by",
+        "last_modified_at",
+        "history",
+    }
 
+    # LucidChart has the suggested "SET enable_nestloop=off" command for psql.
+    # It makes the query around 15 times faster. From the PostgreSQL documentation:
+    #
+    # enable_nestloop (boolean)
+    #
+    #   Enables or disables the query planner's use of nested-loop join plans.
+    #   It is impossible to suppress nested-loop joins entirely, but turning
+    #   this variable off discourages the planner from using one if there are
+    #   other methods available. The default is on.
     psql_cmd = [
         "psql",
         "-c",
-        f"SET enable_nestloop=0; COPY ({lucidchart_sql}) TO STDOUT WITH NULL AS ''",
+        f"SET enable_nestloop=off; COPY ({lucidchart_sql}) TO STDOUT WITH NULL AS ''",
     ]
-    with Popen(psql_cmd, stdout=PIPE, text=True).stdout as psql_pipe:
-        head = psql_pipe.readline()
-        for row_str in psql_pipe:
-            row = row_str.rstrip().split("\t")
+
+    with Popen(psql_cmd, stdout=PIPE, text=True) as psql_pipe:
+        for row_str in psql_pipe.stdout:
+            row = row_str.rstrip("\r\n").split("\t")
+
+            # Skip header output from psql
+            if len(row) != 12:
+                continue
 
             # Skip single letter tables "A".."H"
             if len(row[3]) == 1:
