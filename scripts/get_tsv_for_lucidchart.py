@@ -46,7 +46,7 @@ def main():
     }
 
     # Not interested in audit log columns in diagram
-    skip_column = {"created_by", "created_at", "last_modified_by", "last_modified_at"}
+    skip_column = {"created_by", "created_at", "last_modified_by", "last_modified_at", "history"}
 
     psql_cmd = [
         "psql",

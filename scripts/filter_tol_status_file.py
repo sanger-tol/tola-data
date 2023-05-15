@@ -26,7 +26,7 @@ def fixup_status_tsv_file(file):
     for line in input_io:
         row_n += 1
 
-        # Skip blanks lines
+        # Skip blank lines
         if not re.search(r"\w", line):
             continue
 
