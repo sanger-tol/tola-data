@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -19,7 +20,7 @@ class Assembly(Base):
     description = Column(String)
 
     # Sources are assemblies for which there is a row in assembly_source
-    # with this assembly's ID
+    # with this instance's assembly_id
     source_assembly_assn = relationship(
         "AssemblySource",
         primaryjoin="Assembly.assembly_id == AssemblySource.assembly_id",
@@ -57,7 +58,8 @@ class AssemblySource(Base):
 
 
 def main():
-    # print(f"{Assembly.__table__!r}")
+    # inheritance(Assembly)
+    test_creation_of_all_classes()
     engine = create_engine("sqlite:///assembly.sqlite", echo=False)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
@@ -66,32 +68,37 @@ def main():
     assembly_source_factory(ssn)
     ssn.commit()
 
-    asm_1 = ssn.query(Assembly).filter_by(assembly_id=1).first()
-    print(asm_1.name, asm_1.description)
-    for cmp in asm_1.components:
+    # Fetch assembly #11 and print its components
+    asm_11 = ssn.query(Assembly).filter_by(assembly_id=11).first()
+    print(asm_11.name, asm_11.description)
+    for cmp in asm_11.components:
         print("Component: ", cmp.name, cmp.component_type_id, cmp.description)
 
-    asm_5 = ssn.query(Assembly).filter_by(assembly_id=5).first()
-    print(asm_5.name, asm_5.description)
-    for src in asm_5.sources:
+    # Fetch assembly #15 and print its sources
+    asm_15 = ssn.query(Assembly).filter_by(assembly_id=15).first()
+    print(asm_15.name, asm_15.description)
+    for src in asm_15.sources:
         print("Source: ", src.name, src.component_type_id, src.description)
 
 
 def assembly_factory(ssn):
     fields = "assembly_id", "name", "component_type_id", "description"
     data = [
+        #
         # hifiasm assembly produces three components
-        (1, "hifiasm", None, "Initial assembly"),
-        (2, "hifiasm", "primary", "Primary haplotype component assembly"),
-        (3, "hifiasm", "alternate", "Alternate haplotype component assembly"),
-        (4, "hifiasm", "mitochondrion", "Mitochondrion component assembly"),
+        (11, "hifiasm", None, "Initial assembly"),
+        (12, "hifiasm", "primary", "Primary haplotype component assembly"),
+        (13, "hifiasm", "alternate", "Alternate haplotype component assembly"),
+        (14, "hifiasm", "mitochondrion", "Mitochondrion component assembly"),
+        #
         # purge_dups assembly
-        (5, "purge_dups", None, "purge_dups assembly from hifiasm"),
-        (6, "purge_dups", "primary", "purge_dups assembly from hifiasm"),
-        (7, "purge_dups", "alternate", "purge_dups assembly from hifiasm"),
+        (15, "purge_dups", None, "purge_dups assembly from hifiasm"),
+        (16, "purge_dups", "primary", "purge_dups assembly from hifiasm"),
+        (17, "purge_dups", "alternate", "purge_dups assembly from hifiasm"),
+        #
         # scaffolding assembly
-        (8, "yahs", "primary", "yahs scaffolding assembly from purge_dups"),
-        (9, "yahs", "alternate", "yahs scaffolding assembly from purge_dups"),
+        (18, "yahs", "primary", "yahs scaffolding assembly from purge_dups"),
+        (19, "yahs", "alternate", "yahs scaffolding assembly from purge_dups"),
     ]
     build_and_merge(ssn, Assembly, fields, data)
 
@@ -99,20 +106,24 @@ def assembly_factory(ssn):
 def assembly_source_factory(ssn):
     fields = "assembly_id", "source_assembly_id"
     data = [
+        #
         # Connect the three components of the hifiasm assembly
-        (2, 1),
-        (3, 1),
-        (4, 1),
+        (12, 11),
+        (13, 11),
+        (14, 11),
+        #
         # Connect the two sources of the purge_dups assembly
-        (5, 2),
-        (5, 3),
+        (15, 12),
+        (15, 13),
+        #
         # Connect the two components of the purge_dups assembly
-        (6, 5),
-        (7, 5),
+        (16, 15),
+        (17, 15),
+        #
         # Connect each of the yahs scaffolding assembly to its
         # purge_dups component source
-        (8, 6),
-        (9, 7),
+        (18, 16),
+        (19, 17),
     ]
     build_and_merge(ssn, AssemblySource, fields, data)
 
@@ -120,9 +131,20 @@ def assembly_source_factory(ssn):
 def build_and_merge(ssn, Class, fields, data):
     for row in data:
         obj = Class()
-        for fld, val in zip(fields, row):
+        for fld, val in zip(fields, row, strict=True):
             setattr(obj, fld, val)
         ssn.merge(obj)
+
+
+def inheritance(obj):
+    for cls in obj.__mro__:
+        print(f"{cls.__name__}: {cls.__module__}", file=sys.stderr)
+
+
+def test_creation_of_all_classes():
+    for mapr in Base.registry.mappers:
+        mapr_class = mapr.class_
+        t = mapr_class()
 
 
 if __name__ == "__main__":
