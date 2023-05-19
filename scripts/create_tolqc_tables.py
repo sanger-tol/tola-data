@@ -1,29 +1,41 @@
 #!/usr/bin/env python3
 
 import inspect
+import pathlib
 import re
 import sys
 
 
 def main(table_names):
-
     for name in table_names:
         snake, camel = snake_and_camel(name)
         templates = file_templates(snake, camel)
-        for file, content in templates.items():
-            print(f"{file}:\n{content}\n")
+        for root, conf in templates.items():
+            create_files(root, snake, conf)
 
 
-def snake_and_camel(str):
-    words = [x for x in re.findall(r"([A-Z]*[a-z]*)", str) if len(x)]
+def create_files(root, snake, conf):
+    root_dir = pathlib.Path(root)
+    root_dir.mkdir(exist_ok=True)
+
+    source = root_dir / f"{snake}.py"
+    with source.open(mode="x") as source_fh:
+        source_fh.writelines(conf["content"] + "\n")
+
+    init = root_dir / "__init__.py"
+    with init.open(mode="a") as init_fh:
+        init_fh.writelines(conf["init_line"] + "\n")
+
+
+def snake_and_camel(name):
+    words = [x for x in re.findall(r"([A-Z]*[a-z]*)", name) if len(x)]
     snake = "_".join(x.lower() for x in words)
     camel = "".join(x.title() for x in words)
     return snake, camel
 
 
 def file_templates(snake, camel):
-
-    # header indentation needs to match files
+    # header indentation needs to match content in templates dict
     header = """
             # SPDX-FileCopyrightText: 2023 Genome Research Ltd.
             #
@@ -45,7 +57,13 @@ def file_templates(snake, camel):
                     type_ = "{snake}s"
                     id_column = "{snake}_id"
 
-                specimen = db.relationship("Other", back_populates="{snake}")
+                {snake}_id = db.Column(db.String(), primary_key=True)
+                string_col = db.Column(db.String())
+                integer_col = db.Column(db.Integer())
+                float_col = db.Column(db.Float())
+                other_id = db.Column(db.String(), db.ForeignKey("other.other_id"))
+
+                rel_other = db.relationship("Other", back_populates="{snake}")
 
             """,
         "resource": f"""
@@ -53,7 +71,6 @@ def file_templates(snake, camel):
 
             from main.service import {camel}Service
             from main.swagger import {camel}Swagger
-
             from tol.api_base.resource import AutoResourceGroup, setup_resource_group
 
 
@@ -71,7 +88,6 @@ def file_templates(snake, camel):
             {header}
 
             from main.model import {camel}
-
             from tol.api_base.schema import BaseSchema, setup_schema
 
 
@@ -86,7 +102,6 @@ def file_templates(snake, camel):
 
             from main.model import {camel}
             from main.schema import {camel}Schema
-
             from tol.api_base.service import BaseService, setup_service
 
 
@@ -101,7 +116,6 @@ def file_templates(snake, camel):
             {header}
 
             from main.schema import {camel}Schema
-
             from tol.api_base.swagger import BaseSwagger, setup_swagger
 
 
@@ -112,7 +126,27 @@ def file_templates(snake, camel):
 
             """,
     }
-    return {file: inspect.cleandoc(content) for file, content in templates.items()}
+
+    init_lines = {
+        "model": f"from .{snake} import {camel}",
+        "resource": f"from .{snake} import api_{snake}",
+        "schema": f"from .{snake} import {camel}Schema",
+        "service": f"from .{snake} import {camel}Service",
+        "swagger": f"from .{snake} import {camel}Swagger",
+    }
+
+    return {
+        file: {
+            "content": inspect.cleandoc(content),
+            "init_line": f"{init_lines[file]} # noqa: F401",
+        }
+        for file, content in templates.items()
+    }
+
+
+def info(*args):
+    for item in args:
+        print(item, file=sys.stderr)
 
 
 if __name__ == "__main__":
