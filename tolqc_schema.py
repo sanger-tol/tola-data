@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: MIT
 
 
+import inspect
+import pytest
 from sqlalchemy import (
     Boolean,
     Column,
@@ -18,7 +20,6 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
 LogBase = Base
-EnumBase = Base
 
 
 def main():
@@ -28,12 +29,16 @@ def main():
     Session = sessionmaker(bind=engine)
     ssn = Session()
     ssn.commit()
+    # print(inspect.getsource(Assembly))
 
 
-def test_creation_of_all_classes():
-    for mapr in Base.registry.mappers:
-        mapr_class = mapr.class_
-        _ = mapr_class()
+@pytest.mark.parametrize("cls", [mppr.class_ for mppr in Base.registry.mappers])
+def test_creation_of_class(cls):
+    try:
+        _ = cls()
+    except excptn:
+        pytest.fail(f"Failed to create Class {cls.__name__}: {excptn}")
+    assert 1
 
 
 class Accession(LogBase):
@@ -41,33 +46,37 @@ class Accession(LogBase):
 
     class Meta:
         type_ = "accessions"
+        id_column = "accession_id"
 
-    accession_id = Column(String, primary_key=True)  # noqa: A003
-    accession_type_id = Column(Integer, ForeignKey("accession_type_dict.id"))
+    accession_id = Column(String, primary_key=True)
+    accession_type_id = Column(
+        Integer, ForeignKey("accession_type_dict.accession_type_id")
+    )
     secondary = Column(String)
     submission = Column(String)
     date_submitted = Column(DateTime)
     title = Column(String)
     description = Column(String)
 
-    accession_type_dict = relationship(
-        "AccessionTypeDict",
-        back_populates="accession",
-        foreign_keys=[accession_type_id],
-    )
+    accession_type = relationship("AccessionTypeDict", back_populates="accessions")
     project = relationship("Project", back_populates="accession")
     specimen = relationship("Specimen", back_populates="accession")
     sample = relationship("Sample", back_populates="accession")
     data = relationship("Data", back_populates="accession")
 
 
-class AccessionTypeDict(EnumBase):
+class AccessionTypeDict(LogBase):
     __tablename__ = "accession_type_dict"
 
     class Meta:
         type_ = "accession_types"
+        id_column = "accession_type_id"
 
-    accession = relationship("Accession", back_populates="accession_type_dict")
+    accession_type_id = Column(String, primary_key=True)
+    regexp = Column(String)
+    url = Column(String)
+
+    accessions = relationship("Accession", back_populates="accession_type")
 
 
 class Allocation(LogBase):
@@ -76,16 +85,12 @@ class Allocation(LogBase):
     class Meta:
         type_ = "allocations"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    project_id = Column(Integer, ForeignKey("project.id"))
-    specimen_id = Column(Integer, ForeignKey("specimen.specimen_id"))
+    project_id = Column(Integer, ForeignKey("project.id"), primary_key=True)
+    specimen_id = Column(Integer, ForeignKey("specimen.specimen_id"), primary_key=True)
     is_primary = Column(Boolean)
-    project = relationship(
-        "Project", back_populates="allocations", foreign_keys=[project_id]
-    )
-    specimen = relationship(
-        "Specimen", back_populates="allocations", foreign_keys=[specimen_id]
-    )
+
+    project = relationship("Project", back_populates="allocations")
+    specimen = relationship("Specimen", back_populates="allocations")
 
 
 class Assembly(LogBase):
@@ -93,31 +98,61 @@ class Assembly(LogBase):
 
     class Meta:
         type_ = "assemblies"
+        id_column = "assembly_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, primary_key=True)  # noqa: A003
     dataset_id = Column(Integer, ForeignKey("dataset.id"))
+    software_version_id = Column(
+        Integer, ForeignKey("software_version.software_version_id")
+    )
     name = Column(String)
     description = Column(String)
-    dataset = relationship(
-        "Dataset", back_populates="assembly", foreign_keys=[dataset_id]
-    )
+
+    dataset = relationship("Dataset", back_populates="assembly")
     assembly_metrics = relationship("AssemblyMetrics", back_populates="assembly")
     busco_metrics = relationship("BuscoMetrics", back_populates="assembly")
     merqury_metrics = relationship("MerquryMetrics", back_populates="assembly")
+    software_version = relationship("SoftwareVersion", back_populates="assemblies")
+
+    # Sources are assemblies for which there is a row in assembly_source
+    # with this instance's assembly_id
+    source_assembly_assn = relationship(
+        "AssemblySource",
+        primaryjoin="Assembly.assembly_id == AssemblySource.assembly_id",
+        back_populates="component",
+    )
+    sources = association_proxy("source_assembly_assn", "source")
+
+    # Components are assemblies which have this assembly as their source
+    component_assembly_assn = relationship(
+        "AssemblySource",
+        primaryjoin="Assembly.assembly_id == AssemblySource.source_assembly_id",
+        back_populates="source",
+    )
+    components = association_proxy("component_assembly_assn", "component")
 
 
-class AssemblyComponent(LogBase, EnumBase):
-    __tablename__ = "assembly_component"
+class AssemblySource(Base):
+    __tablename__ = "assembly_source"
 
     class Meta:
-        type_ = "assembly_components"
+        type_ = "assembly_sources"
+        id_column = ["assembly_id", "source_assembly_id"]
 
-    busco_metrics = relationship("BuscoMetrics", back_populates="assembly_component")
-    merqury_metrics = relationship(
-        "MerquryMetrics", back_populates="assembly_component"
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"), primary_key=True)
+    source_assembly_id = Column(
+        Integer, ForeignKey("assembly.assembly_id"), primary_key=True
     )
-    assembly_metrics = relationship(
-        "AssemblyMetrics", back_populates="assembly_component"
+
+    source = relationship(
+        "Assembly",
+        foreign_keys=[source_assembly_id],
+        back_populates="component_assembly_assn",
+    )
+    component = relationship(
+        "Assembly",
+        foreign_keys=[assembly_id],
+        back_populates="source_assembly_assn",
     )
 
 
@@ -128,8 +163,7 @@ class AssemblyMetrics(LogBase):
         type_ = "assembly_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    assembly_id = Column(Integer, ForeignKey("assembly.id"))
-    assembly_component_id = Column(Integer, ForeignKey("assembly_component.id"))
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
     bases = Column(Integer)
     a = Column(Integer)
     c = Column(Integer)
@@ -154,14 +188,7 @@ class AssemblyMetrics(LogBase):
     scaffold_aun = Column(Float)
     gap_n = Column(Integer)
     gap_n50 = Column(Integer)
-    assembly = relationship(
-        "Assembly", back_populates="assembly_metrics", foreign_keys=[assembly_id]
-    )
-    assembly_component = relationship(
-        "AssemblyComponent",
-        back_populates="assembly_metrics",
-        foreign_keys=[assembly_component_id],
-    )
+    assembly = relationship("Assembly", back_populates="assembly_metrics")
 
 
 class BuscoLineage(LogBase):
@@ -185,8 +212,7 @@ class BuscoMetrics(LogBase):
         type_ = "busco_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    assembly_id = Column(Integer, ForeignKey("assembly.id"))
-    assembly_component_id = Column(Integer, ForeignKey("assembly_component.id"))
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
     complete = Column(Integer)
     single = Column(Integer)
     duplicated = Column(Integer)
@@ -196,21 +222,11 @@ class BuscoMetrics(LogBase):
     busco_lineage_id = Column(Integer, ForeignKey("busco_lineage.id"))
     summary = Column(String)
     software_version_id = Column(Integer, ForeignKey("software_version.id"))
-    assembly = relationship(
-        "Assembly", back_populates="busco_metrics", foreign_keys=[assembly_id]
-    )
-    assembly_component = relationship(
-        "AssemblyComponent",
-        back_populates="busco_metrics",
-        foreign_keys=[assembly_component_id],
-    )
-    busco_lineage = relationship(
-        "BuscoLineage", back_populates="busco_metrics", foreign_keys=[busco_lineage_id]
-    )
+    assembly = relationship("Assembly", back_populates="busco_metrics")
+    busco_lineage = relationship("BuscoLineage", back_populates="busco_metrics")
     software_version = relationship(
         "SoftwareVersion",
         back_populates="busco_metrics",
-        foreign_keys=[software_version_id],
     )
 
 
@@ -247,14 +263,14 @@ class Data(LogBase):
     qc = Column(Integer)
     withdrawn = Column(Boolean)
     manually_withdrawn = Column(Boolean)
-    sample = relationship("Sample", back_populates="data", foreign_keys=[sample_id])
-    library = relationship("Library", back_populates="data", foreign_keys=[library_id])
-    run = relationship("Run", back_populates="data", foreign_keys=[run_id])
-    accession = relationship(
-        "Accession", back_populates="data", foreign_keys=[accession_id]
-    )
-    set = relationship("Set", back_populates="data")  # noqa: A003
-    file = relationship("File", back_populates="data")
+
+    sample = relationship("Sample", back_populates="data")
+    library = relationship("Library", back_populates="data")
+    run = relationship("Run", back_populates="data")
+    accession = relationship("Accession", back_populates="data")
+    data_assn = relationship("DatasetElement", back_populates="data")  # noqa: A003
+    files = relationship("File", back_populates="data")
+    datasets = association_proxy("data_assn", "dataset")
 
 
 class Dataset(LogBase):
@@ -268,10 +284,25 @@ class Dataset(LogBase):
     bases = Column(Integer)
     avg_read_len = Column(Float)
     read_len_n50 = Column(Float)
-    set = relationship("Set", back_populates="dataset")  # noqa: A003
+    dataset_assn = relationship("Set", back_populates="dataset")  # noqa: A003
     merqury_metrics = relationship("MerquryMetrics", back_populates="dataset")
     assembly = relationship("Assembly", back_populates="dataset")
     genomescope_metrics = relationship("GenomescopeMetrics", back_populates="dataset")
+    data = association_proxy("dataset_assn", "data")
+
+
+class DatasetElement(LogBase):
+    __tablename__ = "dataset_element"
+
+    class Meta:
+        type_ = "dataset_elements"
+        id_column = ["data_id", "dataset_id"]
+
+    data_id = Column(Integer, ForeignKey("data.id"), primary_key=True)
+    dataset_id = Column(Integer, ForeignKey("dataset.id"), primary_key=True)
+
+    data = relationship("Data", back_populates="data_assn")
+    dataset = relationship("Dataset", back_populates="dataset_assn")
 
 
 class File(LogBase):
@@ -283,9 +314,11 @@ class File(LogBase):
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.id"))
     name = Column(String)
-    type = Column(String)  # noqa: A003
+    irods_path = Column(String)
+    lustre_path = Column(String)
     md5 = Column(String)
-    data = relationship("Data", back_populates="file", foreign_keys=[data_id])
+
+    data = relationship("Data", back_populates="files", foreign_keys=[data_id])
 
 
 class GenomescopeMetrics(LogBase):
@@ -360,8 +393,7 @@ class MerquryMetrics(LogBase):
         type_ = "merqury_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    assembly_id = Column(Integer, ForeignKey("assembly.id"))
-    assembly_component_id = Column(Integer, ForeignKey("assembly_component.id"))
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
     dataset_id = Column(Integer, ForeignKey("dataset.id"))
     kmer = Column(String)
     complete_primary = Column(Integer)
@@ -371,21 +403,11 @@ class MerquryMetrics(LogBase):
     qv_alternate = Column(Float)
     qv_all = Column(Float)
     software_version_id = Column(Integer, ForeignKey("software_version.id"))
-    assembly = relationship(
-        "Assembly", back_populates="merqury_metrics", foreign_keys=[assembly_id]
-    )
-    dataset = relationship(
-        "Dataset", back_populates="merqury_metrics", foreign_keys=[dataset_id]
-    )
-    assembly_component = relationship(
-        "AssemblyComponent",
-        back_populates="merqury_metrics",
-        foreign_keys=[assembly_component_id],
-    )
+    assembly = relationship("Assembly", back_populates="merqury_metrics")
+    dataset = relationship("Dataset", back_populates="merqury_metrics")
     software_version = relationship(
         "SoftwareVersion",
         back_populates="merqury_metrics",
-        foreign_keys=[software_version_id],
     )
 
 
@@ -455,16 +477,6 @@ class Project(LogBase):
     specimens = association_proxy("allocations", "specimen")
 
 
-class QcDict(EnumBase):
-    __tablename__ = "qc_dict"
-
-    class Meta:
-        type_ = "qc_types"
-
-    status = relationship("Status", back_populates="qc_dict")
-    genomescope_metrics = relationship("GenomescopeMetrics", back_populates="qc_dict")
-
-
 class ReviewDict(LogBase):
     __tablename__ = "review_dict"
 
@@ -523,19 +535,6 @@ class Sample(LogBase):
     data = relationship("Data", back_populates="sample")
 
 
-class Set(LogBase):
-    __tablename__ = "set"
-
-    class Meta:
-        type_ = "sets"
-
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    data_id = Column(Integer, ForeignKey("data.id"))
-    dataset_id = Column(Integer, ForeignKey("dataset.id"))
-    data = relationship("Data", back_populates="set", foreign_keys=[data_id])
-    dataset = relationship("Dataset", back_populates="set", foreign_keys=[dataset_id])
-
-
 class Sex(LogBase):
     __tablename__ = "sex"
 
@@ -565,6 +564,7 @@ class SoftwareVersion(LogBase):
     genomescope_metrics = relationship(
         "GenomescopeMetrics", back_populates="software_version"
     )
+    assemblies = relationship("Assembly", back_populates="software_version")
 
 
 class Species(LogBase):
@@ -706,3 +706,7 @@ class Study(Base):
     lims_id = Column(Integer)
     project_id = Column(Integer, ForeignKey("project.id"))
     project = relationship("Project", back_populates="study", foreign_keys=[project_id])
+
+
+if __name__ == "__main__":
+    main()
