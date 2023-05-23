@@ -16,7 +16,9 @@ def main(table_names):
 
 def create_files(root, snake, conf):
     root_dir = pathlib.Path(root)
-    root_dir.mkdir(exist_ok=True)
+    if not root_dir.is_dir():
+        root_dir.mkdir()
+        info(f"Created directory: '{root}'")
 
     source = root_dir / f"{snake}.py"
     with source.open(mode="x") as source_fh:
