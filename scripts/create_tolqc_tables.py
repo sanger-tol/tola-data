@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
 
+import datetime
 import inspect
 import pathlib
 import re
 import sys
 
+from tolqc_schema import Base
+
 
 def main(table_names):
     for name in table_names:
         snake, camel = snake_and_camel(name)
-        templates = file_templates(snake, camel)
+        class_code = fetch_alchemy_class_code(camel)
+        templates = file_templates(snake, camel, class_code)
         for root, conf in templates.items():
             create_files(root, snake, conf)
+
+
+def fetch_alchemy_class_code(name):
+    cls = None
+    for mppr in Base.registry.mappers:
+        if mppr.class_.__name__ == name:
+            cls = mppr.class_
+            break
+    if not cls:
+        raise Exception(f"No such class {name}")
+
+    return inspect.getsource(cls)
 
 
 def create_files(root, snake, conf):
@@ -36,10 +52,18 @@ def snake_and_camel(name):
     return snake, camel
 
 
-def file_templates(snake, camel):
+def indent_all_but_first_line(level, code):
+    indent = " " * level
+    indented_code = re.sub(r"^", indent, code, flags=re.MULTILINE)
+    return indented_code[level:]
+
+
+def file_templates(snake, camel, class_code):
+    this_year = datetime.date.today().year
+
     # header indentation needs to match content in templates dict
-    header = """
-            # SPDX-FileCopyrightText: 2023 Genome Research Ltd.
+    header = f"""
+            # SPDX-FileCopyrightText: {this_year} Genome Research Ltd.
             #
             # SPDX-License-Identifier: MIT
             """
@@ -52,20 +76,7 @@ def file_templates(snake, camel):
 
 
             @setup_model
-            class {camel}(LogBase):
-                __tablename__ = "{snake}"
-
-                class Meta:
-                    type_ = "{snake}s"
-                    id_column = "{snake}_id"
-
-                {snake}_id = db.Column(db.String(), primary_key=True)
-                string_col = db.Column(db.String())
-                integer_col = db.Column(db.Integer())
-                float_col = db.Column(db.Float())
-                other_id = db.Column(db.String(), db.ForeignKey("other.other_id"))
-
-                rel_other = db.relationship("Other", back_populates="{snake}")
+            {indent_all_but_first_line(12, class_code)}
 
             """,
         "resource": f"""
@@ -86,6 +97,18 @@ def file_templates(snake, camel):
                     swagger = {camel}Swagger
 
             """,
+        #
+        # Need to add:
+        #
+        #   from tol.api_base.schema import BaseSchema, Str, setup_schema
+        #
+        #   class Schema(BaseSchema):
+        #       id = Str(attribute="accession_id", dump_only=True)  # noqa: A003
+        #
+        # if the primary key is not an integer called "id".
+        #
+        # Also: what about integer primary key columns not called "id"?
+        #
         "schema": f"""
             {header}
 
