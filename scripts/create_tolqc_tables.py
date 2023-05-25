@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import black
 import datetime
 import inspect
 import pathlib
@@ -24,6 +25,7 @@ def fetch_alchemy_class_code(name):
         if mppr.class_.__name__ == name:
             cls = mppr.class_
             break
+
     if not cls:
         raise Exception(f"No such class {name}")
 
@@ -67,9 +69,9 @@ def make_id_attribute(code):
             (\w+)\s*=\s*          # e.g. "accession_id = "
             (db\.)?Column\(\s*    # "Column(" optionally preceeded by "db."
             (db\.)?(\w+)\(?\d*\)? # e.g. "String" or "db.String()" or "db.String(32)"
-            [\w=,\s\[\]]*         # Further arguments, e.g. "foreign_keys=[species_id]"
+            [\w=,\s\[\]]*         # Keyword arguments, e.g. "foreign_keys=[species_id]"
             primary_key=True
-            [\w=,\s\[\]]*         # Further arguments
+            [\w=,\s\[\]]*         # Keyword arguments
             \)                    # Closing parenthesis of "Column(..."
         """,
         code,
@@ -191,11 +193,22 @@ def file_templates(snake, camel, class_code):
 
     return {
         file: {
-            "content": inspect.cleandoc(content),
+            "content": clean_code(content),
             "init_line": f"{init_lines[file]} # noqa: F401",
         }
         for file, content in templates.items()
     }
+
+
+black_mode = black.Mode(
+    target_versions={
+        black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"]
+    }
+)
+
+
+def clean_code(code):
+    return black.format_str(inspect.cleandoc(code), mode=black_mode)
 
 
 def info(*args):
