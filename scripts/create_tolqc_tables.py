@@ -52,6 +52,31 @@ def snake_and_camel(name):
     return snake, camel
 
 
+def uglify_model_code(code):
+    code_db_types = re.sub(
+        r"(?<!db\.)(Boolean|DateTime|Float|Integer|String)(\(\))?", r"db.\1()", code
+    )
+    return re.sub(
+        r"(?<!db\.)(Column|ForeignKey|relationship)\(", r"db.\1(", code_db_types
+    )
+
+
+def make_id_attribute(code):
+    primary_key_match = re.search(
+        r"(\w+)\s*=\s*(db\.)?Column\(\s*(db\.)?(\w+)\(?\w*\)?[\w=,\s\[\]]*primary_key=True[\w=,\s\[\]]*\)",
+        code,
+    )
+    if primary_key_match:
+        id_name = primary_key_match.group(1)
+        return (
+            ""
+            if id_name == "id"
+            else f'id = Str(attribute="{id_name}", dump_only=True)  # noqa: A003'
+        )
+    else:
+        return ""
+
+
 def indent_all_but_first_line(level, code):
     indent = "\n" + (" " * level)
     return re.sub(r"\n", indent, code)
@@ -59,6 +84,14 @@ def indent_all_but_first_line(level, code):
 
 def file_templates(snake, camel, class_code):
     this_year = datetime.date.today().year
+
+    schema_id_attr = make_id_attribute(class_code)
+    schema_imports = (
+        "BaseSchema, Str, setup_schema"
+        if schema_id_attr
+        else "BaseSchema, setup_schema"
+    )
+    ugly_code = uglify_model_code(class_code)
 
     # header indentation needs to match content in templates dict
     header = f"""
@@ -75,7 +108,7 @@ def file_templates(snake, camel, class_code):
 
 
             @setup_model
-            {indent_all_but_first_line(12, class_code)}
+            {indent_all_but_first_line(12, ugly_code)}
 
             """,
         "resource": f"""
@@ -96,30 +129,18 @@ def file_templates(snake, camel, class_code):
                     swagger = {camel}Swagger
 
             """,
-        #
-        # Need to add:
-        #
-        #   from tol.api_base.schema import BaseSchema, Str, setup_schema
-        #
-        #   class Schema(BaseSchema):
-        #       id = Str(attribute="accession_id", dump_only=True)  # noqa: A003
-        #
-        # if the primary key is not an integer called "id".
-        #
-        # Also: what about integer primary key columns not called "id"?
-        #
         "schema": f"""
             {header}
 
             from main.model import {camel}
-            from tol.api_base.schema import BaseSchema, setup_schema
+            from tol.api_base.schema import {schema_imports}
 
 
             @setup_schema
             class {camel}Schema(BaseSchema):
                 class Meta(BaseSchema.BaseMeta):
                     model = {camel}
-
+                {schema_id_attr}
             """,
         "service": f"""
             {header}
