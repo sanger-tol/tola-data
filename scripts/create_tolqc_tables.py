@@ -63,8 +63,17 @@ def uglify_model_code(code):
 
 def make_id_attribute(code):
     primary_key_match = re.search(
-        r"(\w+)\s*=\s*(db\.)?Column\(\s*(db\.)?(\w+)\(?\w*\)?[\w=,\s\[\]]*primary_key=True[\w=,\s\[\]]*\)",
+        r"""
+            (\w+)\s*=\s*          # e.g. "accession_id = "
+            (db\.)?Column\(\s*    # "Column(" optionally preceeded by "db."
+            (db\.)?(\w+)\(?\d*\)? # e.g. "String" or "db.String()" or "db.String(32)"
+            [\w=,\s\[\]]*         # Further arguments, e.g. "foreign_keys=[species_id]"
+            primary_key=True
+            [\w=,\s\[\]]*         # Further arguments
+            \)                    # Closing parenthesis of "Column(..."
+        """,
         code,
+        flags=re.VERBOSE,
     )
     if primary_key_match:
         id_name = primary_key_match.group(1)
