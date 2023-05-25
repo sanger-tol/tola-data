@@ -53,9 +53,8 @@ def snake_and_camel(name):
 
 
 def indent_all_but_first_line(level, code):
-    indent = " " * level
-    indented_code = re.sub(r"^", indent, code, flags=re.MULTILINE)
-    return indented_code[level:]
+    indent = "\n" + (" " * level)
+    return re.sub(r"\n", indent, code)
 
 
 def file_templates(snake, camel, class_code):
