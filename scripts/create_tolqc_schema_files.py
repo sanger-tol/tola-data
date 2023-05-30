@@ -1,51 +1,103 @@
 #!/usr/bin/env python3
 
-import black
 import datetime
 import inspect
 import pathlib
 import re
 import sys
 
+import black
 from tolqc_schema import Base
 
-class_by_name = {mppr.class_.__name__: mppr.class_ for mppr in Base.registry.mappers}
+
+### TODO:
+###    api.py - curate import statements (and deal with environment exceptions)
+###    deal with association_proxy()
 
 
 def main(table_names):
-    if "ALL" in table_names:
+    root_folders = (
+        "model",
+        "resource",
+        "schema",
+        "service",
+        "swagger",
+    )
+    class_by_name = {
+        mppr.class_.__name__: mppr.class_ for mppr in Base.registry.mappers
+    }
+    if not class_by_name:
+        msg = "No classes found in tolqc_schema"
+        raise Exception(msg)
+
+    if not table_names:
         table_names = class_by_name.keys()
+
+    templates = {}
+    for name in sorted(class_by_name.keys()):
+        snake, camel = snake_and_camel(name)
+        class_code = fetch_alchemy_class_code(class_by_name, camel)
+        templates[snake] = file_templates(snake, camel, class_code)
+
+    files_to_delete(root_folders, templates)
 
     for name in table_names:
         snake, camel = snake_and_camel(name)
-        class_code = fetch_alchemy_class_code(camel)
-        templates = file_templates(snake, camel, class_code)
-        for root, conf in templates.items():
-            create_files(f"schema/{root}", snake, conf)
+        create_table_files(snake, templates[snake])
+
+    rewrite_init_files(root_folders, templates)
+
+    # Edit api.py
 
 
-def fetch_alchemy_class_code(name):
+def files_to_delete(root_folders, templates):
+    for fldr in root_folders:
+        fldr_path = pathlib.Path(fldr)
+        for file in fldr_path.iterdir():
+            if file.name == "__init__.py":
+                continue
+            tmpl = templates.get(file.stem, None)
+            if tmpl is None:
+                print(f"git rm {file}")
+
+
+def fetch_alchemy_class_code(class_by_name, name):
     cls = class_by_name.get(name, None)
 
     if not cls:
-        raise Exception(f"No such class {name}")
+        msg = f"No such class {name}"
+        raise Exception(msg)
 
     return inspect.getsource(cls)
 
 
-def create_files(root, snake, conf):
-    root_dir = pathlib.Path(root)
-    if not root_dir.is_dir():
-        root_dir.mkdir(parents=True)
-        info(f"Created directory: '{root}'")
+def create_table_files(snake, tmplt):
+    for root, conf in tmplt.items():
+        root_dir = pathlib.Path(root)
+        if not root_dir.is_dir():
+            root_dir.mkdir(parents=True)
+            info(f"Created directory: '{root}'")
 
-    source = root_dir / f"{snake}.py"
-    with source.open(mode="x") as source_fh:
-        source_fh.writelines(conf["content"] + "\n")
+        source = root_dir / f"{snake}.py"
+        with source.open(mode="w") as source_fh:
+            source_fh.writelines(conf["content"] + "\n")
 
-    init = root_dir / "__init__.py"
-    with init.open(mode="a") as init_fh:
-        init_fh.writelines(conf["init_line"] + "\n")
+
+def rewrite_init_files(root_folders, templates):
+    for fldr in root_folders:
+        init = pathlib.Path(fldr) / "__init__.py"
+        init_content = strip_dot_imports(init.read_text()) + "\n"
+        for tmpl in templates.values():
+            init_content += tmpl[fldr]["init_line"] + "\n"
+        init.write_text(clean_code(init_content))
+
+
+def strip_dot_imports(text):
+    """Remove lines such as:
+
+    from .accession import api_accession # noqa: F401
+    """
+    return re.sub(r"^from \.(.+)\n", r"", text, flags=re.MULTILINE)
 
 
 def snake_and_camel(name):
@@ -89,8 +141,7 @@ def make_id_attribute(code):
             if id_name == "id"
             else f'id = Str(attribute="{id_name}", dump_only=True)  # noqa: A003'
         )
-    else:
-        return ""
+    return ""
 
 
 def indent_all_but_first_line(level, code):
@@ -207,8 +258,8 @@ def file_templates(snake, camel, class_code):
 
 black_mode = black.Mode(
     target_versions={
-        black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"]
-    }
+        black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"],
+    },
 )
 
 
