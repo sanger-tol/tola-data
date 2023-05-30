@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -74,12 +75,15 @@ class Allocation(LogBase):
     class Meta:
         type_ = "allocations"
 
-    project_id = Column(Integer, ForeignKey("project.id"), primary_key=True)
-    specimen_id = Column(Integer, ForeignKey("specimen.specimen_id"), primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    project_id = Column(Integer, ForeignKey("project.id"))
+    data_id = Column(Integer, ForeignKey("data.data_id"))
     is_primary = Column(Boolean)
 
+    UniqueConstraint("project_id", "specimen_id")
+
     project = relationship("Project", back_populates="allocations")
-    specimen = relationship("Specimen", back_populates="allocations")
+    data = relationship("Data", back_populates="allocations")
 
 
 class Assembly(LogBase):
@@ -90,7 +94,7 @@ class Assembly(LogBase):
         id_column = "assembly_id"
 
     assembly_id = Column(Integer, primary_key=True)  # noqa: A003
-    dataset_id = Column(Integer, ForeignKey("dataset.id"))
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
@@ -126,12 +130,12 @@ class AssemblySource(Base):
 
     class Meta:
         type_ = "assembly_sources"
-        id_column = ["assembly_id", "source_assembly_id"]
 
-    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"), primary_key=True)
-    source_assembly_id = Column(
-        Integer, ForeignKey("assembly.assembly_id"), primary_key=True
-    )
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+    source_assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+
+    UniqueConstraint("assembly_id", "source_assembly_id")
 
     source = relationship(
         "Assembly",
@@ -215,10 +219,7 @@ class BuscoMetrics(LogBase):
     )
     assembly = relationship("Assembly", back_populates="busco_metrics")
     busco_lineage = relationship("BuscoLineage", back_populates="busco_metrics")
-    software_version = relationship(
-        "SoftwareVersion",
-        back_populates="busco_metrics",
-    )
+    software_version = relationship("SoftwareVersion", back_populates="busco_metrics")
 
 
 class Centre(Base):
@@ -257,11 +258,15 @@ class Data(LogBase):
 
     sample = relationship("Sample", back_populates="data")
     library = relationship("Library", back_populates="data")
-    run = relationship("Run", back_populates="data")
     accession = relationship("Accession", back_populates="data")
-    data_assn = relationship("DatasetElement", back_populates="data")  # noqa: A003
+    run = relationship("Run", back_populates="data")
     files = relationship("File", back_populates="data")
-    datasets = association_proxy("data_assn", "dataset")
+
+    project_assn = relationship("Allocation", back_populates="data")
+    projects = association_proxy("project_assn", "project")
+
+    dataset_assn = relationship("DatasetElement", back_populates="data")
+    datasets = association_proxy("dataset_assn", "dataset")
 
 
 class Dataset(LogBase):
@@ -269,17 +274,21 @@ class Dataset(LogBase):
 
     class Meta:
         type_ = "datasets"
+        id_column = "dataset_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
+    dataset_id = Column(String, primary_key=True)
     reads = Column(Integer)
     bases = Column(Integer)
     avg_read_len = Column(Float)
     read_len_n50 = Column(Float)
-    dataset_assn = relationship("Set", back_populates="dataset")  # noqa: A003
-    merqury_metrics = relationship("MerquryMetrics", back_populates="dataset")
+
     assembly = relationship("Assembly", back_populates="dataset")
     genomescope_metrics = relationship("GenomescopeMetrics", back_populates="dataset")
-    data = association_proxy("dataset_assn", "data")
+    merqury_metrics = relationship("MerquryMetrics", back_populates="dataset")
+    ploidyplot_metrics = relationship("PloidyplotMetrics", back_populates="dataset")
+
+    data_assn = relationship("DatasetElement", back_populates="dataset")
+    data = association_proxy("data_assn", "data")
 
 
 class DatasetElement(LogBase):
@@ -287,13 +296,15 @@ class DatasetElement(LogBase):
 
     class Meta:
         type_ = "dataset_elements"
-        id_column = ["data_id", "dataset_id"]
 
-    data_id = Column(Integer, ForeignKey("data.id"), primary_key=True)
-    dataset_id = Column(Integer, ForeignKey("dataset.id"), primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    data_id = Column(Integer, ForeignKey("data.id"))
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
 
-    data = relationship("Data", back_populates="data_assn")
-    dataset = relationship("Dataset", back_populates="dataset_assn")
+    UniqueConstraint("data_id", "dataset_id")
+
+    data = relationship("Data", back_populates="dataset_assn")
+    dataset = relationship("Dataset", back_populates="data_assn")
 
 
 class File(LogBase):
@@ -319,7 +330,7 @@ class GenomescopeMetrics(LogBase):
         type_ = "genomescope_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    dataset_id = Column(Integer, ForeignKey("dataset.id"))
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
@@ -387,7 +398,7 @@ class MerquryMetrics(LogBase):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-    dataset_id = Column(Integer, ForeignKey("dataset.id"))
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     kmer = Column(String)
     complete_primary = Column(Integer)
     complete_alternate = Column(Integer)
@@ -452,6 +463,28 @@ class Platform(Base):
     run = relationship("Run", back_populates="platform")
 
 
+class PloidyplotMetrics(LogBase):
+    __tablename__ = "ploidyplot_metrics"
+
+    class Meta:
+        type_ = "ploidyplot_metrics"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    dataset_id = Column(Integer, ForeignKey("dataset.dataset_id"))
+    kmer = Column(Integer)
+    ploidy = Column(Integer)
+    n1 = Column(Float)
+    partition = Column(String)
+    trim_threshold = Column(Integer)
+    software_version_id = Column(
+        Integer, ForeignKey("software_version.software_version_id")
+    )
+
+    software_version = relationship(
+        "SoftwareVersion", back_populates="ploidyplot_metrics"
+    )
+
+
 class Project(LogBase):
     __tablename__ = "project"
 
@@ -464,12 +497,12 @@ class Project(LogBase):
     description = Column(String)
     lims_id = Column(Integer)
     accession_id = Column(String, ForeignKey("accession.accession_id"))
+
     accession = relationship(
         "Accession", back_populates="project", foreign_keys=[accession_id]
     )
-    study = relationship("Study", back_populates="project")
-    allocations = relationship("Allocation", back_populates="project")
-    specimens = association_proxy("allocations", "specimen")
+    data_assn = relationship("Allocation", back_populates="project")
+    data = association_proxy("data_assn", "data")
 
 
 class ReviewDict(LogBase):
@@ -604,55 +637,21 @@ class Specimen(LogBase):
     sex_id = Column(String, ForeignKey("sex.sex_id"))
     ploidy = Column(String)
     karyotype = Column(String)
-    father_id = Column(Integer, ForeignKey("specimen.specimen_id"))
-    mother_id = Column(Integer, ForeignKey("specimen.specimen_id"))
 
     species = relationship(
         "Species", back_populates="specimens", foreign_keys=[species_id]
     )
-    father = relationship(
-        "Specimen",
-        primaryjoin="Specimen.father_id == Specimen.specimen_id",
-        uselist=False,
-    )
-    mother = relationship(
-        "Specimen",
-        primaryjoin="Specimen.mother_id == Specimen.specimen_id",
-        uselist=False,
-    )
     sample = relationship("Sample", back_populates="specimen")
-    status = relationship("SpecimenStatus", foreign_keys=[specimen_status_id])
+    status = relationship("SpecimenStatus")
     status_history = relationship(
         "SpecimenStatus",
-        # foreign_keys=[specimen_id],
         primaryjoin="Specimen.specimen_id == SpecimenStatus.specimen_id",
-        # back_populates="specimen",
+        back_populates="specimen",
     )
-
-    # Removing foreign_keys=[sex_id] fixes error from SQLAlchemy:
-    #
-    #    sqlalchemy.exc.NoForeignKeysError: Could not determine join condition
-    #    between parent/child tables on relationship Sex.specimens - there are
-    #    no foreign keys linking these tables.  Ensure that referencing
-    #    columns are associated with a ForeignKey or ForeignKeyConstraint, or
-    #    specify a 'primaryjoin' expression.
-    #
-    # but produces this error from the API instead:
-    #
-    #    File "/Users/jgrg/git/tolqc/venv/lib/python3.10/site-packages/tol/api_base/model/base.py",
-    #    line 669, in _get_type_from_tablename
-    #
-    #    return cls.tablename_type_dict[tablename]
-    #    KeyError: 'specimens'
-
-    # sex = relationship("Sex", back_populates="specimens", foreign_keys=[sex_id])
     sex = relationship("Sex", back_populates="specimens")
-
     accession = relationship(
         "Accession", back_populates="specimen", foreign_keys=[accession_id]
     )
-    allocations = relationship("Allocation", back_populates="specimen")
-    projects = association_proxy("allocations", "project")
 
 
 class SpecimenStatus(LogBase):
@@ -689,19 +688,6 @@ class SpecimenStatusType(LogBase):
     assign_order = Column(Integer)
 
     statuses = relationship("SpecimenStatus", back_populates="status_type")
-
-
-class Study(Base):
-    __tablename__ = "study"
-
-    class Meta:
-        type_ = "studies"
-
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    name = Column(String)
-    lims_id = Column(Integer)
-    project_id = Column(Integer, ForeignKey("project.id"))
-    project = relationship("Project", back_populates="study", foreign_keys=[project_id])
 
 
 if __name__ == "__main__":
