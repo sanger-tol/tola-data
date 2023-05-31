@@ -11,17 +11,12 @@ from tolqc_schema import Base
 
 
 ### TODO:
-###    api.py - curate import statements (and deal with environment exceptions)
 ###    deal with association_proxy()
 
 
 def main(table_names):
     root_folders = (
-        "model",
-        "resource",
-        "schema",
-        "service",
-        "swagger",
+        pathlib.Path(x) for x in ("model", "resource", "schema", "service", "swagger")
     )
     class_by_name = {
         mppr.class_.__name__: mppr.class_ for mppr in Base.registry.mappers
@@ -46,19 +41,46 @@ def main(table_names):
         create_table_files(snake, templates[snake])
 
     rewrite_init_files(root_folders, templates)
+    fixup_api_py()
 
-    # Edit api.py
+
+def fixup_api_py():
+    """
+    Edit the `api.py` file to include the correct list of resoure file imports and uses
+    """
+    resource_dir = pathlib.Path("resource")
+    res_list = sorted(f"api_{x.stem}" for x in resource_dir.iterdir() if x.stem != "__init__")
+    api_py_file = pathlib.Path("route/api.py")
+    api_py_text = api_py_file.read_text()
+    api_py_text = re.sub(
+        r"(?<=from main\.resource import).+?(?=\n\n|\bfrom\b)",
+        f" {', '.join(res_list)}\n",
+        api_py_text,
+        flags=re.DOTALL,
+    )
+    api_py_text = re.sub(
+        r"(    api\.add_namespace\(\w+\)\s*\n)+",
+        "".join(f"    api.add_namespace({x})\n" for x in res_list) + "\n\n",
+        api_py_text,
+        flags=re.DOTALL,
+    )
+    api_py_file.write_text(clean_code(api_py_text))
 
 
 def files_to_delete(root_folders, templates):
-    for fldr in root_folders:
-        fldr_path = pathlib.Path(fldr)
-        for file in fldr_path.iterdir():
-            if file.name == "__init__.py":
-                continue
-            tmpl = templates.get(file.stem, None)
-            if tmpl is None:
-                print(f"git rm {file}")
+    """
+    For files found in `model/` which are no longer in the schema, prints
+    a list of `git rm` commands for it and any matching files found in
+    the other root folders.
+    """
+    for file in pathlib.Path("model").iterdir():
+        if file.name == "__init__.py":
+            continue
+        if not templates.get(file.stem, None):
+            for fldr in root_folders:
+                fldr_file = fldr / file.name
+                if fldr_file.exists():
+                    print(f"git rm '{fldr_file}'")
 
 
 def fetch_alchemy_class_code(class_by_name, name):
@@ -85,7 +107,7 @@ def create_table_files(snake, tmplt):
 
 def rewrite_init_files(root_folders, templates):
     for fldr in root_folders:
-        init = pathlib.Path(fldr) / "__init__.py"
+        init = fldr / "__init__.py"
         init_content = strip_dot_imports(init.read_text()) + "\n"
         for tmpl in templates.values():
             init_content += tmpl[fldr]["init_line"] + "\n"
