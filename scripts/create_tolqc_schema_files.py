@@ -10,10 +10,6 @@ import black
 from tolqc_schema import Base
 
 
-### TODO:
-###    deal with association_proxy()
-
-
 def main(table_names):
     root_folders = (
         pathlib.Path(x) for x in ("model", "resource", "schema", "service", "swagger")
@@ -49,7 +45,9 @@ def fixup_api_py():
     Edit the `api.py` file to include the correct list of resoure file imports and uses
     """
     resource_dir = pathlib.Path("resource")
-    res_list = sorted(f"api_{x.stem}" for x in resource_dir.iterdir() if x.stem != "__init__")
+    res_list = sorted(
+        f"api_{x.stem}" for x in resource_dir.iterdir() if x.stem != "__init__"
+    )
     api_py_file = pathlib.Path("route/api.py")
     api_py_text = api_py_file.read_text()
     api_py_text = re.sub(
@@ -181,6 +179,11 @@ def file_templates(snake, camel, class_code):
         else "BaseSchema, setup_schema"
     )
     ugly_code = uglify_model_code(class_code)
+    assn_proxy_import = (
+        "from sqlalchemy.ext.associationproxy import association_proxy"
+        if "association_proxy(" in class_code
+        else ""
+    )
 
     # header indentation needs to match content in templates dict
     header = f"""
@@ -194,6 +197,7 @@ def file_templates(snake, camel, class_code):
             {header}
 
             from tol.api_base.model import LogBase, db, setup_model
+            {assn_proxy_import}
 
 
             @setup_model
