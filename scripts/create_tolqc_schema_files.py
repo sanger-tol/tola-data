@@ -72,7 +72,7 @@ def files_to_delete(root_folders, templates):
     the other root folders.
     """
     for file in pathlib.Path("model").iterdir():
-        if file.name == "__init__.py":
+        if file.name in ("__init__.py", "__pycache__"):
             continue
         if not templates.get(file.stem, None):
             for fldr in root_folders:
@@ -108,7 +108,7 @@ def rewrite_init_files(root_folders, templates):
         init = fldr / "__init__.py"
         init_content = strip_dot_imports(init.read_text()) + "\n"
         for tmpl in templates.values():
-            init_content += tmpl[fldr]["init_line"] + "\n"
+            init_content += tmpl[fldr.name]["init_line"] + "\n"
         init.write_text(clean_code(init_content))
 
 
@@ -169,6 +169,15 @@ def indent_all_but_first_line(level, code):
     return re.sub(r"\n", indent, code)
 
 
+def get_base_flavour(code):
+    base_match = re.search(r"class \w+\((\w+)\)", code)
+    if base_match:
+        return base_match.group(1)
+    else:
+        msg = f"Unable to determine base class from code:\n{code}"
+        raise Exception(msg)
+
+
 def file_templates(snake, camel, class_code):
     this_year = datetime.date.today().year
 
@@ -184,6 +193,8 @@ def file_templates(snake, camel, class_code):
         if "association_proxy(" in class_code
         else ""
     )
+    base_flavour = get_base_flavour(class_code)
+
 
     # header indentation needs to match content in templates dict
     header = f"""
@@ -196,7 +207,7 @@ def file_templates(snake, camel, class_code):
         "model": f"""
             {header}
 
-            from tol.api_base.model import LogBase, db, setup_model
+            from tol.api_base.model import {base_flavour}, db, setup_model
             {assn_proxy_import}
 
 
