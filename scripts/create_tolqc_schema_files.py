@@ -10,7 +10,7 @@ import black
 from tolqc_schema import Base
 
 
-IGNORE_FILES = {"__init__.py", "__pycache__"}
+IGNORE_FILES = {"__init__.py", "__pycache__", "environment.py"}
 
 
 def main(table_names):
