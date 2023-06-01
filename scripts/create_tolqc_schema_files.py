@@ -100,7 +100,7 @@ def create_table_files(snake, tmplt):
 
         source = root_dir / f"{snake}.py"
         with source.open(mode="w") as source_fh:
-            source_fh.writelines(conf["content"] + "\n")
+            source_fh.writelines(conf["content"])
 
 
 def rewrite_init_files(root_folders, templates):
@@ -194,7 +194,6 @@ def file_templates(snake, camel, class_code):
         else ""
     )
     base_flavour = get_base_flavour(class_code)
-
 
     # header indentation needs to match content in templates dict
     header = f"""
