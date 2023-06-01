@@ -10,6 +10,9 @@ import black
 from tolqc_schema import Base
 
 
+IGNORE_FILES = {"__init__.py", "__pycache__"}
+
+
 def main(table_names):
     root_folders = (
         pathlib.Path(x) for x in ("model", "resource", "schema", "service", "swagger")
@@ -24,11 +27,7 @@ def main(table_names):
     if not table_names:
         table_names = class_by_name.keys()
 
-    templates = {}
-    for name in sorted(class_by_name.keys()):
-        snake, camel = snake_and_camel(name)
-        class_code = fetch_alchemy_class_code(class_by_name, camel)
-        templates[snake] = file_templates(snake, camel, class_code)
+    templates = create_templates(class_by_name)
 
     files_to_delete(root_folders, templates)
 
@@ -40,13 +39,22 @@ def main(table_names):
     fixup_api_py()
 
 
+def create_templates(class_by_name):
+    templates = {}
+    for name in sorted(class_by_name.keys()):
+        snake, camel = snake_and_camel(name)
+        class_code = fetch_alchemy_class_code(class_by_name, camel)
+        templates[snake] = file_templates(snake, camel, class_code)
+    return templates
+
+
 def fixup_api_py():
     """
     Edit the `api.py` file to include the correct list of resoure file imports and uses
     """
     resource_dir = pathlib.Path("resource")
     res_list = sorted(
-        f"api_{x.stem}" for x in resource_dir.iterdir() if x.stem != "__init__"
+        f"api_{x.stem}" for x in resource_dir.iterdir() if x.name not in IGNORE_FILES
     )
     api_py_file = pathlib.Path("route/api.py")
     api_py_text = api_py_file.read_text()
@@ -72,7 +80,7 @@ def files_to_delete(root_folders, templates):
     the other root folders.
     """
     for file in pathlib.Path("model").iterdir():
-        if file.name in ("__init__.py", "__pycache__"):
+        if file.name in IGNORE_FILES:
             continue
         if not templates.get(file.stem, None):
             for fldr in root_folders:
