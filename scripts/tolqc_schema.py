@@ -26,6 +26,13 @@ def main():
     # engine = create_engine("sqlite:///assembly.sqlite", echo=False)
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
+
+    # Trigger creation of Mappers to expose any errors in schema
+    for mapr in Base.registry.mappers:
+        print(f"{mapr}")
+        for prop in mapr.iterate_properties:
+            print(f"  {prop}")
+
     Session = sessionmaker(bind=engine)
     ssn = Session()
     ssn.commit()
@@ -83,8 +90,8 @@ class Allocation(LogBase):
 
     UniqueConstraint("project_id", "specimen_id")
 
-    project = relationship("Project", back_populates="allocations")
-    data = relationship("Data", back_populates="allocations")
+    project = relationship("Project", back_populates="data_assn")
+    data = relationship("Data", back_populates="project_assn")
 
 
 class Assembly(LogBase):
@@ -99,6 +106,12 @@ class Assembly(LogBase):
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
+    component_type_id = Column(
+        String, ForeignKey("assembly_component_type.component_type_id")
+    )
+    assembly_status_id = Column(
+        Integer, ForeignKey("assembly_status.assembly_status_id")
+    )
     name = Column(String)
     description = Column(String)
 
@@ -106,9 +119,10 @@ class Assembly(LogBase):
     assembly_metrics = relationship("AssemblyMetrics", back_populates="assembly")
     busco_metrics = relationship("BuscoMetrics", back_populates="assembly")
     merqury_metrics = relationship("MerquryMetrics", back_populates="assembly")
+    component_type = relationship("AssemblyComponentType", back_populates="assemblies")
     software_version = relationship("SoftwareVersion", back_populates="assemblies")
 
-    status = relationship("AssemblyStatus")
+    status = relationship("AssemblyStatus", foreign_keys=[assembly_status_id])
     status_history = relationship(
         "AssemblyStatus",
         primaryjoin="Assembly.assembly_id == AssemblyStatus.assembly_id",
@@ -131,6 +145,19 @@ class Assembly(LogBase):
         back_populates="source",
     )
     components = association_proxy("component_assembly_assn", "component")
+
+
+class AssemblyComponentType(LogBase):
+    __tablename__ = "assembly_component_type"
+
+    class Meta:
+        type_ = "component_types"
+        id_column = "component_type_id"
+
+    component_type_id = Column(String, primary_key=True)
+    description = Column(String)
+
+    assemblies = relationship("Assembly", back_populates="component_type")
 
 
 class AssemblySource(Base):
@@ -200,14 +227,14 @@ class AssemblyStatus(LogBase):
         id_column = "assembly_status_id"
 
     assembly_status_id = Column(Integer, primary_key=True)
-    assembly_id = Column(String, ForeignKey("assembly.assembly_id"))
-    status_type_id = Column(String, ForeignKey("assembly_status_type.status_type_id"))
-    status_time = Column(DateTime)
+    assembly_id = Column(String, ForeignKey("assembly.assembly_id"), nullable=False)
+    status_type_id = Column(
+        String, ForeignKey("assembly_status_type.status_type_id"), nullable=False
+    )
+    status_time = Column(DateTime, nullable=False)
 
     assembly = relationship(
-        "Assembly",
-        foreign_keys=[assembly_id],
-        back_populates="status_history",
+        "Assembly", foreign_keys=[assembly_id], back_populates="status_history"
     )
     status_type = relationship("AssemblyStatusType", back_populates="statuses")
 
@@ -320,6 +347,8 @@ class Dataset(LogBase):
         id_column = "dataset_id"
 
     dataset_id = Column(String, primary_key=True)
+    dataset_status_id = Column(Integer, ForeignKey("dataset_status.dataset_status_id"))
+    dataset_list_md5 = Column(String)
     reads = Column(Integer)
     bases = Column(Integer)
     avg_read_len = Column(Float)
@@ -330,7 +359,7 @@ class Dataset(LogBase):
     merqury_metrics = relationship("MerquryMetrics", back_populates="dataset")
     ploidyplot_metrics = relationship("PloidyplotMetrics", back_populates="dataset")
 
-    status = relationship("DatasetStatus")
+    status = relationship("DatasetStatus", foreign_keys=[dataset_status_id])
     status_history = relationship(
         "DatasetStatus",
         primaryjoin="Dataset.dataset_id == DatasetStatus.dataset_id",
@@ -365,14 +394,14 @@ class DatasetStatus(LogBase):
         id_column = "dataset_status_id"
 
     dataset_status_id = Column(Integer, primary_key=True)
-    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
-    status_type_id = Column(String, ForeignKey("dataset_status_type.status_type_id"))
-    status_time = Column(DateTime)
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"), nullable=False)
+    status_type_id = Column(
+        String, ForeignKey("dataset_status_type.status_type_id"), nullable=False
+    )
+    status_time = Column(DateTime, nullable=False)
 
     dataset = relationship(
-        "Dataset",
-        foreign_keys=[dataset_id],
-        back_populates="status_history",
+        "Dataset", foreign_keys=[dataset_id], back_populates="status_history"
     )
     status_type = relationship("DatasetStatusType", back_populates="statuses")
 
@@ -580,6 +609,7 @@ class PloidyplotMetrics(LogBase):
         Integer, ForeignKey("software_version.software_version_id")
     )
 
+    dataset = relationship("Dataset", back_populates="ploidyplot_metrics")
     software_version = relationship(
         "SoftwareVersion", back_populates="ploidyplot_metrics"
     )
@@ -679,12 +709,16 @@ class SoftwareVersion(LogBase):
     name = Column(String)
     version = Column(String)
     cmd = Column(String)
+
+    assemblies = relationship("Assembly", back_populates="software_version")
     busco_metrics = relationship("BuscoMetrics", back_populates="software_version")
-    merqury_metrics = relationship("MerquryMetrics", back_populates="software_version")
     genomescope_metrics = relationship(
         "GenomescopeMetrics", back_populates="software_version"
     )
-    assemblies = relationship("Assembly", back_populates="software_version")
+    merqury_metrics = relationship("MerquryMetrics", back_populates="software_version")
+    ploidyplot_metrics = relationship(
+        "PloidyplotMetrics", back_populates="software_version"
+    )
 
 
 class Species(LogBase):
@@ -731,14 +765,15 @@ class Specimen(LogBase):
 
     species = relationship("Species", back_populates="specimens")
     samples = relationship("Sample", back_populates="specimen")
-    status = relationship("SpecimenStatus")
+    sex = relationship("Sex", back_populates="specimens")
+    accession = relationship("Accession", back_populates="specimens")
+
+    status = relationship("SpecimenStatus", foreign_keys=[specimen_status_id])
     status_history = relationship(
         "SpecimenStatus",
         primaryjoin="Specimen.specimen_id == SpecimenStatus.specimen_id",
         back_populates="specimen",
     )
-    sex = relationship("Sex", back_populates="specimens")
-    accession = relationship("Accession", back_populates="specimens")
 
     parent_assn = relationship(
         "Offspring",
@@ -763,14 +798,14 @@ class SpecimenStatus(LogBase):
         id_column = "specimen_status_id"
 
     specimen_status_id = Column(Integer, primary_key=True)
-    specimen_id = Column(String, ForeignKey("specimen.specimen_id"))
-    status_type_id = Column(String, ForeignKey("specimen_status_type.status_type_id"))
-    status_time = Column(DateTime)
+    specimen_id = Column(String, ForeignKey("specimen.specimen_id"), nullable=False)
+    status_type_id = Column(
+        String, ForeignKey("specimen_status_type.status_type_id"), nullable=False
+    )
+    status_time = Column(DateTime, nullable=False)
 
-    specmien = relationship(
-        "Specimen",
-        foreign_keys=[specimen_id],
-        back_populates="status_history",
+    specimen = relationship(
+        "Specimen", foreign_keys=[specimen_id], back_populates="status_history"
     )
     status_type = relationship("SpecimenStatusType", back_populates="statuses")
 
