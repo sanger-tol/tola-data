@@ -39,7 +39,7 @@ def main():
     # print(inspect.getsource(Assembly))
 
 
-class Accession(LogBase):
+class Accession(Base):
     __tablename__ = "accession"
 
     class Meta:
@@ -63,7 +63,7 @@ class Accession(LogBase):
     data = relationship("Data", back_populates="accession")
 
 
-class AccessionTypeDict(LogBase):
+class AccessionTypeDict(Base):
     __tablename__ = "accession_type_dict"
 
     class Meta:
@@ -77,7 +77,7 @@ class AccessionTypeDict(LogBase):
     accessions = relationship("Accession", back_populates="accession_type")
 
 
-class Allocation(LogBase):
+class Allocation(Base):
     __tablename__ = "allocation"
 
     class Meta:
@@ -147,7 +147,7 @@ class Assembly(LogBase):
     components = association_proxy("component_assembly_assn", "component")
 
 
-class AssemblyComponentType(LogBase):
+class AssemblyComponentType(Base):
     __tablename__ = "assembly_component_type"
 
     class Meta:
@@ -184,7 +184,7 @@ class AssemblySource(Base):
     )
 
 
-class AssemblyMetrics(LogBase):
+class AssemblyMetrics(Base):
     __tablename__ = "assembly_metrics"
 
     class Meta:
@@ -239,7 +239,7 @@ class AssemblyStatus(LogBase):
     status_type = relationship("AssemblyStatusType", back_populates="statuses")
 
 
-class AssemblyStatusType(LogBase):
+class AssemblyStatusType(Base):
     __tablename__ = "assembly_status_type"
 
     class Meta:
@@ -253,7 +253,7 @@ class AssemblyStatusType(LogBase):
     statuses = relationship("AssemblyStatus", back_populates="status_type")
 
 
-class BuscoLineage(LogBase):
+class BuscoLineage(Base):
     __tablename__ = "busco_lineage"
 
     class Meta:
@@ -267,7 +267,7 @@ class BuscoLineage(LogBase):
     busco_metrics = relationship("BuscoMetrics", back_populates="busco_lineage")
 
 
-class BuscoMetrics(LogBase):
+class BuscoMetrics(Base):
     __tablename__ = "busco_metrics"
 
     class Meta:
@@ -320,9 +320,9 @@ class Data(LogBase):
     processed = Column(Integer)
     tag1_id = Column(String)
     tag2_id = Column(String)
-    lims_qc = Column(Integer)
-    auto_qc = Column(Integer)
-    qc = Column(Integer)
+    lims_qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
+    auto_qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
+    qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
     withdrawn = Column(Boolean)
     manually_withdrawn = Column(Boolean)
 
@@ -338,6 +338,15 @@ class Data(LogBase):
     dataset_assn = relationship("DatasetElement", back_populates="data")
     datasets = association_proxy("dataset_assn", "dataset")
 
+
+class QCDict(Base):
+    __tablename__ = "qc_dict"
+
+    class Meta:
+        type_ = "qc_dict"
+        id_column = "qc_state"
+
+    qc_state = Column(String, primary_key=True)
 
 class Dataset(LogBase):
     __tablename__ = "dataset"
@@ -370,7 +379,7 @@ class Dataset(LogBase):
     data = association_proxy("data_assn", "data")
 
 
-class DatasetElement(LogBase):
+class DatasetElement(Base):
     __tablename__ = "dataset_element"
 
     class Meta:
@@ -406,7 +415,7 @@ class DatasetStatus(LogBase):
     status_type = relationship("DatasetStatusType", back_populates="statuses")
 
 
-class DatasetStatusType(LogBase):
+class DatasetStatusType(Base):
     __tablename__ = "dataset_status_type"
 
     class Meta:
@@ -420,7 +429,7 @@ class DatasetStatusType(LogBase):
     statuses = relationship("DatasetStatus", back_populates="status_type")
 
 
-class File(LogBase):
+class File(Base):
     __tablename__ = "file"
 
     class Meta:
@@ -468,7 +477,7 @@ class GenomescopeMetrics(LogBase):
     review = relationship("ReviewDict", back_populates="genomescope_metrics")
 
 
-class Library(LogBase):
+class Library(Base):
     __tablename__ = "library"
 
     class Meta:
@@ -497,7 +506,7 @@ class LibraryType(Base):
     library = relationship("Library", back_populates="library_type")
 
 
-class MerquryMetrics(LogBase):
+class MerquryMetrics(Base):
     __tablename__ = "merqury_metrics"
 
     class Meta:
@@ -524,7 +533,7 @@ class MerquryMetrics(LogBase):
     )
 
 
-class Offspring(LogBase):
+class Offspring(Base):
     __tablename__ = "offspring"
 
     class Meta:
@@ -548,7 +557,7 @@ class Offspring(LogBase):
     )
 
 
-class PacbioRunMetrics(LogBase):
+class PacbioRunMetrics(Base):
     __tablename__ = "pacbio_run_metrics"
 
     class Meta:
@@ -592,7 +601,7 @@ class Platform(Base):
     run = relationship("Run", back_populates="platform")
 
 
-class PloidyplotMetrics(LogBase):
+class PloidyplotMetrics(Base):
     __tablename__ = "ploidyplot_metrics"
 
     class Meta:
@@ -615,7 +624,7 @@ class PloidyplotMetrics(LogBase):
     )
 
 
-class Project(LogBase):
+class Project(Base):
     __tablename__ = "project"
 
     class Meta:
@@ -633,7 +642,7 @@ class Project(LogBase):
     data = association_proxy("data_assn", "data")
 
 
-class ReviewDict(LogBase):
+class ReviewDict(Base):
     __tablename__ = "review_dict"
 
     class Meta:
@@ -646,7 +655,7 @@ class ReviewDict(LogBase):
     genomescope_metrics = relationship("GenomescopeMetrics", back_populates="review")
 
 
-class Run(LogBase):
+class Run(Base):
     __tablename__ = "run"
 
     class Meta:
@@ -685,7 +694,7 @@ class Sample(LogBase):
     data = relationship("Data", back_populates="sample")
 
 
-class Sex(LogBase):
+class Sex(Base):
     __tablename__ = "sex"
 
     class Meta:
@@ -698,7 +707,7 @@ class Sex(LogBase):
     specimens = relationship("Specimen", back_populates="sex")
 
 
-class SoftwareVersion(LogBase):
+class SoftwareVersion(Base):
     __tablename__ = "software_version"
 
     class Meta:
@@ -810,7 +819,7 @@ class SpecimenStatus(LogBase):
     status_type = relationship("SpecimenStatusType", back_populates="statuses")
 
 
-class SpecimenStatusType(LogBase):
+class SpecimenStatusType(Base):
     __tablename__ = "specimen_status_type"
 
     class Meta:

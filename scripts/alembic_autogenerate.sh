@@ -11,5 +11,5 @@ else
 fi
 
 export DB_URI="postgresql://sts-dev:build-that-sts@127.0.0.1:5435/tolqc"
-cd ~/git/tolqc/tolqc-api
-alembic --config migrations/alembic.ini revision --autogenerate -m "$msg"
+cd ~/git/tolqc/tolqc-api/migrations
+alembic --config alembic.ini revision --autogenerate -m "$msg"
