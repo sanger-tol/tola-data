@@ -10,10 +10,8 @@ import black
 from tolqc_schema import Base
 
 
-IGNORE_FILES = {"__init__.py", "__pycache__", "environment.py"}
-
-
 def main(table_names):
+    ignore_files = {"__init__.py", "__pycache__", "environment.py"}
     root_folders = (
         pathlib.Path(x) for x in ("model", "resource", "schema", "service", "swagger")
     )
@@ -29,14 +27,14 @@ def main(table_names):
 
     templates = create_templates(class_by_name)
 
-    files_to_delete(root_folders, templates)
+    files_to_delete(root_folders, templates, ignore_files)
 
     for name in table_names:
         snake, camel = snake_and_camel(name)
         create_table_files(snake, templates[snake])
 
     rewrite_init_files(root_folders, templates)
-    fixup_api_py()
+    fixup_api_py(ignore_files)
 
 
 def create_templates(class_by_name):
@@ -48,13 +46,13 @@ def create_templates(class_by_name):
     return templates
 
 
-def fixup_api_py():
+def fixup_api_py(ignore_files):
     """
     Edit the `api.py` file to include the correct list of resoure file imports and uses
     """
     resource_dir = pathlib.Path("resource")
     res_list = sorted(
-        f"api_{x.stem}" for x in resource_dir.iterdir() if x.name not in IGNORE_FILES
+        f"api_{x.stem}" for x in resource_dir.iterdir() if x.name not in ignore_files
     )
     api_py_file = pathlib.Path("route/api.py")
     api_py_text = api_py_file.read_text()
@@ -73,14 +71,14 @@ def fixup_api_py():
     api_py_file.write_text(clean_code(api_py_text))
 
 
-def files_to_delete(root_folders, templates):
+def files_to_delete(root_folders, templates, ignore_files):
     """
     For files found in `model/` which are no longer in the schema, prints
     a list of `git rm` commands for it and any matching files found in
     the other root folders.
     """
     for file in pathlib.Path("model").iterdir():
-        if file.name in IGNORE_FILES:
+        if file.name in ignore_files:
             continue
         if not templates.get(file.stem, None):
             for fldr in root_folders:
