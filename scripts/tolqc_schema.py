@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     UniqueConstraint,
     create_engine,
@@ -84,11 +85,11 @@ class Allocation(Base):
         type_ = "allocations"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    project_id = Column(Integer, ForeignKey("project.id"))
+    project_id = Column(String, ForeignKey("project.project_id"))
     data_id = Column(Integer, ForeignKey("data.data_id"))
     is_primary = Column(Boolean)
 
-    UniqueConstraint("project_id", "specimen_id")
+    UniqueConstraint("project_id", "data_id")
 
     project = relationship("Project", back_populates="data_assn")
     data = relationship("Data", back_populates="project_assn")
@@ -102,10 +103,10 @@ class Assembly(LogBase):
         id_column = "assembly_id"
 
     assembly_id = Column(Integer, primary_key=True)  # noqa: A003
-    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     component_type_id = Column(
         String, ForeignKey("assembly_component_type.component_type_id")
     )
@@ -116,11 +117,14 @@ class Assembly(LogBase):
     description = Column(String)
 
     dataset = relationship("Dataset", back_populates="assembly")
-    assembly_metrics = relationship("AssemblyMetrics", back_populates="assembly")
-    busco_metrics = relationship("BuscoMetrics", back_populates="assembly")
-    merqury_metrics = relationship("MerquryMetrics", back_populates="assembly")
     component_type = relationship("AssemblyComponentType", back_populates="assemblies")
     software_version = relationship("SoftwareVersion", back_populates="assemblies")
+
+    assembly_metrics = relationship("AssemblyMetrics", back_populates="assembly")
+    busco_metrics = relationship("BuscoMetrics", back_populates="assembly")
+    contigviz_metrics = relationship("ContigvizMetrics", back_populates="assembly")
+    merqury_metrics = relationship("MerquryMetrics", back_populates="assembly")
+    markerscan_metrics = relationship("MarkerscanMetrics", back_populates="assembly")
 
     status = relationship("AssemblyStatus", foreign_keys=[assembly_status_id])
     status_history = relationship(
@@ -253,6 +257,22 @@ class AssemblyStatusType(Base):
     statuses = relationship("AssemblyStatus", back_populates="status_type")
 
 
+class BarcodeMetrics(Base):
+    __tablename__ = "barcode_metrics"
+
+    class Meta:
+        type_ = "barcode_metrics"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    data_id = Column(Integer, ForeignKey("data.data_id"))
+    qc_id = Column(Integer)  # QCDict pass|fail ?
+    species_match_top = Column(String)  # Is this a foreign key to the species table?
+    species_match_identity = Column(Float)
+    species_match_barcode = Column(String)
+
+    data = relationship("Data", back_populates="barcode_metrics")
+
+
 class BuscoLineage(Base):
     __tablename__ = "busco_lineage"
 
@@ -286,6 +306,7 @@ class BuscoMetrics(Base):
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
+
     assembly = relationship("Assembly", back_populates="busco_metrics")
     busco_lineage = relationship("BuscoLineage", back_populates="busco_metrics")
     software_version = relationship("SoftwareVersion", back_populates="busco_metrics")
@@ -300,7 +321,24 @@ class Centre(Base):
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
     hierarchy_name = Column(String)
+
     run = relationship("Run", back_populates="centre")
+
+
+class ContigvizMetrics(Base):
+    __tablename__ = "contigviz_metrics"
+
+    class Meta:
+        type_ = "contigviz_metrics"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+    software_version_id = Column(Integer, ForeignKey("software_version.software_version_id"))
+    results = Column(JSON)
+
+    assembly = relationship("Assembly", back_populates="contigviz_metrics")
+    software_version = relationship("SoftwareVersion", back_populates="contigviz_metrics")
+
 
 
 class Data(LogBase):
@@ -311,10 +349,10 @@ class Data(LogBase):
         id_column = "data_id"
 
     data_id = Column(Integer, primary_key=True)
-    name = Column(String)
+    name = Column(String)  # Do we need this column?
     hierarchy_name = Column(String)
     sample_id = Column(String, ForeignKey("sample.sample_id"))
-    library_id = Column(Integer, ForeignKey("library.id"))
+    library_id = Column(String, ForeignKey("library.library_id"))
     accession_id = Column(String, ForeignKey("accession.accession_id"))
     run_id = Column(Integer, ForeignKey("run.id"))
     processed = Column(Integer)
@@ -325,12 +363,18 @@ class Data(LogBase):
     qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
     withdrawn = Column(Boolean)
     manually_withdrawn = Column(Boolean)
+    date = Column(DateTime)
+    reads = Column(Integer)
+    bases = Column(Integer)
+    read_length_mean = Column(Float)
+    read_length_n50 = Column(Integer)
 
     sample = relationship("Sample", back_populates="data")
     library = relationship("Library", back_populates="data")
     accession = relationship("Accession", back_populates="data")
     run = relationship("Run", back_populates="data")
     files = relationship("File", back_populates="data")
+    barcode_metrics = relationship("BarcodeMetrics", back_populates="data")
 
     project_assn = relationship("Allocation", back_populates="data")
     projects = association_proxy("project_assn", "project")
@@ -338,15 +382,6 @@ class Data(LogBase):
     dataset_assn = relationship("DatasetElement", back_populates="data")
     datasets = association_proxy("dataset_assn", "dataset")
 
-
-class QCDict(Base):
-    __tablename__ = "qc_dict"
-
-    class Meta:
-        type_ = "qc_dict"
-        id_column = "qc_state"
-
-    qc_state = Column(String, primary_key=True)
 
 class Dataset(LogBase):
     __tablename__ = "dataset"
@@ -360,8 +395,8 @@ class Dataset(LogBase):
     dataset_list_md5 = Column(String)
     reads = Column(Integer)
     bases = Column(Integer)
-    avg_read_len = Column(Float)
-    read_len_n50 = Column(Float)
+    read_length_mean = Column(Float)
+    read_length_n50 = Column(Integer)
 
     assembly = relationship("Assembly", back_populates="dataset")
     genomescope_metrics = relationship("GenomescopeMetrics", back_populates="dataset")
@@ -437,9 +472,10 @@ class File(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
-    name = Column(String)
-    irods_path = Column(String)
-    lustre_path = Column(String)
+    name_root = Column(String)
+    realtive_path = Column(String)
+    remote_path = Column(String)
+    size_bytes = Column(Integer)
     md5 = Column(String)
 
     data = relationship("Data", back_populates="files")
@@ -468,7 +504,7 @@ class GenomescopeMetrics(LogBase):
     kcov_init = Column(Integer)
     model_fit = Column(Float)
     read_error_rate = Column(Float)
-    json = Column(String)
+    results = Column(JSON)
 
     dataset = relationship("Dataset", back_populates="genomescope_metrics")
     software_version = relationship(
@@ -482,12 +518,13 @@ class Library(Base):
 
     class Meta:
         type_ = "libraries"
+        id_column = "library_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    name = Column(String)
+    library_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
-    library_type_id = Column(Integer, ForeignKey("library_type.id"))
+    library_type_id = Column(String, ForeignKey("library_type.library_type_id"))
     lims_id = Column(Integer)
+
     data = relationship("Data", back_populates="library")
     library_type = relationship("LibraryType", back_populates="library")
 
@@ -497,13 +534,29 @@ class LibraryType(Base):
 
     class Meta:
         type_ = "library_types"
+        id_column = "library_type_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    name = Column(String)
+    library_type_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
     kit = Column(String)
     enzyme = Column(String)
+
     library = relationship("Library", back_populates="library_type")
+
+
+class MarkerscanMetrics(Base):
+    __tablename__ = "markerscan_metrics"
+
+    class Meta:
+        type_ = "markerscan_metrics"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+    software_version_id = Column(Integer, ForeignKey("software_version.software_version_id"))
+    results = Column(JSON)
+
+    assembly = relationship("Assembly", back_populates="markerscan_metrics")
+    software_version = relationship("SoftwareVersion", back_populates="markerscan_metrics")
 
 
 class MerquryMetrics(Base):
@@ -525,6 +578,7 @@ class MerquryMetrics(Base):
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
+
     assembly = relationship("Assembly", back_populates="merqury_metrics")
     dataset = relationship("Dataset", back_populates="merqury_metrics")
     software_version = relationship(
@@ -586,6 +640,7 @@ class PacbioRunMetrics(Base):
     demux_version_id = Column(String)
     demux_pass = Column(Integer)
     demux_fail = Column(Integer)
+
     run = relationship("Run", back_populates="pacbio_run_metrics")
 
 
@@ -598,6 +653,7 @@ class Platform(Base):
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
     model = Column(String)
+
     run = relationship("Run", back_populates="platform")
 
 
@@ -629,9 +685,9 @@ class Project(Base):
 
     class Meta:
         type_ = "projects"
+        id_column = "project_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    name = Column(String)
+    project_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
     description = Column(String)
     lims_id = Column(Integer)
@@ -640,6 +696,16 @@ class Project(Base):
     accession = relationship("Accession", back_populates="projects")
     data_assn = relationship("Allocation", back_populates="project")
     data = association_proxy("data_assn", "data")
+
+
+class QCDict(Base):
+    __tablename__ = "qc_dict"
+
+    class Meta:
+        type_ = "qc_dict"
+        id_column = "qc_state"
+
+    qc_state = Column(String, primary_key=True)
 
 
 class ReviewDict(Base):
@@ -686,7 +752,7 @@ class Sample(LogBase):
     sample_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
     lims_id = Column(Integer)
-    specimen_id = Column(Integer, ForeignKey("specimen.specimen_id"))
+    specimen_id = Column(String, ForeignKey("specimen.specimen_id"))
     accession_id = Column(String, ForeignKey("accession.accession_id"))
 
     specimen = relationship("Specimen", back_populates="samples")
@@ -719,11 +785,15 @@ class SoftwareVersion(Base):
     version = Column(String)
     cmd = Column(String)
 
+    UniqueConstraint("name", "version")
+
     assemblies = relationship("Assembly", back_populates="software_version")
     busco_metrics = relationship("BuscoMetrics", back_populates="software_version")
+    contigviz_metrics = relationship("ContigvizMetrics", back_populates="software_version")
     genomescope_metrics = relationship(
         "GenomescopeMetrics", back_populates="software_version"
     )
+    markerscan_metrics = relationship("MarkerscanMetrics", back_populates="software_version")
     merqury_metrics = relationship("MerquryMetrics", back_populates="software_version")
     ploidyplot_metrics = relationship(
         "PloidyplotMetrics", back_populates="software_version"

@@ -127,6 +127,10 @@ def strip_dot_imports(text):
 
 
 def snake_and_camel(name):
+    qc_dict = "qc_dict", "QCDict"
+    if name in qc_dict:
+        return qc_dict
+
     words = [x for x in re.findall(r"([A-Z]*[a-z]*)", name) if len(x)]
     snake = "_".join(x.lower() for x in words)
     camel = "".join(x.title() for x in words)
@@ -135,7 +139,7 @@ def snake_and_camel(name):
 
 def uglify_model_code(code):
     code_db_types = re.sub(
-        r"(?<!db\.)(Boolean|DateTime|Float|Integer|String)(\(\))?",
+        r"(?<!db\.)(Boolean|DateTime|Float|Integer|JSON|String)(\(\))?",
         r"db.\1()",
         code,
     )
