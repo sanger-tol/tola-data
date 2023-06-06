@@ -12,7 +12,7 @@ from tolqc_schema import Base
 
 def main(table_names):
     ignore_files = {"__init__.py", "__pycache__", "environment.py"}
-    root_folders = (
+    root_folders = tuple(
         pathlib.Path(x) for x in ("model", "resource", "schema", "service", "swagger")
     )
     class_by_name = {
@@ -303,8 +303,11 @@ def file_templates(snake, camel, class_code):
 
 
 quote_trans = str.maketrans("\"'", "'\"")
+
+
 def single_quote_code(code):
     return code.translate(quote_trans)
+
 
 black_mode = black.Mode(
     string_normalization=False,
@@ -315,9 +318,7 @@ black_mode = black.Mode(
 
 
 def clean_code(code):
-    return black.format_str(
-        inspect.cleandoc(code), mode=black_mode
-    )
+    return black.format_str(inspect.cleandoc(code), mode=black_mode)
 
 
 def info(*args):
