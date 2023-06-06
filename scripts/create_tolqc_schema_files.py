@@ -295,14 +295,19 @@ def file_templates(snake, camel, class_code):
 
     return {
         file: {
-            "content": clean_code(content),
+            "content": clean_code(single_quote_code(content)),
             "init_line": f"{init_lines[file]} # noqa: F401",
         }
         for file, content in templates.items()
     }
 
 
+quote_trans = str.maketrans("\"'", "'\"")
+def single_quote_code(code):
+    return code.translate(quote_trans)
+
 black_mode = black.Mode(
+    string_normalization=False,
     target_versions={
         black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"],
     },
@@ -310,7 +315,9 @@ black_mode = black.Mode(
 
 
 def clean_code(code):
-    return black.format_str(inspect.cleandoc(code), mode=black_mode)
+    return black.format_str(
+        inspect.cleandoc(code), mode=black_mode
+    )
 
 
 def info(*args):
