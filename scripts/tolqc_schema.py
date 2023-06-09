@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-
+import sys
 from sqlalchemy import (
     Boolean,
     Column,
@@ -22,17 +22,23 @@ Base = declarative_base()
 LogBase = Base
 
 
-def main():
+def main(args):
     # inheritance(Assembly)
     # engine = create_engine("sqlite:///assembly.sqlite", echo=False)
-    engine = create_engine("sqlite://", echo=False)
-    Base.metadata.create_all(engine)
 
     # Trigger creation of Mappers to expose any errors in schema
     for mapr in Base.registry.mappers:
         print(f"{mapr}")
         for prop in mapr.iterate_properties:
             print(f"  {prop}")
+
+    if "--build" in args:
+        engine = create_engine("postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", echo=True)
+        Base.metadata.drop_all(engine)
+    else:
+        engine = create_engine("sqlite://", echo=False)
+
+    Base.metadata.create_all(engine)
 
     Session = sessionmaker(bind=engine)
     ssn = Session()
@@ -49,7 +55,7 @@ class Accession(Base):
 
     accession_id = Column(String, primary_key=True)
     accession_type_id = Column(
-        Integer, ForeignKey("accession_type_dict.accession_type_id")
+        String, ForeignKey("accession_type_dict.accession_type_id")
     )
     secondary = Column(String)
     submission = Column(String)
@@ -164,30 +170,6 @@ class AssemblyComponentType(Base):
     assemblies = relationship("Assembly", back_populates="component_type")
 
 
-class AssemblySource(Base):
-    __tablename__ = "assembly_source"
-
-    class Meta:
-        type_ = "assembly_sources"
-
-    id = Column(Integer, primary_key=True)  # noqa: A003
-    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-    source_assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-
-    UniqueConstraint("assembly_id", "source_assembly_id")
-
-    source = relationship(
-        "Assembly",
-        foreign_keys=[source_assembly_id],
-        back_populates="component_assembly_assn",
-    )
-    component = relationship(
-        "Assembly",
-        foreign_keys=[assembly_id],
-        back_populates="source_assembly_assn",
-    )
-
-
 class AssemblyMetrics(Base):
     __tablename__ = "assembly_metrics"
 
@@ -223,6 +205,30 @@ class AssemblyMetrics(Base):
     assembly = relationship("Assembly", back_populates="assembly_metrics")
 
 
+class AssemblySource(Base):
+    __tablename__ = "assembly_source"
+
+    class Meta:
+        type_ = "assembly_sources"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+    source_assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
+
+    UniqueConstraint("assembly_id", "source_assembly_id")
+
+    source = relationship(
+        "Assembly",
+        foreign_keys=[source_assembly_id],
+        back_populates="component_assembly_assn",
+    )
+    component = relationship(
+        "Assembly",
+        foreign_keys=[assembly_id],
+        back_populates="source_assembly_assn",
+    )
+
+
 class AssemblyStatus(LogBase):
     __tablename__ = "assembly_status"
 
@@ -231,7 +237,7 @@ class AssemblyStatus(LogBase):
         id_column = "assembly_status_id"
 
     assembly_status_id = Column(Integer, primary_key=True)
-    assembly_id = Column(String, ForeignKey("assembly.assembly_id"), nullable=False)
+    assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"), nullable=False)
     status_type_id = Column(
         String, ForeignKey("assembly_status_type.status_type_id"), nullable=False
     )
@@ -358,9 +364,9 @@ class Data(LogBase):
     processed = Column(Integer)
     tag1_id = Column(String)
     tag2_id = Column(String)
-    lims_qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
-    auto_qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
-    qc = Column(Integer, ForeignKey("qc_dict.qc_state"))
+    lims_qc = Column(String, ForeignKey("qc_dict.qc_state"))
+    auto_qc = Column(String, ForeignKey("qc_dict.qc_state"))
+    qc = Column(String, ForeignKey("qc_dict.qc_state"))
     withdrawn = Column(Boolean)
     manually_withdrawn = Column(Boolean)
     date = Column(DateTime)
@@ -664,7 +670,7 @@ class PloidyplotMetrics(Base):
         type_ = "ploidyplot_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    dataset_id = Column(Integer, ForeignKey("dataset.dataset_id"))
+    dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
     kmer = Column(Integer)
     ploidy = Column(Integer)
     n = Column(Float)
@@ -834,7 +840,7 @@ class Specimen(LogBase):
     specimen_status_id = Column(
         Integer, ForeignKey("specimen_status.specimen_status_id")
     )
-    species_id = Column(Integer, ForeignKey("species.species_id"))
+    species_id = Column(String, ForeignKey("species.species_id"))
     lims_id = Column(Integer)
     supplied_name = Column(String)
     accession_id = Column(String, ForeignKey("accession.accession_id"))
@@ -904,4 +910,4 @@ class SpecimenStatusType(Base):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
