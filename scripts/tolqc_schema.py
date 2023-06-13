@@ -527,7 +527,6 @@ class Library(Base):
         id_column = "library_id"
 
     library_id = Column(String, primary_key=True)
-    hierarchy_name = Column(String)
     library_type_id = Column(String, ForeignKey("library_type.library_type_id"))
     lims_id = Column(Integer)
 
