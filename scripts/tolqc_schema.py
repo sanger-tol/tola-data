@@ -33,7 +33,9 @@ def main(args):
             print(f"  {prop}")
 
     if "--build" in args:
-        engine = create_engine("postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", echo=True)
+        engine = create_engine(
+            "postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", echo=True
+        )
         Base.metadata.drop_all(engine)
     else:
         engine = create_engine("sqlite://", echo=False)
@@ -339,12 +341,15 @@ class ContigvizMetrics(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-    software_version_id = Column(Integer, ForeignKey("software_version.software_version_id"))
+    software_version_id = Column(
+        Integer, ForeignKey("software_version.software_version_id")
+    )
     results = Column(JSON)
 
     assembly = relationship("Assembly", back_populates="contigviz_metrics")
-    software_version = relationship("SoftwareVersion", back_populates="contigviz_metrics")
-
+    software_version = relationship(
+        "SoftwareVersion", back_populates="contigviz_metrics"
+    )
 
 
 class Data(LogBase):
@@ -543,8 +548,10 @@ class LibraryType(Base):
 
     library_type_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
+    category = Column(String)
     kit = Column(String)
-    enzyme = Column(String)
+    enzymes = Column(String)
+    cut_sites = Column(String)
 
     library = relationship("Library", back_populates="library_type")
 
@@ -557,11 +564,15 @@ class MarkerscanMetrics(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-    software_version_id = Column(Integer, ForeignKey("software_version.software_version_id"))
+    software_version_id = Column(
+        Integer, ForeignKey("software_version.software_version_id")
+    )
     results = Column(JSON)
 
     assembly = relationship("Assembly", back_populates="markerscan_metrics")
-    software_version = relationship("SoftwareVersion", back_populates="markerscan_metrics")
+    software_version = relationship(
+        "SoftwareVersion", back_populates="markerscan_metrics"
+    )
 
 
 class MerquryMetrics(Base):
@@ -624,7 +635,7 @@ class PacbioRunMetrics(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     run_id = Column(Integer, ForeignKey("run.id"))
-    move_time = Column(Integer)
+    movie_time = Column(Integer)
     pre_extension_time = Column(Integer)
     total_bases = Column(Integer)
     polymerase_reads = Column(Integer)
@@ -794,11 +805,15 @@ class SoftwareVersion(Base):
 
     assemblies = relationship("Assembly", back_populates="software_version")
     busco_metrics = relationship("BuscoMetrics", back_populates="software_version")
-    contigviz_metrics = relationship("ContigvizMetrics", back_populates="software_version")
+    contigviz_metrics = relationship(
+        "ContigvizMetrics", back_populates="software_version"
+    )
     genomescope_metrics = relationship(
         "GenomescopeMetrics", back_populates="software_version"
     )
-    markerscan_metrics = relationship("MarkerscanMetrics", back_populates="software_version")
+    markerscan_metrics = relationship(
+        "MarkerscanMetrics", back_populates="software_version"
+    )
     merqury_metrics = relationship("MerquryMetrics", back_populates="software_version")
     ploidyplot_metrics = relationship(
         "PloidyplotMetrics", back_populates="software_version"

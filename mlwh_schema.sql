@@ -976,8 +976,8 @@ CREATE TABLE pac_bio_run (
   library_created_at              datetime          DEFAULT NULL              COMMENT 'Timestamp of library creation',
   pac_bio_run_name                varchar(255)      DEFAULT NULL              COMMENT 'Name of the run',
   pipeline_id_lims                varchar(60)       DEFAULT NULL              COMMENT 'LIMS-specific pipeline identifier that unambiguously defines library type (eg. Sequel-v1, IsoSeq-v1)',
-  comparable_tag_identifier       varchar(255)                                GENERATED ALWAYS AS (ifnull(`tag_identifier`,-(1))) VIRTUAL,
-  comparable_tag2_identifier      varchar(255)                                GENERATED ALWAYS AS (ifnull(`tag2_identifier`,-(1))) VIRTUAL,
+  comparable_tag_identifier       varchar(255)      GENERATED ALWAYS AS (ifnull(`tag_identifier`,-(1))) VIRTUAL,
+  comparable_tag2_identifier      varchar(255)      GENERATED ALWAYS AS (ifnull(`tag2_identifier`,-(1))) VIRTUAL,
   plate_number                    int(11)           DEFAULT NULL              COMMENT 'The number of the plate that goes onto the sequencing machine. Necessary as an identifier for multi-plate support.',
   pac_bio_library_tube_barcode    varchar(255)      DEFAULT NULL              COMMENT 'The barcode of the originating library tube',
 
@@ -1228,15 +1228,15 @@ CREATE TABLE schema_migrations (
 
 CREATE TABLE seq_product_irods_locations (
 
-  id_seq_product_irods_locations_tmp  bigint(20) unsigned  NOT NULL AUTO_INCREMENT                                COMMENT 'Internal to this database id, value can change',
-  created                             datetime             DEFAULT CURRENT_TIMESTAMP                              COMMENT 'Datetime this record was created',
-  last_changed                        datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP  COMMENT 'Datetime this record was created or changed',
-  id_product                          varchar(64)          CHARACTER SET utf8 NOT NULL                            COMMENT 'A sequencing platform specific product id. For Illumina, data corresponds to the id_iseq_product column in the iseq_product_metrics table',
-  seq_platform_name                   enum('               Illumina','PacBio','ONT') NOT NULL                     COMMENT 'Name of the sequencing platform used to produce raw data',
-  pipeline_name                       varchar(32)          NOT NULL                                               COMMENT 'The name of the pipeline used to produce the data, values are: npg-prod, npg-prod-alt-process, cellranger, spaceranger, ncov2019-artic-nf',
-  irods_root_collection               varchar(255)         NOT NULL                                               COMMENT 'Path to the product root collection in iRODS',
-  irods_data_relative_path            varchar(255)         DEFAULT NULL                                           COMMENT 'The path, relative to the root collection, to the most used data location',
-  irods_secondary_data_relative_path  varchar(255)         DEFAULT NULL                                           COMMENT 'The path, relative to the root collection, to a useful data location',
+  id_seq_product_irods_locations_tmp  bigint(20) unsigned             NOT NULL AUTO_INCREMENT                                COMMENT 'Internal to this database id, value can change',
+  created                             datetime                        DEFAULT CURRENT_TIMESTAMP                              COMMENT 'Datetime this record was created',
+  last_changed                        datetime                        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP  COMMENT 'Datetime this record was created or changed',
+  id_product                          varchar(64)                     CHARACTER SET utf8 NOT NULL                            COMMENT 'A sequencing platform specific product id. For Illumina, data corresponds to the id_iseq_product column in the iseq_product_metrics table',
+  seq_platform_name                   enum('Illumina','PacBio','ONT') NOT NULL                                               COMMENT 'Name of the sequencing platform used to produce raw data',
+  pipeline_name                       varchar(32)                     NOT NULL                                               COMMENT 'The name of the pipeline used to produce the data, values are: npg-prod, npg-prod-alt-process, cellranger, spaceranger, ncov2019-artic-nf',
+  irods_root_collection               varchar(255)                    NOT NULL                                               COMMENT 'Path to the product root collection in iRODS',
+  irods_data_relative_path            varchar(255)                    DEFAULT NULL                                           COMMENT 'The path, relative to the root collection, to the most used data location',
+  irods_secondary_data_relative_path  varchar(255)                    DEFAULT NULL                                           COMMENT 'The path, relative to the root collection, to a useful data location',
 
   PRIMARY KEY (id_seq_product_irods_locations_tmp),
   UNIQUE KEY pi_root_product (irods_root_collection,id_product),
