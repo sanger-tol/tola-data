@@ -21,10 +21,189 @@ WHERE y.id_study_lims IN (
   6969, 7112, 7107, 7106, 7104, 7103, 7102, 7101, 7005, 7007, 7233, 7237,
   7256
   )
-  AND taxon_id = 13579
+  AND taxon_id = 13579;
+
+
+-- Reformatted version of mlwh_datasource.py Illumina query.  Unnecessary
+-- DISTINCT removed with join from product_metrics to run_land_metrics using
+-- both id_run and position columns
+
+SELECT sample.name AS sample_ref
+  , sample.public_name AS public_name
+  , sample.common_name AS common_name
+  , sample.supplier_name AS supplier_name
+  , sample.accession_number AS accession_number
+  , sample.donor_id AS donor_id
+  , sample.taxon_id AS taxon_id
+  , sample.description AS description
+  , run_lane_metrics.instrument_model AS instrument_model
+  , CONVERT(run_lane_metrics.id_run, char) AS run_id
+  , run_lane_metrics.run_pending AS start_date
+  , run_lane_metrics.qc_complete AS qc_date
+  , CONVERT(flowcell.position, char) AS position
+  , CONVERT(flowcell.tag_index, char) AS tag_index
+  , flowcell.pipeline_id_lims AS pipeline_id_lims
+  , flowcell.tag_sequence AS tag_sequence
+  , flowcell.tag2_sequence AS tag2_sequence
+  , run_status_dict.description AS run_status
+  , run_status.date AS complete_date
+  , study.id_study_lims AS study_id
+  , study.name AS study_name
+  , flowcell.manual_qc AS manual_qc
+  , 'iseq' AS platform_type
+FROM mlwarehouse.sample
+JOIN mlwarehouse.iseq_flowcell AS flowcell
+  ON sample.id_sample_tmp = flowcell.id_sample_tmp
+JOIN mlwarehouse.iseq_product_metrics AS product_metrics
+  ON flowcell.id_iseq_flowcell_tmp = product_metrics.id_iseq_flowcell_tmp
+JOIN mlwarehouse.iseq_run_lane_metrics AS run_lane_metrics
+  ON product_metrics.id_run = run_lane_metrics.id_run
+  AND product_metrics.position = run_lane_metrics.position
+JOIN mlwarehouse.iseq_run_status AS run_status
+  ON product_metrics.id_run = run_status.id_run
+JOIN mlwarehouse.iseq_run_status_dict AS run_status_dict
+  ON run_status.id_run_status_dict = run_status_dict.id_run_status_dict
+JOIN mlwarehouse.study AS study
+  ON flowcell.id_study_tmp = study.id_study_tmp
+WHERE study.id_study_lims = 5901
+  AND run_status.iscurrent = 1
+  AND run_lane_metrics.qc_complete IS NOT NULL
+ORDER BY run_lane_metrics.id_run
+
+
+-- New Illumina query to use per-product QC outcomes
+
+SELECT sample.name AS sample_ref
+  , sample.public_name AS public_name
+  , sample.common_name AS common_name
+  , sample.supplier_name AS supplier_name
+  , sample.accession_number AS accession_number
+  , sample.donor_id AS donor_id
+  , sample.taxon_id AS taxon_id
+  , sample.description AS description
+  , 'Illumina' AS platform_type
+  , run_lane_metrics.instrument_model AS instrument_model
+  , CONVERT(run_lane_metrics.id_run, char) AS run_id
+  , run_lane_metrics.qc_complete AS qc_date
+  , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
+  , CONVERT(flowcell.position, char) AS position
+  , CONVERT(flowcell.tag_index, char) AS tag_index
+  , flowcell.pipeline_id_lims AS pipeline_id_lims
+  , flowcell.tag_sequence AS tag_sequence
+  , flowcell.tag2_sequence AS tag2_sequence
+  , study.id_study_lims AS study_id
+  , study.name AS study_name
+  , irods.irods_root_collection AS irods_path
+  , irods.irods_data_relative_path AS irods_file
+FROM mlwarehouse.sample
+JOIN mlwarehouse.iseq_flowcell AS flowcell
+  ON sample.id_sample_tmp = flowcell.id_sample_tmp
+JOIN mlwarehouse.study
+  ON flowcell.id_study_tmp = study.id_study_tmp
+JOIN mlwarehouse.iseq_product_metrics AS product_metrics
+  ON flowcell.id_iseq_flowcell_tmp = product_metrics.id_iseq_flowcell_tmp
+JOIN mlwarehouse.iseq_run_lane_metrics AS run_lane_metrics
+  ON product_metrics.id_run = run_lane_metrics.id_run
+  AND product_metrics.position = run_lane_metrics.position
+LEFT JOIN mlwarehouse.seq_product_irods_locations irods
+  ON product_metrics.id_iseq_product = irods.id_product
+WHERE run_lane_metrics.qc_complete IS NOT NULL
+  AND study.id_study_lims = 5901;
+
+
+SELECT study.id_study_lims AS study_id
+  , study.name AS study_name
+  , sample.name AS sample_ref
+  , sample.supplier_name AS supplier_name
+  , sample.accession_number AS accession_number
+  , sample.public_name AS public_name
+  , sample.donor_id AS donor_id
+  , sample.taxon_id AS taxon_id
+  , sample.common_name AS common_name
+  , sample.description AS description
+  , smrtcell.pac_bio_run_name AS run_id
+  , smrtcell.tag_identifier AS tag_index
+  , smrtcell.tag_sequence AS tag1_sequence
+  , smrtcell.tag2_sequence AS tag2_sequence
+  , smrtcell.well_label AS position
+  , smrtcell.plate_barcode AS plate_barcode
+  , smrtcell.pipeline_id_lims AS pipeline_id_lims
+  , 'PacBio' AS platform_type
+  , well_metrics.instrument_type AS instrument_model
+  , well_metrics.qc_seq_date AS qc_date
+  , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
+  , CONVERT(well_metrics.p1_num, char) AS p1_num
+  , well_metrics.movie_name AS movie
+  , CONVERT(well_metrics.hifi_read_bases, char) AS yield
+  , irods.irods_root_collection AS irods_path
+  , irods.irods_data_relative_path AS irods_file
+FROM mlwarehouse.sample
+JOIN mlwarehouse.pac_bio_run AS smrtcell
+  ON sample.id_sample_tmp = smrtcell.id_sample_tmp
+JOIN pac_bio_product_metrics AS product_metrics
+  ON smrtcell.id_pac_bio_tmp = product_metrics.id_pac_bio_tmp
+JOIN pac_bio_run_well_metrics AS well_metrics
+  ON product_metrics.id_pac_bio_rw_metrics_tmp = well_metrics.id_pac_bio_rw_metrics_tmp
+JOIN mlwarehouse.study
+  ON smrtcell.id_study_tmp = study.id_study_tmp
+LEFT JOIN mlwarehouse.seq_product_irods_locations irods
+  ON well_metrics.id_pac_bio_product = irods.id_product
+WHERE well_metrics.qc_seq_state_is_final = 1
+  AND study.id_study_lims = 5901;
 
 
 -- Query joining PacBio runs into iRODS locations table
+
+ --       sample_ref  DTOL9702654
+ --      public_name  lpJunEffu1
+ --      common_name  Juncus effusus
+ --    supplier_name  KDTOL10021
+ -- accession_number  SAMEA7521953
+ --         donor_id  SAMEA7521930
+ --         taxon_id  13579
+ --      description
+ --    platform_type  Illumina
+ -- instrument_model  NovaSeq
+ --           run_id  36691
+ --          qc_date  2021-03-18 12:16:43
+ --          lims_qc  pass
+ --         position  2
+ --        tag_index  7
+ -- pipeline_id_lims  Chromium genome
+ --     tag_sequence  ATACCCAA
+ --    tag2_sequence
+ --         study_id  5901
+ --       study_name  DTOL_Darwin Tree of Life
+ --       irods_path  /seq/illumina/runs/36/36691/lane2/plex7
+ --       irods_file  36691_2#7.cram
+
+
+ --         study_id  5901
+ --       study_name  DTOL_Darwin Tree of Life
+ --       sample_ref  DTOL9838614
+ --    supplier_name  FD21271880
+ -- accession_number  SAMEA7521953
+ --      public_name  lpJunEffu1
+ --         donor_id  SAMEA7521930
+ --         taxon_id  13579
+ --      common_name  Juncus effusus
+ --      description
+ --           run_id  79924
+ --        tag_index  1019
+ --    tag1_sequence  ACACACTCTATCAGATT
+ --    tag2_sequence
+ --         position  D1
+ --    plate_barcode  DN776795M
+ -- pipeline_id_lims
+ --    platform_type  PacBio
+ -- instrument_model  Sequel2e
+ --          qc_date  2021-02-22 23:07:55
+ --           p1_num  4559996
+ --            movie  m64097e_210221_172213
+ --            yield  22632028638
+ --       irods_path
+ --       irods_file
+
 
 SELECT y.id_study_lims
   , y.name
@@ -54,7 +233,7 @@ LEFT JOIN seq_product_irods_locations loc
 JOIN sample s
   ON r.id_sample_tmp = s.id_sample_tmp
 WHERE y.id_study_lims = 5901
-  AND taxon_id = 13579
+  AND taxon_id = 13579;
 
 
 -- Query joining Illumina data into iRODS locations table
@@ -77,5 +256,5 @@ JOIN iseq_run_lane_metrics rlm
   AND m.position = rlm.position
 LEFT JOIN seq_product_irods_locations loc
   ON m.id_iseq_product = loc.id_product
-WHERE y.id_study_lims = 5901
+WHERE y.id_study_lims = 5901;
 
