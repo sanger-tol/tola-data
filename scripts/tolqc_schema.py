@@ -360,7 +360,7 @@ class Data(LogBase):
         id_column = "data_id"
 
     data_id = Column(Integer, primary_key=True)
-    name = Column(String)  # Do we need this column?
+    name_root = Column(String)
     hierarchy_name = Column(String)
     sample_id = Column(String, ForeignKey("sample.sample_id"))
     library_id = Column(String, ForeignKey("library.library_id"))
@@ -484,7 +484,7 @@ class File(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
-    name_root = Column(String)
+    name = Column(String)
     realtive_path = Column(String)
     remote_path = Column(String)
     size_bytes = Column(Integer)
@@ -707,7 +707,7 @@ class Project(Base):
     project_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
     description = Column(String)
-    lims_id = Column(Integer)
+    lims_id = Column(Integer, index=True)
     accession_id = Column(String, ForeignKey("accession.accession_id"))
 
     accession = relationship("Accession", back_populates="projects")
@@ -752,7 +752,8 @@ class Run(Base):
     lims_id = Column(Integer)
     element = Column(String)
     instrument_name = Column(String)
-    date = Column(DateTime)
+    complete = Column(DateTime)
+
     data = relationship("Data", back_populates="run")
     platform = relationship("Platform", back_populates="run")
     centre = relationship("Centre", back_populates="run")
@@ -832,7 +833,7 @@ class Species(LogBase):
     hierarchy_name = Column(String, nullable=False, unique=True)
     strain = Column(String)
     common_name = Column(String)
-    taxon_id = Column(Integer)
+    taxon_id = Column(Integer, index=True)
     taxon_family = Column(String)
     taxon_order = Column(String)
     taxon_phylum = Column(String)
