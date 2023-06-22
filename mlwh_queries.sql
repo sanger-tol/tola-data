@@ -73,7 +73,7 @@ ORDER BY run_lane_metrics.id_run
 
 -- New Illumina query to use per-product QC outcomes
 
-SELECT sample.name AS sample_ref
+SELECT sample.name AS sample_name
   , sample.public_name AS public_name
   , sample.common_name AS common_name
   , sample.supplier_name AS supplier_name
@@ -84,6 +84,7 @@ SELECT sample.name AS sample_ref
   , 'Illumina' AS platform_type
   , run_lane_metrics.instrument_model AS instrument_model
   , CONVERT(run_lane_metrics.id_run, char) AS run_id
+  , run_lane_metrics.run_complete AS run_complete
   , run_lane_metrics.qc_complete AS qc_date
   , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
   , CONVERT(flowcell.position, char) AS position
@@ -91,6 +92,7 @@ SELECT sample.name AS sample_ref
   , flowcell.pipeline_id_lims AS pipeline_id_lims
   , flowcell.tag_sequence AS tag_sequence
   , flowcell.tag2_sequence AS tag2_sequence
+  , flowcell.id_library_lims AS library_id
   , study.id_study_lims AS study_id
   , study.name AS study_name
   , irods.irods_root_collection AS irods_path
@@ -113,7 +115,7 @@ WHERE run_lane_metrics.qc_complete IS NOT NULL
 
 SELECT study.id_study_lims AS study_id
   , study.name AS study_name
-  , sample.name AS sample_ref
+  , sample.name AS sample_name
   , sample.supplier_name AS supplier_name
   , sample.accession_number AS accession_number
   , sample.public_name AS public_name
@@ -127,8 +129,9 @@ SELECT study.id_study_lims AS study_id
   , smrtcell.tag2_sequence AS tag2_sequence
   , smrtcell.well_label AS position
   , smrtcell.plate_barcode AS plate_barcode
-  , smrtcell.pipeline_id_lims AS pipeline_id_lims
   , 'PacBio' AS platform_type
+  , smrtcell.pipeline_id_lims AS pipeline_id_lims
+  , smrtcell.pac_bio_library_tube_name AS library_id
   , well_metrics.instrument_type AS instrument_model
   , well_metrics.qc_seq_date AS qc_date
   , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
@@ -148,7 +151,7 @@ JOIN mlwarehouse.study
   ON smrtcell.id_study_tmp = study.id_study_tmp
 LEFT JOIN mlwarehouse.seq_product_irods_locations irods
   ON well_metrics.id_pac_bio_product = irods.id_product
-WHERE well_metrics.qc_seq_state_is_final = 1
+WHERE product_metrics.qc IS NOT NULL
   AND study.id_study_lims = 5901;
 
 
