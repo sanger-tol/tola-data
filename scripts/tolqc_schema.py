@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     create_engine,
+    text,
 )
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -33,9 +34,14 @@ def main(args):
             print(f"  {prop}")
 
     if "--build" in args:
-        engine = create_engine(
-            "postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", echo=True
-        )
+        engine = local_postgres_engine(echo=True)
+
+        # SQLAlchemy cannot work out order of ..._status tables for drop_all
+        # due to multiple foreign keys that link to their subject tables
+        with engine.connect() as conn:
+            for table in ('specimen_status', 'dataset_status', 'assembly_status'):
+                conn.execute(text(f"DROP TABLE {table} CASCADE"))
+
         Base.metadata.drop_all(engine)
     else:
         engine = create_engine("sqlite://", echo=False)
@@ -46,6 +52,10 @@ def main(args):
     ssn = Session()
     ssn.commit()
     # print(inspect.getsource(Assembly))
+
+
+def local_postgres_engine(**kwargs):
+    return create_engine("postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", **kwargs)
 
 
 class Accession(Base):
@@ -93,7 +103,7 @@ class Allocation(Base):
         type_ = "allocations"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    project_id = Column(String, ForeignKey("project.project_id"))
+    project_id = Column(Integer, ForeignKey("project.project_id"))
     data_id = Column(Integer, ForeignKey("data.data_id"))
     is_primary = Column(Boolean)
 
@@ -704,7 +714,7 @@ class Project(Base):
         type_ = "projects"
         id_column = "project_id"
 
-    project_id = Column(String, primary_key=True)
+    project_id = Column(Integer, primary_key=True)
     hierarchy_name = Column(String)
     description = Column(String)
     lims_id = Column(Integer, index=True)

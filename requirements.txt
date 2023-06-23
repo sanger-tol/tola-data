@@ -1,2 +1,6 @@
 sqlalchemy~=1.4.0
-
+flask
+Flask-SQLAlchemy
+flask-restx
+marshmallow-jsonapi
+marshmallow-sqlalchemy
