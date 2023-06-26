@@ -163,7 +163,7 @@ class Assembly(LogBase):
     # Components are assemblies which have this assembly as their source
     component_assembly_assn = relationship(
         "AssemblySource",
-        primaryjoin="Assembly.assembly_id == AssemblySource.source_assembly_id",
+        primaryjoin="Assembly.assembly_id == AssemblySource.source_assembly_id",  # noqa: E501
         back_populates="source",
     )
     components = association_proxy("component_assembly_assn", "component")

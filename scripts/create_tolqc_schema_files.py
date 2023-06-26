@@ -54,20 +54,25 @@ def fixup_api_py(ignore_files):
     res_list = sorted(
         f"api_{x.stem}" for x in resource_dir.iterdir() if x.name not in ignore_files
     )
+
     api_py_file = pathlib.Path("route/api.py")
     api_py_text = api_py_file.read_text()
+
     api_py_text = re.sub(
         r"(?<=from main\.resource import).+?(?=\n\n|\bfrom\b)",
         f" {', '.join(res_list)}\n",
         api_py_text,
         flags=re.DOTALL,
     )
+
+    res_list = sorted(res_list + ["api_auth", "api_environment", "api_user"])
     api_py_text = re.sub(
         r"(    api\.add_namespace\(\w+\)\s*\n)+",
         "".join(f"    api.add_namespace({x})\n" for x in res_list) + "\n\n",
         api_py_text,
         flags=re.DOTALL,
     )
+
     api_py_file.write_text(clean_code(api_py_text))
 
 
@@ -216,8 +221,9 @@ def file_templates(snake, camel, class_code):
         "model": f"""
             {header}
 
-            from tol.api_base.model import {base_flavour}, db, setup_model
             {assn_proxy_import}
+
+            from tol.api_base.model import {base_flavour}, db, setup_model
 
 
             @setup_model
@@ -229,6 +235,7 @@ def file_templates(snake, camel, class_code):
 
             from main.service import {camel}Service
             from main.swagger import {camel}Swagger
+
             from tol.api_base.resource import AutoResourceGroup, setup_resource_group
 
 
@@ -246,6 +253,7 @@ def file_templates(snake, camel, class_code):
             {header}
 
             from main.model import {camel}
+
             from tol.api_base.schema import {schema_imports}
 
 
@@ -260,6 +268,7 @@ def file_templates(snake, camel, class_code):
 
             from main.model import {camel}
             from main.schema import {camel}Schema
+
             from tol.api_base.service import BaseService, setup_service
 
 
@@ -274,6 +283,7 @@ def file_templates(snake, camel, class_code):
             {header}
 
             from main.schema import {camel}Schema
+
             from tol.api_base.swagger import BaseSwagger, setup_swagger
 
 
@@ -311,6 +321,7 @@ def single_quote_code(code):
 
 black_mode = black.Mode(
     string_normalization=False,
+    line_length=79,
     target_versions={
         black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"],
     },
