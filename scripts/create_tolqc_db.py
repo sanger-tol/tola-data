@@ -1,19 +1,35 @@
 from main.model import Base
-from sqlalchemy import create_engine, text
+from sqlalchemy import MetaData
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.schema import DropTable
+
 from . import db_connection
+
+
+@compiles(DropTable, "postgresql")
+def compile_drop_table(element, compiler, **kw):
+    """Add CASCADE to PostgreSQL DROP TABLE statements
+
+    PostgreSQL will refuse to drop tables which contain dependent FOREIGN KEYs,
+    but adding a CASCADE automatically removes them from the other table.
+    """
+    return compiler.visit_drop_table(element, **kw) + " CASCADE"
 
 
 def main():
     engine, Session = db_connection.local_postgres_engine(echo=True)
 
-    # SQLAlchemy cannot work out order of ..._status tables for drop_all
-    # due to multiple foreign keys that link to their subject tables
-    with Session() as ssn:
-        for table in ('specimen_status', 'dataset_status', 'assembly_status'):
-            ssn.execute(text(f"DROP TABLE {table} CASCADE"))
-        ssn.commit()
+    old_db = MetaData()
+    old_db.reflect(engine)
 
-    Base.metadata.drop_all(engine)
+    keep_tables = {"user", "auth", "role"}
+    drop_tables = []
+    for name in old_db.tables:
+        if name in keep_tables:
+            continue
+        drop_tables.append(old_db.tables[name])
+    old_db.drop_all(engine, tables=drop_tables)
+
     Base.metadata.create_all(engine)
 
 
