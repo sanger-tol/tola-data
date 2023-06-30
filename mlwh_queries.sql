@@ -51,19 +51,19 @@ SELECT sample.name AS sample_ref
   , study.name AS study_name
   , flowcell.manual_qc AS manual_qc
   , 'iseq' AS platform_type
-FROM mlwarehouse.sample
-JOIN mlwarehouse.iseq_flowcell AS flowcell
+FROM sample
+JOIN iseq_flowcell AS flowcell
   ON sample.id_sample_tmp = flowcell.id_sample_tmp
-JOIN mlwarehouse.iseq_product_metrics AS product_metrics
+JOIN iseq_product_metrics AS product_metrics
   ON flowcell.id_iseq_flowcell_tmp = product_metrics.id_iseq_flowcell_tmp
-JOIN mlwarehouse.iseq_run_lane_metrics AS run_lane_metrics
+JOIN iseq_run_lane_metrics AS run_lane_metrics
   ON product_metrics.id_run = run_lane_metrics.id_run
   AND product_metrics.position = run_lane_metrics.position
-JOIN mlwarehouse.iseq_run_status AS run_status
+JOIN iseq_run_status AS run_status
   ON product_metrics.id_run = run_status.id_run
-JOIN mlwarehouse.iseq_run_status_dict AS run_status_dict
+JOIN iseq_run_status_dict AS run_status_dict
   ON run_status.id_run_status_dict = run_status_dict.id_run_status_dict
-JOIN mlwarehouse.study AS study
+JOIN study AS study
   ON flowcell.id_study_tmp = study.id_study_tmp
 WHERE study.id_study_lims = 5901
   AND run_status.iscurrent = 1
@@ -73,65 +73,61 @@ ORDER BY run_lane_metrics.id_run
 
 -- New Illumina query to use per-product QC outcomes
 
-SELECT sample.name AS sample_name
-  , sample.public_name AS public_name
-  , sample.common_name AS common_name
+SELECT study.id_study_lims AS study_id
+  , sample.name AS sample_name
   , sample.supplier_name AS supplier_name
+  , sample.public_name AS public_name
   , sample.accession_number AS accession_number
   , sample.donor_id AS donor_id
   , sample.taxon_id AS taxon_id
   , sample.description AS description
   , 'Illumina' AS platform_type
-  , run_lane_metrics.instrument_model AS instrument_model
   , CONVERT(run_lane_metrics.id_run, char) AS run_id
+  , run_lane_metrics.instrument_model AS instrument_model
   , run_lane_metrics.run_complete AS run_complete
   , run_lane_metrics.qc_complete AS qc_date
   , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
   , CONVERT(flowcell.position, char) AS position
   , CONVERT(flowcell.tag_index, char) AS tag_index
   , flowcell.pipeline_id_lims AS pipeline_id_lims
-  , flowcell.tag_sequence AS tag_sequence
-  , flowcell.tag2_sequence AS tag2_sequence
+  , flowcell.tag_identifier AS tag1_id
+  , flowcell.tag2_identifier AS tag2_id
   , flowcell.id_library_lims AS library_id
   , study.id_study_lims AS study_id
-  , study.name AS study_name
   , irods.irods_root_collection AS irods_path
   , irods.irods_data_relative_path AS irods_file
-FROM mlwarehouse.sample
-JOIN mlwarehouse.iseq_flowcell AS flowcell
+FROM sample
+JOIN iseq_flowcell AS flowcell
   ON sample.id_sample_tmp = flowcell.id_sample_tmp
-JOIN mlwarehouse.study
+JOIN study
   ON flowcell.id_study_tmp = study.id_study_tmp
-JOIN mlwarehouse.iseq_product_metrics AS product_metrics
+JOIN iseq_product_metrics AS product_metrics
   ON flowcell.id_iseq_flowcell_tmp = product_metrics.id_iseq_flowcell_tmp
-JOIN mlwarehouse.iseq_run_lane_metrics AS run_lane_metrics
+JOIN iseq_run_lane_metrics AS run_lane_metrics
   ON product_metrics.id_run = run_lane_metrics.id_run
   AND product_metrics.position = run_lane_metrics.position
-LEFT JOIN mlwarehouse.seq_product_irods_locations irods
+LEFT JOIN seq_product_irods_locations irods
   ON product_metrics.id_iseq_product = irods.id_product
 WHERE run_lane_metrics.qc_complete IS NOT NULL
   AND study.id_study_lims = 5901;
 
 
 SELECT study.id_study_lims AS study_id
-  , study.name AS study_name
   , sample.name AS sample_name
   , sample.supplier_name AS supplier_name
-  , sample.accession_number AS accession_number
   , sample.public_name AS public_name
+  , sample.accession_number AS accession_number
   , sample.donor_id AS donor_id
   , sample.taxon_id AS taxon_id
-  , sample.common_name AS common_name
   , sample.description AS description
-  , smrtcell.pac_bio_run_name AS run_id
-  , smrtcell.tag_identifier AS tag_index
-  , smrtcell.tag_sequence AS tag1_sequence
-  , smrtcell.tag2_sequence AS tag2_sequence
-  , smrtcell.well_label AS position
-  , smrtcell.plate_barcode AS plate_barcode
   , 'PacBio' AS platform_type
-  , smrtcell.pipeline_id_lims AS pipeline_id_lims
-  , smrtcell.pac_bio_library_tube_name AS library_id
+  , run.pac_bio_run_name AS run_id
+  , run.well_label AS tag_index
+  , run.tag_identifier AS tag1_id
+  , run.tag2_identifier AS tag2_id
+  , run.plate_barcode AS plate_barcode
+  , run.pipeline_id_lims AS pipeline_id_lims
+  , run.pac_bio_library_tube_name AS library_id
   , well_metrics.instrument_type AS instrument_model
   , well_metrics.qc_seq_date AS qc_date
   , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
@@ -140,17 +136,17 @@ SELECT study.id_study_lims AS study_id
   , CONVERT(well_metrics.hifi_read_bases, char) AS yield
   , irods.irods_root_collection AS irods_path
   , irods.irods_data_relative_path AS irods_file
-FROM mlwarehouse.sample
-JOIN mlwarehouse.pac_bio_run AS smrtcell
-  ON sample.id_sample_tmp = smrtcell.id_sample_tmp
+FROM sample
+JOIN pac_bio_run AS run
+  ON sample.id_sample_tmp = run.id_sample_tmp
 JOIN pac_bio_product_metrics AS product_metrics
-  ON smrtcell.id_pac_bio_tmp = product_metrics.id_pac_bio_tmp
+  ON run.id_pac_bio_tmp = product_metrics.id_pac_bio_tmp
 JOIN pac_bio_run_well_metrics AS well_metrics
   ON product_metrics.id_pac_bio_rw_metrics_tmp = well_metrics.id_pac_bio_rw_metrics_tmp
-JOIN mlwarehouse.study
-  ON smrtcell.id_study_tmp = study.id_study_tmp
-LEFT JOIN mlwarehouse.seq_product_irods_locations irods
-  ON well_metrics.id_pac_bio_product = irods.id_product
+JOIN study
+  ON run.id_study_tmp = study.id_study_tmp
+LEFT JOIN seq_product_irods_locations AS irods
+  ON product_metrics.id_pac_bio_product = irods.id_product
 WHERE product_metrics.qc IS NOT NULL
   AND study.id_study_lims = 5901;
 

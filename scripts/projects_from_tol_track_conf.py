@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+import inspect
+import json
 import os
 import re
 import sys
@@ -10,7 +12,7 @@ import pathlib
 from sqlalchemy import select
 from . import db_connection
 from tol.api_client import ApiDataSource, ApiObject
-from main.model import db, Project
+from main.model import Project
 
 
 def main(conf_file="tol_track.conf"):
@@ -46,6 +48,7 @@ def store_Projects_via_tol_api(proj_iter):
     )
     stored_projects = {p.lims_id: p for p in tolqc.get_list('projects')}
     for proj in proj_iter:
+        print(f"Processing project with lims_id = {proj.lims_id}")
         if db_proj := stored_projects.get(proj.lims_id):
             db_proj.hierarchy_name = proj.hierarchy_name
             db_proj.description = proj.description
@@ -81,3 +84,23 @@ def conf_file_Projects(conf_file):
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
+
+# from main.schema import ProjectSchema
+# schema = ProjectSchema()
+# for proj in proj_iter:
+#     # new_proj = schema.load(schema.dump(proj))
+#     obj = ApiObject(
+#         'projects',
+#         None,
+#         {
+#             "hierarchy_name": proj.hierarchy_name,
+#             "description": proj.description,
+#             "lims_id": proj.lims_id,
+#         },
+#     )
+#     # print(json.dumps({"data": obj.to_json()}))
+#     print(json.dumps(schema.dump(proj)))
+#     # print(json.dumps(schema.dump(new_proj)))
+#     return
+# print(json.dumps(schema.dump(proj_iter, many=True)))
+# return
