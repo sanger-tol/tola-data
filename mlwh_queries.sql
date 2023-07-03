@@ -124,11 +124,11 @@ SELECT study.id_study_lims AS study_id
   , run.pipeline_id_lims AS pipeline_id_lims
   , well_metrics.movie_name AS run_id
   , well_metrics.run_complete AS run_complete
-  , IF(run.tag2_identifier IS NULL
-      , CONCAT(well_metrics.movie_name, "#", run.tag_identifier)
-      , CONCAT(well_metrics.movie_name, "#", run.tag_identifier, '#', run.tag2_identifier)
-      ) AS data_id
-  , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
+  , CONCAT(well_metrics.movie_name, "#", run.tag_identifier
+      , IF(run.tag2_identifier IS NOT NULL
+          , CONCAT('#', run.tag2_identifier), '')) AS data_id
+  , IF(well_metrics.qc_seq IS NULL, NULL
+    , IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
   , well_metrics.qc_seq_date AS qc_date
   , run.well_label AS tag_index
   , run.tag_identifier AS tag1_id

@@ -41,7 +41,7 @@ def read_tsv(cls, path):
 
 
 def split_tsv_line(line):
-    return line.rstrip("\r\n").split("\t")
+    return list(None if x == r"\N" else x for x in line.rstrip("\r\n").split("\t"))
 
 
 if __name__ == "__main__":
