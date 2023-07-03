@@ -76,24 +76,22 @@ ORDER BY run_lane_metrics.id_run
 SELECT study.id_study_lims AS study_id
   , sample.name AS sample_name
   , sample.supplier_name AS supplier_name
-  , sample.public_name AS public_name
-  , sample.accession_number AS accession_number
-  , sample.donor_id AS donor_id
+  , sample.public_name AS tol_specimen_id
+  , sample.accession_number AS biosample_accession
+  , sample.donor_id AS biospecimen_accession
   , sample.taxon_id AS taxon_id
-  , sample.description AS description
   , 'Illumina' AS platform_type
-  , CONVERT(run_lane_metrics.id_run, char) AS run_id
   , run_lane_metrics.instrument_model AS instrument_model
-  , run_lane_metrics.run_complete AS run_complete
-  , run_lane_metrics.qc_complete AS qc_date
-  , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
-  , CONVERT(flowcell.position, char) AS position
-  , CONVERT(flowcell.tag_index, char) AS tag_index
   , flowcell.pipeline_id_lims AS pipeline_id_lims
+  , CONVERT(run_lane_metrics.id_run, char) AS run_id
+  , run_lane_metrics.run_complete AS run_complete
+  , CONCAT(run_lane_metrics.id_run, '_', flowcell.position, '#', flowcell.tag_index) AS data_id
+  , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
+  , run_lane_metrics.qc_complete AS qc_date
+  , CONVERT(flowcell.tag_index, char) AS tag_index
   , flowcell.tag_identifier AS tag1_id
   , flowcell.tag2_identifier AS tag2_id
   , flowcell.id_library_lims AS library_id
-  , study.id_study_lims AS study_id
   , irods.irods_root_collection AS irods_path
   , irods.irods_data_relative_path AS irods_file
 FROM sample
@@ -112,28 +110,30 @@ WHERE run_lane_metrics.qc_complete IS NOT NULL
   AND study.id_study_lims = 5901;
 
 
+-- New query for PacBio data
+
 SELECT study.id_study_lims AS study_id
   , sample.name AS sample_name
   , sample.supplier_name AS supplier_name
-  , sample.public_name AS public_name
-  , sample.accession_number AS accession_number
-  , sample.donor_id AS donor_id
+  , sample.public_name AS tol_specimen_id
+  , sample.accession_number AS biosample_accession
+  , sample.donor_id AS biospecimen_accession
   , sample.taxon_id AS taxon_id
-  , sample.description AS description
   , 'PacBio' AS platform_type
-  , run.pac_bio_run_name AS run_id
+  , well_metrics.instrument_type AS instrument_model
+  , run.pipeline_id_lims AS pipeline_id_lims
+  , well_metrics.movie_name AS run_id
+  , well_metrics.run_complete AS run_complete
+  , IF(run.tag2_identifier IS NULL
+      , CONCAT(well_metrics.movie_name, "#", run.tag_identifier)
+      , CONCAT(well_metrics.movie_name, "#", run.tag_identifier, '#', run.tag2_identifier)
+      ) AS data_id
+  , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
+  , well_metrics.qc_seq_date AS qc_date
   , run.well_label AS tag_index
   , run.tag_identifier AS tag1_id
   , run.tag2_identifier AS tag2_id
-  , run.plate_barcode AS plate_barcode
-  , run.pipeline_id_lims AS pipeline_id_lims
   , run.pac_bio_library_tube_name AS library_id
-  , well_metrics.instrument_type AS instrument_model
-  , well_metrics.qc_seq_date AS qc_date
-  , IF(well_metrics.qc_seq IS NULL, NULL, IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
-  , CONVERT(well_metrics.p1_num, char) AS p1_num
-  , well_metrics.movie_name AS movie
-  , CONVERT(well_metrics.hifi_read_bases, char) AS yield
   , irods.irods_root_collection AS irods_path
   , irods.irods_data_relative_path AS irods_file
 FROM sample
@@ -148,7 +148,8 @@ JOIN study
 LEFT JOIN seq_product_irods_locations AS irods
   ON product_metrics.id_pac_bio_product = irods.id_product
 WHERE product_metrics.qc IS NOT NULL
-  AND study.id_study_lims = 5901;
+  AND study.id_study_lims = 5901
+
 
 
 -- Query joining PacBio runs into iRODS locations table
