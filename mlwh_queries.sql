@@ -85,7 +85,7 @@ SELECT study.id_study_lims AS study_id
   , flowcell.pipeline_id_lims AS pipeline_id_lims
   , CONVERT(run_lane_metrics.id_run, char) AS run_id
   , run_lane_metrics.run_complete AS run_complete
-  , CONCAT(run_lane_metrics.id_run, '_', flowcell.position, '#', flowcell.tag_index) AS data_id
+  , CONCAT(run_lane_metrics.id_run, '_', flowcell.position, '#', flowcell.tag_index) AS name_root
   , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
   , run_lane_metrics.qc_complete AS qc_date
   , CONVERT(flowcell.tag_index, char) AS tag_index
@@ -126,7 +126,7 @@ SELECT study.id_study_lims AS study_id
   , well_metrics.run_complete AS run_complete
   , CONCAT(well_metrics.movie_name, "#", run.tag_identifier
       , IF(run.tag2_identifier IS NOT NULL
-          , CONCAT('#', run.tag2_identifier), '')) AS data_id
+          , CONCAT('#', run.tag2_identifier), '')) AS name_root
   , IF(well_metrics.qc_seq IS NULL, NULL
     , IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
   , well_metrics.qc_seq_date AS qc_date
