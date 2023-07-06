@@ -1,43 +1,143 @@
+import datetime
 import inspect
 import os
 import pwd
+import sys
 
+from sqlalchemy import select
+from tol.api_client import ApiDataSource, ApiObject
+from tol.core import DataSourceFilter
+from main.model import (
+    Allocation,
+    Base,
+    Data,
+    File,
+    Project,
+    Run,
+    Sample,
+    Species,
+    Specimen,
+    User,
+)
 from . import db_connection
-from main.model import Allocation, Data, File, Project, Run, Sample, Specimen
 
 
-def main():
-    engine, Session = db_connection.local_postgres_engine(echo=True)
+def main(opt=""):
     mlwh = db_connection.mlwh_db()
+    sts = db_connection.sts_db()
+    if "api" in opt.lower():
+        load_via_tol_api(mlwh, sts)
+    else:
+        load_via_sqlalchemy(mlwh, sts)
 
-    user_name = user_name()
+
+def load_via_tol_api(mlwh, sts):
+    tolqc = ApiDataSource(
+        {
+            'url': os.getenv('TOLQC_URL') + '/api/v1',
+            'key': os.getenv('TOLQC_API_KEY'),
+        }
+    )
+    project_ids = tuple(
+        p.lims_id for p in tolqc.get_list('projects') if p.lims_id is not None
+    )
+    for proj_lims_id in project_ids:
+        for get_sql in illumina_sql, pacbio_sql:
+            ### Iterate through projects ###
+            crsr = mlwh.cursor(dictionary=True)
+            crsr.execute(get_sql(), (proj_lims_id,))
+
+
+class TolSqlMarshall:
+    def __init__(self, session=None, mlwh=None, sts=None):
+        self.mlwh = mlwh
+        self.sts = sts
+        self.session = session
+        self.user_id = effective_user_id(session)
+
+    def fetch_or_create(self, cls, spec, selector=None):
+        # Use the primary key if there is no selector
+        if not selector:
+            if hasattr(cls.Meta, 'id_column'):
+                selector = (cls.Meta.id_column,)
+            else:
+                selector = ('id',)
+
+        # Build a filter for the select query
+        fltr = {}
+        for sel in selector:
+            sel_val = spec.get(sel)
+            if sel_val is not None:
+                fltr[sel] = sel_val
+        if len(fltr) != len(selector):
+            raise Exception(f"For selector={selector} passed spec is missing fields")
+
+        query = select(cls).filter_by(**fltr)
+        ssn = self.session
+        if db_obj := ssn.scalars(query).one_or_none():
+            # Object matching selector fields is already in database
+            return db_obj
+        else:
+            if cls.has_log_details():
+                self.add_log_fields(spec)
+            obj = cls(**spec)
+            ssn.add(obj)
+            ssn.flush()
+            return obj
+
+    def add_log_fields(self, spec):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if not spec.get("created_at"):
+            spec["last_modified_at"] = now
+        if not spec.get("created_by"):
+            spec["created_by"] = self.user_id
+        spec["last_modified_at"] = now
+        spec["last_modified_by"] = self.user_id
+
+
+def load_via_sqlalchemy(mlwh, sts):
+    engine, Session = db_connection.local_postgres_engine(echo=True)
 
     with Session() as ssn:
+        mrshl = TolSqlMarshall(session=ssn, mlwh=mlwh, sts=sts)
         for get_sql in illumina_sql, pacbio_sql:
             ### Iterate through projects ###
             crsr = mlwh.cursor(dictionary=True)
             crsr.execute(get_sql(), (5901,))
             for row in crsr:
-                data = Data(
-                    name_root=row["name_root"],
-                    # tag_index=row["tag_index"],
-                    tag1_sequence=row["tag1_id"],
-                    tag2_sequence=row["tag2_id"],
-                    lims_qc=row["lims_qc"],
-                    date=row["qc_date"],
+                if rec_count == 0:
+                    continue
+                data = mrshl.fetch_or_create(
+                    Data,
+                    {
+                        "name_root": row["name_root"],
+                        "tag_index": row["tag_index"],
+                        "tag1_id": row["tag1_id"],
+                        "tag2_id": row["tag2_id"],
+                        "lims_qc": row["lims_qc"],
+                        "date": row["qc_date"],
+                    },
+                    ('name_root',),
                 )
-                ssn.merge(data)
                 if row["irods_path"]:
-                    file = File(
-                        data_id=data.data_id,
-                        name=row["irods_file"],
-                        remote_path=row["irods_path"],
+                    file = mrshl.fetch_or_create(
+                        File,
+                        {
+                            "data_id": data.data_id,
+                            "name": row["irods_file"],
+                            "remote_path": row["irods_path"],
+                        },
+                        ('data_id',),
                     )
-                    ssn.merge(file)
+
+        ssn.commit()
 
 
-def user_name():
-    return pwd.getpwuid(os.getuid()).pw_name
+def effective_user_id(ssn):
+    user_name = pwd.getpwuid(os.getuid()).pw_name
+    query = select(User).filter_by(email=f"{user_name}@sanger.ac.uk")
+    user = ssn.scalars(query).unique().one()
+    return user.id
 
 
 def illumina_sql():
@@ -127,4 +227,4 @@ def pacbio_sql():
 
 
 if __name__ == '__main__':
-    main()
+    main(*sys.argv[1:])

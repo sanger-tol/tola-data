@@ -1,4 +1,5 @@
 import mysql.connector
+import psycopg2
 import json
 
 from pathlib import Path
@@ -17,9 +18,18 @@ def mlwh_db():
     return make_connection("mlwh")
 
 
+def sts_db():
+    return make_connection("sts")
+
+
 def make_connection(db_alias):
     params_json = Path().home() / ".connection_params.json"
     params = json.loads(params_json.read_text())[db_alias]
     dbd = params.pop("dbd")
     if dbd == "mysql":
-        return mysql.connector.connect(**params)
+        connect = mysql.connector.connect
+    elif dbd == "Pg":
+        connect = psycopg2.connect
+    else:
+        raise f"Unknown database type '{dbd}'"
+    return connect(**params)
