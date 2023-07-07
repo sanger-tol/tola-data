@@ -1,5 +1,7 @@
 import datetime
 import inspect
+import json
+import logging
 import os
 import pwd
 import sys
@@ -21,14 +23,14 @@ from main.model import (
 )
 from . import db_connection
 
+logging.basicConfig(level=logging.INFO)
+
 
 def main(opt=""):
     mlwh = db_connection.mlwh_db()
     sts = db_connection.sts_db()
-    if "api" in opt.lower():
-        load_via_tol_api(mlwh, sts)
-    else:
-        load_via_sqlalchemy(mlwh, sts)
+    mrshl = TolApiMarshall() if "api" in opt.lower() else TolSqlMarshall()
+    load_mlwh_data(mrshl, mlwh, sts)
 
 
 def load_via_tol_api(mlwh, sts):
@@ -48,20 +50,11 @@ def load_via_tol_api(mlwh, sts):
             crsr.execute(get_sql(), (proj_lims_id,))
 
 
-class TolSqlMarshall:
-    def __init__(self, session=None, mlwh=None, sts=None):
-        self.mlwh = mlwh
-        self.sts = sts
-        self.session = session
-        self.user_id = effective_user_id(session)
-
-    def fetch_or_create(self, cls, spec, selector=None):
+class TolBaseMarshall:
+    def build_filter(self, cls, spec, selector=None):
         # Use the primary key if there is no selector
         if not selector:
-            if hasattr(cls.Meta, 'id_column'):
-                selector = (cls.Meta.id_column,)
-            else:
-                selector = ('id',)
+            selector = (self.class_pimary_key(cls),)
 
         # Build a filter for the select query
         fltr = {}
@@ -71,6 +64,71 @@ class TolSqlMarshall:
                 fltr[sel] = sel_val
         if len(fltr) != len(selector):
             raise Exception(f"For selector={selector} passed spec is missing fields")
+
+        return fltr
+
+    @staticmethod
+    def class_pimary_key(cls):
+        if hasattr(cls.Meta, 'id_column'):
+            return cls.Meta.id_column
+        else:
+            return 'id'
+
+    @staticmethod
+    def pk_field_from_spec(cls, spec):
+        pk = TolBaseMarshall.class_pimary_key(cls)
+        if spec.get(pk) is None:
+            return None
+        else:
+            return spec.pop(pk)
+
+
+class TolApiMarshall(TolBaseMarshall):
+    def __init__(self):
+        self.api_data_source = ApiDataSource(
+            {
+                'url': os.getenv('TOLQC_URL') + '/api/v1',
+                'key': os.getenv('TOLQC_API_KEY'),
+            }
+        )
+
+    def fetch_or_create(self, cls, spec, selector=None):
+        fltr = self.build_filter(cls, spec, selector)
+        obj_type = cls.Meta.type_
+        ads = self.api_data_source
+        stored = list(
+            ads.get_list(obj_type, object_filters=DataSourceFilter(exact=fltr))
+        )
+        count = len(stored)
+        if count == 0:
+            id_ = self.pk_field_from_spec(cls, spec)
+            new_obj = ApiObject(obj_type, id_, attributes=spec)
+            print(json.dumps(new_obj.__dict__, indent=2))
+            ads.create(new_obj)
+            return self.make_alchemy_object(cls, new_obj)
+        elif count == 1:
+            return self.make_alchemy_object(cls, stored[0])
+        else:
+            raise Exception(f"filter {fltr} returned {count} {cls.__name__} objects")
+
+    def make_alchemy_object(self, cls, api_obj):
+        spec = api_obj.attributes
+        if self.class_pimary_key(cls) == 'id':
+            spec["id"] = api_obj.id
+        return cls(**spec)
+
+
+class TolSqlMarshall(TolBaseMarshall):
+    def __init__(self):
+        engine, Session = db_connection.local_postgres_engine(echo=True)
+        self.session = Session()
+        self.user_id = effective_user_id(self.session)
+
+    def __del__(self):
+        self.session.commit()
+
+    def fetch_or_create(self, cls, spec, selector=None):
+        fltr = self.build_filter(cls, spec, selector)
 
         query = select(cls).filter_by(**fltr)
         ssn = self.session
@@ -95,42 +153,38 @@ class TolSqlMarshall:
         spec["last_modified_by"] = self.user_id
 
 
-def load_via_sqlalchemy(mlwh, sts):
-    engine, Session = db_connection.local_postgres_engine(echo=True)
+def isoformat_if_date(dt):
+    return dt.isoformat() if hasattr(dt, "isoformat") else dt
 
-    with Session() as ssn:
-        mrshl = TolSqlMarshall(session=ssn, mlwh=mlwh, sts=sts)
-        for get_sql in illumina_sql, pacbio_sql:
-            ### Iterate through projects ###
-            crsr = mlwh.cursor(dictionary=True)
-            crsr.execute(get_sql(), (5901,))
-            for row in crsr:
-                if rec_count == 0:
-                    continue
-                data = mrshl.fetch_or_create(
-                    Data,
+
+def load_mlwh_data(mrshl, mlwh, sts):
+    for get_sql in illumina_sql, pacbio_sql:
+        ### Iterate through projects ###
+        crsr = mlwh.cursor(dictionary=True)
+        crsr.execute(get_sql() + " LIMIT 100", (5901,))
+        for row in crsr:
+            data = mrshl.fetch_or_create(
+                Data,
+                {
+                    "name_root": row["name_root"],
+                    "tag_index": row["tag_index"],
+                    "tag1_id": row["tag1_id"],
+                    "tag2_id": row["tag2_id"],
+                    "lims_qc": row["lims_qc"],
+                    "date": isoformat_if_date(row["qc_date"]),
+                },
+                ('name_root',),
+            )
+            if row["irods_path"]:
+                file = mrshl.fetch_or_create(
+                    File,
                     {
-                        "name_root": row["name_root"],
-                        "tag_index": row["tag_index"],
-                        "tag1_id": row["tag1_id"],
-                        "tag2_id": row["tag2_id"],
-                        "lims_qc": row["lims_qc"],
-                        "date": row["qc_date"],
+                        "data_id": data.data_id,
+                        "name": row["irods_file"],
+                        "remote_path": row["irods_path"],
                     },
-                    ('name_root',),
+                    ('data_id',),
                 )
-                if row["irods_path"]:
-                    file = mrshl.fetch_or_create(
-                        File,
-                        {
-                            "data_id": data.data_id,
-                            "name": row["irods_file"],
-                            "remote_path": row["irods_path"],
-                        },
-                        ('data_id',),
-                    )
-
-        ssn.commit()
 
 
 def effective_user_id(ssn):
@@ -222,6 +276,7 @@ def pacbio_sql():
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
           AND study.id_study_lims = %s
+        HAVING name_root IS NOT NULL
         """
     )
 
