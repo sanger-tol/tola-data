@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
+from psycopg2.extras import DictCursor
 
 def local_postgres_engine(**kwargs):
     engine = create_engine(
@@ -27,9 +27,8 @@ def make_connection(db_alias):
     params = json.loads(params_json.read_text())[db_alias]
     dbd = params.pop("dbd")
     if dbd == "mysql":
-        connect = mysql.connector.connect
+        return mysql.connector.connect(**params)
     elif dbd == "Pg":
-        connect = psycopg2.connect
+        return psycopg2.connect(cursor_factory=DictCursor, **params)
     else:
         raise f"Unknown database type '{dbd}'"
-    return connect(**params)

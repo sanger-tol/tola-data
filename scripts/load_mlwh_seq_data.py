@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import pwd
+import re
 import sys
 
 from sqlalchemy import select
@@ -31,6 +32,8 @@ def main(opt=""):
     sts = db_connection.sts_db()
     mrshl = TolApiMarshall() if "api" in opt.lower() else TolSqlMarshall()
     load_mlwh_data(mrshl, mlwh, sts)
+    if hasattr(mrshl, "commit"):
+        mrshl.commit()
 
 
 def load_via_tol_api(mlwh, sts):
@@ -117,6 +120,9 @@ class TolApiMarshall(TolBaseMarshall):
             spec["id"] = api_obj.id
         return cls(**spec)
 
+    def list_projects(self):
+        return tuple(self.api_data_source.get_list('projects'))
+
 
 class TolSqlMarshall(TolBaseMarshall):
     def __init__(self):
@@ -124,7 +130,7 @@ class TolSqlMarshall(TolBaseMarshall):
         self.session = Session()
         self.user_id = effective_user_id(self.session)
 
-    def __del__(self):
+    def commit(self):
         self.session.commit()
 
     def fetch_or_create(self, cls, spec, selector=None):
@@ -152,39 +158,144 @@ class TolSqlMarshall(TolBaseMarshall):
         spec["last_modified_at"] = now
         spec["last_modified_by"] = self.user_id
 
+    def list_projects(self):
+        query = select(Project).where(Project.lims_id != None)
+        return tuple(self.session.scalars(query))
+
 
 def isoformat_if_date(dt):
     return dt.isoformat() if hasattr(dt, "isoformat") else dt
 
 
 def load_mlwh_data(mrshl, mlwh, sts):
-    for get_sql in illumina_sql, pacbio_sql:
-        ### Iterate through projects ###
-        crsr = mlwh.cursor(dictionary=True)
-        crsr.execute(get_sql() + " LIMIT 100", (5901,))
-        for row in crsr:
-            data = mrshl.fetch_or_create(
-                Data,
-                {
-                    "name_root": row["name_root"],
-                    "tag_index": row["tag_index"],
-                    "tag1_id": row["tag1_id"],
-                    "tag2_id": row["tag2_id"],
-                    "lims_qc": row["lims_qc"],
-                    "date": isoformat_if_date(row["qc_date"]),
-                },
-                ('name_root',),
+    species_fetcher = sts_species_fetcher(sts)
+    for mlwh_sql in illumina_sql(), pacbio_sql():
+        # Iterate through projects
+        for project in mrshl.list_projects():
+            crsr = mlwh.cursor(dictionary=True)
+            crsr.execute(mlwh_sql + " LIMIT 100", (project.lims_id,))
+            for row in crsr:
+                try:
+                    store_row_data(mrshl, row, species_fetcher, project)
+                except Exception as err:
+                    raise Exception(f"Error saving row:\n{format_row(row)}") from err
+
+
+def store_row_data(mrshl, row, species_fetcher, project):
+    # Species
+    species = mrshl.fetch_or_create(
+        Species,
+        species_fetcher(row["taxon_id"], row["scientific_name"]),
+        ("taxon_id",),
+    )
+
+    # specimen Accession
+    # Specimen
+    specimen = mrshl.fetch_or_create(
+        Specimen,
+        {
+            "specimen_id": row["tol_specimen_id"],
+            "species_id": species.species_id,
+            "hierarchy_name": species.hierarchy_name,  # Why NOT NULL?
+            # "accession_id": row["biospecimen_accession"],
+        },
+    )
+
+    # sample Accession
+    # Sample
+    sample = mrshl.fetch_or_create(
+        Sample,
+        {
+            "sample_id": row["sample_name"],
+            "specimen_id": row["tol_specimen_id"],
+            "hierarchy_name": species.hierarchy_name,  # Why NOT NULL?
+            # "accession_id": row["biosample_accession"],
+        },
+    )
+
+    # Data
+    data = mrshl.fetch_or_create(
+        Data,
+        {
+            "name_root": row["name_root"],
+            "sample_id": row["sample_name"],
+            "tag_index": row["tag_index"],
+            "tag1_id": row["tag1_id"],
+            "tag2_id": row["tag2_id"],
+            "lims_qc": row["lims_qc"],
+            "date": isoformat_if_date(row["qc_date"]),
+        },
+        ("name_root",),
+    )
+
+    # Allocation
+    allocation = mrshl.fetch_or_create(
+        Allocation,
+        {
+            "project_id": project.project_id,
+            "data_id": data.data_id,
+        },
+        ("project_id", "data_id"),
+    )
+
+    # File
+    if row["irods_path"]:
+        file = mrshl.fetch_or_create(
+            File,
+            {
+                "data_id": data.data_id,
+                "name": row["irods_file"],
+                "remote_path": row["irods_path"],
+            },
+            ("data_id",),
+        )
+
+
+def sts_species_fetcher(sts):
+    sql = inspect.cleandoc(
+        """
+        SELECT scientific_name
+          , common_name
+          , family
+          , order_group
+          , genome_size
+        FROM species
+        WHERE taxonid = %s
+        """
+    )
+    crsr = sts.cursor()
+
+    def fetcher(taxon_id, mlwh_sci_name):
+        crsr.execute(sql, (str(taxon_id),))
+        if crsr.rowcount == 0:
+            return minimal_species_info(taxon_id, mlwh_sci_name)
+        elif crsr.rowcount != 1:
+            raise Exception(
+                f"Expecting one row for taxon_id='{taxon_id}' got '{crsr.rowcount}' rows"
             )
-            if row["irods_path"]:
-                file = mrshl.fetch_or_create(
-                    File,
-                    {
-                        "data_id": data.data_id,
-                        "name": row["irods_file"],
-                        "remote_path": row["irods_path"],
-                    },
-                    ('data_id',),
-                )
+        row = crsr.fetchone()
+        sci_name = row["scientific_name"]
+        hierarchy_name = re.sub(r"\s+", "_", sci_name)
+        return {
+            "species_id": sci_name,
+            "hierarchy_name": hierarchy_name,
+            "common_name": row["common_name"],
+            "taxon_id": taxon_id,
+            "taxon_family": row["family"],
+            "taxon_order": row["order_group"],
+            # "genome_size": row["genome_size"],  # BigInteger required
+        }
+
+    return fetcher
+
+
+def minimal_species_info(taxon_id, sci_name):
+    hierarchy_name = re.sub(r"\s+", "_", sci_name)
+    return {
+        "species_id": sci_name,
+        "taxon_id": taxon_id,
+        "hierarchy_name": hierarchy_name,
+    }
 
 
 def effective_user_id(ssn):
@@ -203,6 +314,7 @@ def illumina_sql():
           , sample.public_name AS tol_specimen_id
           , sample.accession_number AS biosample_accession
           , sample.donor_id AS biospecimen_accession
+          , sample.common_name AS scientific_name
           , sample.taxon_id AS taxon_id
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
@@ -231,6 +343,7 @@ def illumina_sql():
         LEFT JOIN seq_product_irods_locations irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
+          AND sample.taxon_id IS NOT NULL
           AND study.id_study_lims = %s
         """
     )
@@ -245,6 +358,7 @@ def pacbio_sql():
           , sample.public_name AS tol_specimen_id
           , sample.accession_number AS biosample_accession
           , sample.donor_id AS biospecimen_accession
+          , sample.common_name AS scientific_name
           , sample.taxon_id AS taxon_id
           , 'PacBio' AS platform_type
           , well_metrics.instrument_type AS instrument_model
@@ -275,10 +389,16 @@ def pacbio_sql():
         LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
+          AND sample.taxon_id IS NOT NULL
           AND study.id_study_lims = %s
         HAVING name_root IS NOT NULL
         """
     )
+
+
+def format_row(row):
+    name_max = max(len(name) for name in row)
+    return "".join(f"  {name:>{name_max}} = {row[name]}\n" for name in row)
 
 
 if __name__ == '__main__':
