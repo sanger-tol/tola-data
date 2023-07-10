@@ -4,6 +4,7 @@
 
 import sys
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -190,13 +191,13 @@ class AssemblyMetrics(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
-    bases = Column(Integer)
-    a = Column(Integer)
-    c = Column(Integer)
-    g = Column(Integer)
-    t = Column(Integer)
-    n = Column(Integer)
-    cpg = Column(Integer)
+    bases = Column(BigInteger)
+    a = Column(BigInteger)
+    c = Column(BigInteger)
+    g = Column(BigInteger)
+    t = Column(BigInteger)
+    n = Column(BigInteger)
+    cpg = Column(BigInteger)
     iupac3 = Column(Integer)
     iupac2 = Column(Integer)
     ts = Column(Integer)
@@ -387,7 +388,7 @@ class Data(LogBase):
     withdrawn = Column(Boolean)
     manually_withdrawn = Column(Boolean)
     reads = Column(Integer)
-    bases = Column(Integer)
+    bases = Column(BigInteger)
     read_length_mean = Column(Float)
     read_length_n50 = Column(Integer)
     elastic_mlwh_cksum = Column(String)
@@ -417,7 +418,7 @@ class Dataset(LogBase):
     dataset_status_id = Column(Integer, ForeignKey("dataset_status.dataset_status_id"))
     dataset_list_md5 = Column(String)
     reads = Column(Integer)
-    bases = Column(Integer)
+    bases = Column(BigInteger)
     read_length_mean = Column(Float)
     read_length_n50 = Column(Integer)
 
@@ -649,7 +650,7 @@ class PacbioRunMetrics(Base):
     run_id = Column(Integer, ForeignKey("run.id"))
     movie_time = Column(Integer)
     pre_extension_time = Column(Integer)
-    total_bases = Column(Integer)
+    total_bases = Column(BigInteger)
     polymerase_reads = Column(Integer)
     polymerase_reads_bases = Column(Integer)
     polymerase_reads_mean = Column(Float)
@@ -849,7 +850,7 @@ class Species(LogBase):
     taxon_order = Column(String)
     taxon_phylum = Column(String)
     taxon_group = Column(String)
-    genome_size = Column(Integer)
+    genome_size = Column(BigInteger)
     chromosome_number = Column(Integer)
 
     specimens = relationship("Specimen", back_populates="species")
@@ -863,7 +864,7 @@ class Specimen(LogBase):
         id_column = "specimen_id"
 
     specimen_id = Column(String, primary_key=True)
-    hierarchy_name = Column(String, nullable=False, unique=True)
+    hierarchy_name = Column(String)
     specimen_status_id = Column(
         Integer, ForeignKey("specimen_status.specimen_status_id")
     )

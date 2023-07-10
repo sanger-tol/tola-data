@@ -144,7 +144,7 @@ def snake_and_camel(name):
 
 def uglify_model_code(code):
     code_db_types = re.sub(
-        r"(?<!db\.)(Boolean|DateTime|Float|Integer|JSON|String)(\(\))?",
+        r"(?<!db\.)(BigInteger|Boolean|DateTime|Float|Integer|JSON|String)(\(\))?",
         r"db.\1()",
         code,
     )
