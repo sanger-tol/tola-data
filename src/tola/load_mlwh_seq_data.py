@@ -1,15 +1,10 @@
-import datetime
 import inspect
-import json
 import logging
 import re
 import sys
 
-from tol.api_client import ApiDataSource, ApiObject
-from tol.core import DataSourceFilter
 from main.model import (
     Allocation,
-    Base,
     Data,
     File,
     Run,
@@ -37,26 +32,40 @@ def isoformat_if_date(dt):
 
 
 def load_mlwh_data(mrshl, mlwh, sts):
+    sci_taxon = mrshl.fetch_sci_taxon_dict()
     species_fetcher = sts_species_fetcher(sts)
     for mlwh_sql in illumina_sql(), pacbio_sql():
         # Iterate through projects
         for project in mrshl.list_projects():
             crsr = mlwh.cursor(dictionary=True)
-            crsr.execute(mlwh_sql + " LIMIT 100", (project.lims_id,))
+            crsr.execute(mlwh_sql, (project.lims_id,))
             for row in crsr:
                 try:
-                    store_row_data(mrshl, row, species_fetcher, project)
+                    store_row_data(mrshl, row, species_fetcher, project, sci_taxon)
                 except Exception as err:
-                    raise Exception(f"Error saving row:\n{format_row(row)}") from err
+                    msg = f"Error saving row:\n{format_row(row)}\n{err}"
+                    raise Exception(msg) from err
 
 
-def store_row_data(mrshl, row, species_fetcher, project):
+def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
     # Species
-    species = mrshl.fetch_or_create(
-        Species,
-        species_fetcher(row["taxon_id"], row["scientific_name"]),
-        ("taxon_id",),
-    )
+    species_info = species_fetcher(row["taxon_id"], row["scientific_name"])
+    if not species_info:
+        row_info(row, "Missing species info")
+        return
+    elif stored_tax_id := sci_taxon.get(species_info["species_id"]):
+        if stored_tax_id != species_info["taxon_id"]:
+            row_info(row, f"Have different taxon_id={stored_tax_id} for scientific_name")
+            return
+    else:
+        sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
+
+    species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
+
+
+    if not row["tol_specimen_id"]:
+        row_info(row, "Missing tol_specimen_id")
+        return
 
     # specimen Accession
     # Specimen
@@ -65,7 +74,7 @@ def store_row_data(mrshl, row, species_fetcher, project):
         {
             "specimen_id": row["tol_specimen_id"],
             "species_id": species.species_id,
-            "hierarchy_name": species.hierarchy_name,
+            # "hierarchy_name": row["tol_specimen_id"],
             # "accession_id": row["biospecimen_accession"],
         },
     )
@@ -136,7 +145,9 @@ def sts_species_fetcher(sts):
     def fetcher(taxon_id, mlwh_sci_name):
         crsr.execute(sql, (str(taxon_id),))
         if crsr.rowcount == 0:
-            return minimal_species_info(taxon_id, mlwh_sci_name)
+            return (
+                minimal_species_info(taxon_id, mlwh_sci_name) if mlwh_sci_name else None
+            )
         elif crsr.rowcount != 1:
             raise Exception(
                 f"Expecting one row for taxon_id='{taxon_id}' got '{crsr.rowcount}' rows"
@@ -205,7 +216,9 @@ def illumina_sql():
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
+          AND sample.public_name IS NOT NULL
           AND study.id_study_lims = %s
+        HAVING name_root IS NOT NULL
         """
     )
 
@@ -257,9 +270,16 @@ def pacbio_sql():
     )
 
 
+def row_info(row, msg):
+    print(f"{msg}:\n{format_row(row)}", file=sys.stderr)
+
+
 def format_row(row):
     name_max = max(len(name) for name in row)
-    return "".join(f"  {name:>{name_max}} = {row[name]}\n" for name in row)
+    return "".join(
+        f"  {name:>{name_max}} = {'' if row[name] is None else row[name]}\n"
+        for name in row
+    )
 
 
 if __name__ == '__main__':

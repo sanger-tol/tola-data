@@ -1,9 +1,13 @@
+import datetime
+import json
 import os
 import pwd
 
+from main.model import Project, Species, User
 from sqlalchemy import select
+from tol.api_client import ApiDataSource, ApiObject
+from tol.core import DataSourceFilter
 from tola import db_connection
-from main.model import Project, User
 
 
 class TolBaseMarshal:
@@ -79,7 +83,8 @@ class TolApiMarshal(TolBaseMarshal):
 
 class TolSqlMarshal(TolBaseMarshal):
     def __init__(self):
-        engine, Session = db_connection.tola_db_engine(echo=True)
+        # engine, Session = db_connection.tola_db_engine(echo=True)
+        engine, Session = db_connection.tola_db_engine()
         self.session = Session()
         self.user_id = self.effective_user_id(self.session)
 
@@ -120,5 +125,12 @@ class TolSqlMarshal(TolBaseMarshal):
         spec["last_modified_by"] = self.user_id
 
     def list_projects(self):
-        query = select(Project).where(Project.lims_id != None)
+        query = select(Project).where(Project.lims_id is not None)
+        # query = select(Project).where(Project.lims_id == 6327)
         return tuple(self.session.scalars(query))
+
+    def fetch_sci_taxon_dict(self):
+        sci_taxon = {}
+        for species in self.session.scalars(select(Species)):
+            sci_taxon[species.species_id] = species.taxon_id
+        return sci_taxon

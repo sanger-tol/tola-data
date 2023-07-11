@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: MIT
 
-import inspect
-import json
 import os
 import re
 import sys
@@ -17,7 +15,7 @@ from tola import db_connection
 
 def main(conf_file="tol_track.conf"):
     proj_iter = conf_file_Projects(pathlib.Path(conf_file))
-    if False:
+    if True:
         store_Projects_via_sql_alchemy(proj_iter)
     else:
         store_Projects_via_tol_api(proj_iter)
