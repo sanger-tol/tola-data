@@ -79,7 +79,7 @@ class TolApiMarshal(TolBaseMarshal):
 
 class TolSqlMarshal(TolBaseMarshal):
     def __init__(self):
-        engine, Session = db_connection.local_postgres_engine(echo=True)
+        engine, Session = db_connection.tola_db_engine(echo=True)
         self.session = Session()
         self.user_id = self.effective_user_id(self.session)
 

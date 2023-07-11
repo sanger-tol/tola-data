@@ -9,10 +9,10 @@ import re
 import sys
 import pathlib
 
-from sqlalchemy import select
-from . import db_connection
-from tol.api_client import ApiDataSource, ApiObject
 from main.model import Project
+from sqlalchemy import select
+from tol.api_client import ApiDataSource, ApiObject
+from tola import db_connection
 
 
 def main(conf_file="tol_track.conf"):
@@ -24,7 +24,7 @@ def main(conf_file="tol_track.conf"):
 
 
 def store_Projects_via_sql_alchemy(proj_iter):
-    engine, Session = db_connection.local_postgres_engine(echo=True)
+    engine, Session = db_connection.tola_db_engine(echo=True)
 
     with Session() as ssn:
         for proj in proj_iter:

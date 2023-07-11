@@ -3,7 +3,7 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.schema import DropTable
 
-from . import db_connection
+from tola import db_connection
 
 
 @compiles(DropTable, "postgresql")
@@ -17,7 +17,7 @@ def compile_drop_table(element, compiler, **kw):
 
 
 def main():
-    engine, Session = db_connection.local_postgres_engine(echo=True)
+    engine, Session = db_connection.tola_db_engine(echo=True)
 
     old_db = MetaData()
     old_db.reflect(engine)

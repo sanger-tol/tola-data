@@ -35,7 +35,7 @@ def main(args):
             print(f"  {prop}")
 
     if "--build" in args:
-        engine = local_postgres_engine(echo=True)
+        engine = tola_db_engine(echo=True)
 
         # SQLAlchemy cannot work out order of ..._status tables for drop_all
         # due to multiple foreign keys that link to their subject tables
@@ -55,7 +55,7 @@ def main(args):
     # print(inspect.getsource(Assembly))
 
 
-def local_postgres_engine(**kwargs):
+def tola_db_engine(**kwargs):
     return create_engine("postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", **kwargs)
 
 

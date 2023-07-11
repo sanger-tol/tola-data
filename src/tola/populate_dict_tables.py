@@ -1,12 +1,12 @@
 import pathlib
 import sys
 
-from . import db_connection
+from tola import db_connection
 from main.model import Base
 
 
 def main(dict_tsv_file_names):
-    engine, Session = db_connection.local_postgres_engine(echo=True)
+    engine, Session = db_connection.tola_db_engine(echo=True)
 
     table_class = table_name_to_class()
 
