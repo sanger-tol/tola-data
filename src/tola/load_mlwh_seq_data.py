@@ -2,6 +2,7 @@ import inspect
 import logging
 import re
 import sys
+import tola.marshals
 
 from main.model import (
     Allocation,
@@ -13,18 +14,18 @@ from main.model import (
     Specimen,
 )
 from tola import db_connection
-from tola.marshals import TolApiMarshal, TolSqlMarshal
 
 logging.basicConfig(level=logging.INFO)
 
 
-def main(opt=""):
+def main():
+    mrshl, _ = tola.marshals.marshal_from_command_line(
+        "Import sequencing run data from the MLWH"
+    )
     mlwh = db_connection.mlwh_db()
     sts = db_connection.sts_db()
-    mrshl = TolApiMarshal() if "api" in opt.lower() else TolSqlMarshal()
     load_mlwh_data(mrshl, mlwh, sts)
-    if hasattr(mrshl, "commit"):
-        mrshl.commit()
+    mrshl.commit()
 
 
 def isoformat_if_date(dt):
@@ -55,13 +56,14 @@ def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
         return
     elif stored_tax_id := sci_taxon.get(species_info["species_id"]):
         if stored_tax_id != species_info["taxon_id"]:
-            row_info(row, f"Have different taxon_id={stored_tax_id} for scientific_name")
+            row_info(
+                row, f"Have different taxon_id={stored_tax_id} for scientific_name"
+            )
             return
     else:
         sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
 
     species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
-
 
     if not row["tol_specimen_id"]:
         row_info(row, "Missing tol_specimen_id")
@@ -237,7 +239,7 @@ def pacbio_sql():
           , 'PacBio' AS platform_type
           , well_metrics.instrument_type AS instrument_model
           , run.pipeline_id_lims AS pipeline_id_lims
-          , well_metrics.movie_name AS run_id
+          , well_metrics.pac_bio_run_name AS run_id
           , well_metrics.run_complete AS run_complete
           , CONCAT(well_metrics.movie_name, "#", run.tag_identifier
               , IF(run.tag2_identifier IS NOT NULL
@@ -283,4 +285,4 @@ def format_row(row):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:])
+    main()

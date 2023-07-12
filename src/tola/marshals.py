@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import json
 import os
@@ -8,6 +9,40 @@ from sqlalchemy import select
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core import DataSourceFilter
 from tola import db_connection
+
+
+def marshal_from_command_line(desc):
+    prsr = argparse.ArgumentParser(
+        description=desc,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    prsr.add_argument(
+        "files",
+        nargs="*",
+        help="List of one or more input files.",
+        metavar="FILE_LIST",
+    )
+
+    prsr_api_choice = prsr.add_mutually_exclusive_group()
+    prsr_api_choice.add_argument(
+        "--api",
+        action="store_const",
+        const=True,
+        default=False,
+        help="Use ToL API Marshal to store data.",
+    )
+    prsr_api_choice.add_argument(
+        "--sql",
+        action="store_const",
+        dest="api",
+        const=False,
+        default=True,
+        help="Use ToL SQL Marshal to store data.",
+    )
+
+    ns_obj = prsr.parse_args()
+    mrshl = TolApiMarshal() if ns_obj.api else TolSqlMarshal()
+    return mrshl, ns_obj.files
 
 
 class TolBaseMarshal:
@@ -37,10 +72,10 @@ class TolBaseMarshal:
     @staticmethod
     def pk_field_from_spec(cls, spec):
         pk = TolBaseMarshal.class_pimary_key(cls)
-        if spec.get(pk) is None:
-            return None
-        else:
-            return spec.pop(pk)
+        return spec.get(pk)
+
+    def commit():
+        pass
 
 
 class TolApiMarshal(TolBaseMarshal):

@@ -497,7 +497,7 @@ class File(Base):
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
     name = Column(String)
-    realtive_path = Column(String)
+    relative_path = Column(String)
     remote_path = Column(String)
     size_bytes = Column(Integer)
     md5 = Column(String)
