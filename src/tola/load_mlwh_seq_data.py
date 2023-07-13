@@ -35,69 +35,64 @@ def isoformat_if_date(dt):
 def load_mlwh_data(mrshl, mlwh, sts):
     sci_taxon = mrshl.fetch_sci_taxon_dict()
     species_fetcher = sts_species_fetcher(sts)
-    for mlwh_sql in illumina_sql(), pacbio_sql():
-        # Iterate through projects
-        for project in mrshl.list_projects():
-            crsr = mlwh.cursor(dictionary=True)
-            crsr.execute(mlwh_sql, (project.lims_id,))
-            for row in crsr:
+    # Iterate through projects
+    for project in mrshl.list_projects():
+        for run_data_fetcher in illumina_fetcher, pacbio_fetcher:
+            for row in run_data_fetcher(mlwh, project):
                 try:
                     store_row_data(mrshl, row, species_fetcher, project, sci_taxon)
                 except Exception as err:
                     msg = f"Error saving row:\n{format_row(row)}\n{err}"
-                    raise Exception(msg) from err
+                    raise ValueError(msg) from err
 
 
 def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
     # Species
     species_info = species_fetcher(row["taxon_id"], row["scientific_name"])
-    if not species_info:
-        row_info(row, "Missing species info")
-        return
-    elif stored_tax_id := sci_taxon.get(species_info["species_id"]):
-        if stored_tax_id != species_info["taxon_id"]:
-            row_info(
-                row, f"Have different taxon_id={stored_tax_id} for scientific_name"
-            )
-            return
+    if species_info:
+        if stored_tax_id := sci_taxon.get(species_info["species_id"]):
+            if stored_tax_id != species_info["taxon_id"]:
+                row_info(
+                    row, f"Have different taxon_id={stored_tax_id} for scientific_name"
+                )
+                return
+        else:
+            sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
+        species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
     else:
-        sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
-
-    species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
-
-    if not row["tol_specimen_id"]:
-        row_info(row, "Missing tol_specimen_id")
-        return
+        species = None
 
     # specimen Accession
     # Specimen
-    specimen = mrshl.fetch_or_create(
-        Specimen,
-        {
+    if row["tol_specimen_id"]:
+        specimen_spec = {
             "specimen_id": row["tol_specimen_id"],
-            "species_id": species.species_id,
             # "hierarchy_name": row["tol_specimen_id"],
             # "accession_id": row["biospecimen_accession"],
-        },
-    )
+        }
+        if species:
+            specimen_spec["species_id"] = species.species_id
+        specimen = mrshl.update_or_create(Specimen, specimen_spec)
+    else:
+        specimen = None
 
     # sample Accession
     # Sample
-    sample = mrshl.fetch_or_create(
-        Sample,
-        {
-            "sample_id": row["sample_name"],
-            "specimen_id": row["tol_specimen_id"],
-            # "accession_id": row["biosample_accession"],
-        },
-    )
+    sample_spec = {
+        "sample_id": row["sample_name"],
+        "specimen_id": row["tol_specimen_id"],
+        # "accession_id": row["biosample_accession"],
+    }
+    if specimen:
+        sample_spec["specimen_id"] = specimen.specimen_id
+    sample = mrshl.update_or_create(Sample, sample_spec)
 
     # Data
-    data = mrshl.fetch_or_create(
+    data = mrshl.update_or_create(
         Data,
         {
             "name_root": row["name_root"],
-            "sample_id": row["sample_name"],
+            "sample_id": sample.sample_id,
             "tag_index": row["tag_index"],
             "tag1_id": row["tag1_id"],
             "tag2_id": row["tag2_id"],
@@ -108,7 +103,7 @@ def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
     )
 
     # Allocation
-    allocation = mrshl.fetch_or_create(
+    allocation = mrshl.update_or_create(
         Allocation,
         {
             "project_id": project.project_id,
@@ -119,12 +114,12 @@ def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
 
     # File
     if row["irods_path"]:
-        file = mrshl.fetch_or_create(
+        file = mrshl.update_or_create(
             File,
             {
                 "data_id": data.data_id,
                 "name": row["irods_file"],
-                "remote_path": row["irods_path"],
+                "remote_path": row["irods_path"].rstrip("/"),
             },
             ("data_id",),
         )
@@ -179,6 +174,46 @@ def minimal_species_info(taxon_id, sci_name):
     }
 
 
+def illumina_fetcher(mlwh, project):
+    crsr = mlwh.cursor(dictionary=True)
+    crsr.execute(illumina_sql(), (project.lims_id,))
+    for row in crsr:
+        # Either position (lane) or tag_index (plex) can be NULL
+        if name_root := row["run_id"]:
+            if row["position"]:
+                name_root += "_" + row["position"]
+            if row["tag_index"]:
+                name_root += "#" + row["tag_index"]
+        else:
+            msg = row_message(row, "No run_id for row")
+            raise ValueError(msg)
+
+        row["name_root"] = name_root
+        yield row
+
+
+def pacbio_fetcher(mlwh, project):
+    crsr = mlwh.cursor(dictionary=True)
+    crsr.execute(pacbio_sql(), (project.lims_id,))
+    for row in crsr:
+        if name_root := row["movie_name"]:
+            if row["tag1_id"]:
+                name_root += "#" + row["tag1_id"]
+                if row["tag2_id"]:
+                    name_root += "#" + row["tag2_id"]
+            elif row["tag2_id"]:
+                msg = row_message(row, "Do not expect tag2_id without tag1_id")
+                raise ValueError(msg)
+        else:
+            # We don't care about missing movie names for failed sequencing
+            if row["lims_qc"] == "pass":
+                row_info(row, "Missing movie_name")
+            continue
+
+        row["name_root"] = name_root
+        yield row
+
+
 def illumina_sql():
     return inspect.cleandoc(
         """
@@ -193,12 +228,14 @@ def illumina_sql():
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
           , flowcell.pipeline_id_lims AS pipeline_id_lims
-          , CONVERT(run_lane_metrics.id_run, char) AS run_id
+          , CONVERT(run_lane_metrics.id_run, CHAR) AS run_id
+          , CONVERT(flowcell.position, CHAR) AS position
+          , CONVERT(flowcell.tag_index, CHAR) AS tag_index
           , run_lane_metrics.run_complete AS run_complete
-          , CONCAT(run_lane_metrics.id_run, '_', flowcell.position, '#', flowcell.tag_index) AS name_root
-          , IF(product_metrics.qc IS NULL, NULL, IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
+          , IF(product_metrics.qc IS NULL, NULL
+            , IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
           , run_lane_metrics.qc_complete AS qc_date
-          , CONVERT(flowcell.tag_index, char) AS tag_index
+          , CONVERT(flowcell.tag_index, CHAR) AS tag_index
           , flowcell.tag_identifier AS tag1_id
           , flowcell.tag2_identifier AS tag2_id
           , flowcell.id_library_lims AS library_id
@@ -218,9 +255,7 @@ def illumina_sql():
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
-          AND sample.public_name IS NOT NULL
           AND study.id_study_lims = %s
-        HAVING name_root IS NOT NULL
         """
     )
 
@@ -240,14 +275,12 @@ def pacbio_sql():
           , well_metrics.instrument_type AS instrument_model
           , run.pipeline_id_lims AS pipeline_id_lims
           , well_metrics.pac_bio_run_name AS run_id
+          , well_metrics.movie_name AS movie_name
+          , run.well_label AS tag_index
           , well_metrics.run_complete AS run_complete
-          , CONCAT(well_metrics.movie_name, "#", run.tag_identifier
-              , IF(run.tag2_identifier IS NOT NULL
-                  , CONCAT('#', run.tag2_identifier), '')) AS name_root
           , IF(well_metrics.qc_seq IS NULL, NULL
             , IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
           , well_metrics.qc_seq_date AS qc_date
-          , run.well_label AS tag_index
           , run.tag_identifier AS tag1_id
           , run.tag2_identifier AS tag2_id
           , run.pac_bio_library_tube_name AS library_id
@@ -267,13 +300,16 @@ def pacbio_sql():
         WHERE product_metrics.qc IS NOT NULL
           AND sample.taxon_id IS NOT NULL
           AND study.id_study_lims = %s
-        HAVING name_root IS NOT NULL
         """
     )
 
 
 def row_info(row, msg):
-    print(f"{msg}:\n{format_row(row)}", file=sys.stderr)
+    print(row_message(row, msg), file=sys.stderr)
+
+
+def row_message(row, msg):
+    return f"{msg}:\n{format_row(row)}"
 
 
 def format_row(row):

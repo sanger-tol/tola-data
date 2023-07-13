@@ -134,30 +134,54 @@ class TolSqlMarshal(TolBaseMarshal):
     def commit(self):
         self.session.commit()
 
-    def fetch_or_create(self, cls, spec, selector=None):
+    def fetch_one(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
 
         query = select(cls).filter_by(**fltr)
-        ssn = self.session
-        if db_obj := ssn.scalars(query).one_or_none():
-            # Object matching selector fields is already in database
-            return db_obj
-        else:
-            if cls.has_log_details():
-                self.add_log_fields(spec)
-            obj = cls(**spec)
-            ssn.add(obj)
-            ssn.flush()
+        if obj := self.session.scalars(query).one_or_none():
+            # Object matching selector fields is in database
             return obj
 
-    def add_log_fields(self, spec):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if not spec.get("created_at"):
-            spec["last_modified_at"] = now
-        if not spec.get("created_by"):
-            spec["created_by"] = self.user_id
-        spec["last_modified_at"] = now
-        spec["last_modified_by"] = self.user_id
+    def create(self, cls, spec, selector=None):
+        ssn = self.session
+        obj = cls(**spec)
+        if cls.has_log_details():
+            self.update_log_fields(obj)
+        ssn.add(obj)
+        ssn.flush()  # Fetches any auto-generated primary IDs
+        return obj
+
+    def fetch_or_create(self, cls, spec, selector=None):
+        if obj := self.fetch_one(cls, spec, selector):
+            return obj
+        else:
+            return self.create(cls, spec, selector)
+
+    def update_or_create(self, cls, spec, selector=None):
+        if obj := self.fetch_one(cls, spec, selector):
+            changed = False
+            for prop, val in spec.items():
+                if (val != getattr(obj, prop)):
+                    setattr(obj, prop, val)
+                    changed = True
+            if changed and cls.has_log_details():
+                self.update_log_fields(obj)
+            return self.session.merge(obj)
+        else:
+            return self.create(cls, spec, selector)
+
+    @staticmethod
+    def now():
+        return datetime.datetime.now(datetime.timezone.utc)
+
+    def update_log_fields(self, obj):
+        now = self.now()
+        if not obj.created_at:
+            obj.created_at = now
+        if not obj.created_by:
+            obj.created_by = self.user_id
+        obj.last_modified_at = now
+        obj.last_modified_by = self.user_id
 
     def list_projects(self):
         query = select(Project).where(Project.lims_id is not None)
