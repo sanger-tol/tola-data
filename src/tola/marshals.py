@@ -1,8 +1,8 @@
 import argparse
 import datetime
-import json
 import os
 import pwd
+import sys
 
 from main.model import Project, Species, User
 from sqlalchemy import select
@@ -74,7 +74,7 @@ class TolBaseMarshal:
         pk = TolBaseMarshal.class_pimary_key(cls)
         return spec.get(pk)
 
-    def commit():
+    def commit(self):
         pass
 
 
@@ -87,7 +87,13 @@ class TolApiMarshal(TolBaseMarshal):
             }
         )
 
-    def fetch_or_create(self, cls, spec, selector=None):
+    def make_alchemy_object(self, cls, api_obj):
+        spec = api_obj.attributes
+        if self.class_pimary_key(cls) == 'id':  ### Not necessary?
+            spec["id"] = api_obj.id
+        return cls(**spec)
+
+    def fetch_one(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
         obj_type = cls.Meta.type_
         ads = self.api_data_source
@@ -96,21 +102,52 @@ class TolApiMarshal(TolBaseMarshal):
         )
         count = len(stored)
         if count == 0:
-            id_ = self.pk_field_from_spec(cls, spec)
-            new_obj = ApiObject(obj_type, id_, attributes=spec)
-            print(json.dumps(new_obj.__dict__, indent=2))
-            ads.create(new_obj)
-            return self.make_alchemy_object(cls, new_obj)
+            return None
         elif count == 1:
-            return self.make_alchemy_object(cls, stored[0])
+            return stored[0]
         else:
             raise Exception(f"filter {fltr} returned {count} {cls.__name__} objects")
 
-    def make_alchemy_object(self, cls, api_obj):
-        spec = api_obj.attributes
-        if self.class_pimary_key(cls) == 'id':
-            spec["id"] = api_obj.id
-        return cls(**spec)
+    def create(self, cls, spec, selector=None):
+        obj_type = cls.Meta.type_
+        id_ = self.pk_field_from_spec(cls, spec)
+        api_obj = ApiObject(obj_type, id_, attributes=spec)
+        self.api_data_source.create(api_obj)
+        return self.make_alchemy_object(cls, api_obj)
+
+    def fetch_or_create(self, cls, spec, selector=None):
+        if api_obj := self.fetch_one(cls, spec, selector):
+            return self.make_alchemy_object(cls, api_obj)
+        else:
+            return self.create(cls, spec, selector)
+
+    def update_or_create(self, cls, spec, selector=None):
+        if api_obj := self.fetch_one(cls, spec, selector):
+            api_attrib = api_obj.attributes
+            changed = False
+            for prop in self.all_keys_but_primary(cls, api_attrib, spec):
+                api_val = api_attrib.get(prop)
+                spec_val = spec.get(prop)
+                if api_val != spec_val:
+                    setattr(api_obj, prop, spec_val)
+                    changed = True
+            if changed:
+                self.api_data_source.update(api_obj)
+            return self.make_alchemy_object(cls, api_obj)
+        else:
+            return self.create(cls, spec, selector)
+
+    def all_keys_but_primary(self, cls, *arg_dicts):
+        """ Return a list of all the keys in the dict arguments
+        which are not the primary key of the class.
+        """
+        class_pk = self.class_pimary_key(cls)
+        all_props = set()
+        for dct in arg_dicts:
+            for prop in dct:
+                if prop != class_pk:
+                    all_props.add(prop)
+        return all_props
 
     def list_projects(self):
         return tuple(self.api_data_source.get_list('projects'))
@@ -138,9 +175,7 @@ class TolSqlMarshal(TolBaseMarshal):
         fltr = self.build_filter(cls, spec, selector)
 
         query = select(cls).filter_by(**fltr)
-        if obj := self.session.scalars(query).one_or_none():
-            # Object matching selector fields is in database
-            return obj
+        return self.session.scalars(query).one_or_none()
 
     def create(self, cls, spec, selector=None):
         ssn = self.session
@@ -161,7 +196,7 @@ class TolSqlMarshal(TolBaseMarshal):
         if obj := self.fetch_one(cls, spec, selector):
             changed = False
             for prop, val in spec.items():
-                if (val != getattr(obj, prop)):
+                if val != getattr(obj, prop):
                     setattr(obj, prop, val)
                     changed = True
             if changed and cls.has_log_details():
