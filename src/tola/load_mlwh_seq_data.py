@@ -5,9 +5,12 @@ import sys
 import tola.marshals
 
 from main.model import (
+    Accession,
     Allocation,
+    Centre,
     Data,
     File,
+    Platform,
     Run,
     Sample,
     Species,
@@ -34,21 +37,25 @@ def isoformat_if_date(dt):
 
 def load_mlwh_data(mrshl, mlwh, sts):
     sci_taxon = mrshl.fetch_sci_taxon_dict()
+    centre = mrshl.fetch_one(Centre, {"name": "Wellcome Sanger Institute"}, ("name",))
     species_fetcher = sts_species_fetcher(sts)
     # Iterate through projects
     for project in mrshl.list_projects():
         for run_data_fetcher in illumina_fetcher, pacbio_fetcher:
             for row in run_data_fetcher(mlwh, project):
                 try:
-                    store_row_data(mrshl, row, species_fetcher, project, sci_taxon)
+                    store_row_data(
+                        mrshl, centre, row, species_fetcher, project, sci_taxon
+                    )
                 except Exception as err:
                     msg = f"Error saving row:\n{format_row(row)}\n{err}"
                     raise ValueError(msg) from err
 
 
-def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
+def store_row_data(mrshl, centre, row, species_fetcher, project, sci_taxon):
     # Species
     species_info = species_fetcher(row["taxon_id"], row["scientific_name"])
+    species = None
     if species_info:
         if stored_tax_id := sci_taxon.get(species_info["species_id"]):
             if stored_tax_id != species_info["taxon_id"]:
@@ -59,48 +66,88 @@ def store_row_data(mrshl, row, species_fetcher, project, sci_taxon):
         else:
             sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
         species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
-    else:
-        species = None
 
     # specimen Accession
+    specimen_acc = None
+    if row["biospecimen_accession"]:
+        specimen_acc = mrshl.update_or_create(
+            Accession,
+            {
+                "accession_id": row["biospecimen_accession"],
+                "accession_type_id": "Bio Sample",
+            },
+        )
+
     # Specimen
+    specimen = None
     if row["tol_specimen_id"]:
         specimen_spec = {
             "specimen_id": row["tol_specimen_id"],
-            # "hierarchy_name": row["tol_specimen_id"],
-            # "accession_id": row["biospecimen_accession"],
         }
         if species:
             specimen_spec["species_id"] = species.species_id
+        if specimen_acc:
+            specimen_spec["accession_id"] = specimen_acc.accession_id
         specimen = mrshl.update_or_create(Specimen, specimen_spec)
-    else:
-        specimen = None
 
     # sample Accession
+    sample_acc = None
+    if row["biosample_accession"]:
+        sample_acc = mrshl.update_or_create(
+            Accession,
+            {
+                "accession_id": row["biosample_accession"],
+                "accession_type_id": "Bio Sample",
+            },
+        )
+
     # Sample
     sample_spec = {
         "sample_id": row["sample_name"],
         "specimen_id": row["tol_specimen_id"],
-        # "accession_id": row["biosample_accession"],
     }
     if specimen:
         sample_spec["specimen_id"] = specimen.specimen_id
+    if sample_acc:
+        sample_spec["accession_id"] = sample_acc.accession_id
     sample = mrshl.update_or_create(Sample, sample_spec)
 
-    # Data
-    data = mrshl.update_or_create(
-        Data,
+    # Platform
+    platform = mrshl.fetch_or_create(
+        Platform,
         {
-            "name_root": row["name_root"],
-            "sample_id": sample.sample_id,
-            "tag_index": row["tag_index"],
-            "tag1_id": row["tag1_id"],
-            "tag2_id": row["tag2_id"],
-            "lims_qc": row["lims_qc"],
-            "date": isoformat_if_date(row["qc_date"]),
+            "name": row["platform_type"],
+            "model": row["instrument_model"],
         },
-        ("name_root",),
+        ("name", "model"),
     )
+
+    # Run
+    run = None
+    if row["run_id"]:
+        run = mrshl.update_or_create(
+            Run,
+            {
+                "run_id": row["run_id"],
+                "platform_id": platform.id,
+                "centre_id": centre.id,
+                "complete": row["run_complete"],
+            },
+        )
+
+    # Data
+    data_spec = {
+        "name_root": row["name_root"],
+        "sample_id": sample.sample_id,
+        "tag_index": row["tag_index"],
+        "tag1_id": row["tag1_id"],
+        "tag2_id": row["tag2_id"],
+        "lims_qc": row["lims_qc"],
+        "date": isoformat_if_date(row["qc_date"]),
+    }
+    if run:
+        data_spec["run_id"] = run.run_id
+    data = mrshl.update_or_create(Data, data_spec, ("name_root",))
 
     # Allocation
     allocation = mrshl.update_or_create(

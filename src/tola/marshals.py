@@ -62,6 +62,13 @@ class TolBaseMarshal:
 
         return fltr
 
+    def fetch_one(self, cls, spec, selector=None):
+        if obj := self.fetch_one_or_none(cls, spec, selector):
+            return obj
+        else:
+            msg = f"No {cls.__name__} matching {selector} in {spec}"
+            raise ValueError(msg)
+
     @staticmethod
     def class_pimary_key(cls):
         if hasattr(cls.Meta, 'id_column'):
@@ -93,7 +100,7 @@ class TolApiMarshal(TolBaseMarshal):
             spec["id"] = api_obj.id
         return cls(**spec)
 
-    def fetch_one(self, cls, spec, selector=None):
+    def fetch_one_or_none(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
         obj_type = cls.Meta.type_
         ads = self.api_data_source
@@ -116,13 +123,13 @@ class TolApiMarshal(TolBaseMarshal):
         return self.make_alchemy_object(cls, api_obj)
 
     def fetch_or_create(self, cls, spec, selector=None):
-        if api_obj := self.fetch_one(cls, spec, selector):
+        if api_obj := self.fetch_one_or_none(cls, spec, selector):
             return self.make_alchemy_object(cls, api_obj)
         else:
             return self.create(cls, spec, selector)
 
     def update_or_create(self, cls, spec, selector=None):
-        if api_obj := self.fetch_one(cls, spec, selector):
+        if api_obj := self.fetch_one_or_none(cls, spec, selector):
             api_attrib = api_obj.attributes
             changed = False
             for prop in self.all_keys_but_primary(cls, api_attrib, spec):
@@ -171,7 +178,7 @@ class TolSqlMarshal(TolBaseMarshal):
     def commit(self):
         self.session.commit()
 
-    def fetch_one(self, cls, spec, selector=None):
+    def fetch_one_or_none(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
 
         query = select(cls).filter_by(**fltr)
@@ -187,13 +194,13 @@ class TolSqlMarshal(TolBaseMarshal):
         return obj
 
     def fetch_or_create(self, cls, spec, selector=None):
-        if obj := self.fetch_one(cls, spec, selector):
+        if obj := self.fetch_one_or_none(cls, spec, selector):
             return obj
         else:
             return self.create(cls, spec, selector)
 
     def update_or_create(self, cls, spec, selector=None):
-        if obj := self.fetch_one(cls, spec, selector):
+        if obj := self.fetch_one_or_none(cls, spec, selector):
             changed = False
             for prop, val in spec.items():
                 if val != getattr(obj, prop):
