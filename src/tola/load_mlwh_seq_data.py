@@ -293,12 +293,16 @@ def illumina_sql():
           ON sample.id_sample_tmp = flowcell.id_sample_tmp
         JOIN study
           ON flowcell.id_study_tmp = study.id_study_tmp
-        JOIN iseq_product_metrics AS product_metrics
-          ON flowcell.id_iseq_flowcell_tmp = product_metrics.id_iseq_flowcell_tmp
+        JOIN iseq_product_metrics AS component_metrics
+          ON flowcell.id_iseq_flowcell_tmp = component_metrics.id_iseq_flowcell_tmp
         JOIN iseq_run_lane_metrics AS run_lane_metrics
-          ON product_metrics.id_run = run_lane_metrics.id_run
-          AND product_metrics.position = run_lane_metrics.position
-        LEFT JOIN seq_product_irods_locations irods
+          ON component_metrics.id_run = run_lane_metrics.id_run
+          AND component_metrics.position = run_lane_metrics.position
+        JOIN iseq_product_components AS components
+          ON component_metrics.id_iseq_pr_metrics_tmp = components.id_iseq_pr_component_tmp
+        JOIN iseq_product_metrics AS product_metrics
+          ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
+        JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
