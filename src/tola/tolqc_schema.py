@@ -376,7 +376,7 @@ class Data(LogBase):
     sample_id = Column(String, ForeignKey("sample.sample_id"))
     library_id = Column(String, ForeignKey("library.library_id"))
     accession_id = Column(String, ForeignKey("accession.accession_id"))
-    run_id = Column(Integer, ForeignKey("run.id"))
+    run_id = Column(String, ForeignKey("run.run_id"))
     processed = Column(Integer)
     tag_index = Column(String)
     tag1_id = Column(String)
@@ -647,7 +647,7 @@ class PacbioRunMetrics(Base):
         type_ = "pacbio_run_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
-    run_id = Column(Integer, ForeignKey("run.id"))
+    run_id = Column(String, ForeignKey("run.run_id"))
     movie_time = Column(Integer)
     pre_extension_time = Column(Integer)
     total_bases = Column(BigInteger)
@@ -755,8 +755,9 @@ class Run(Base):
 
     class Meta:
         type_ = "runs"
+        id_column = "run_id"
 
-    id = Column(Integer, primary_key=True)  # noqa: A003
+    run_id = Column(String, primary_key=True)
     name = Column(String)
     hierarchy_name = Column(String)
     platform_id = Column(Integer, ForeignKey("platform.id"))
