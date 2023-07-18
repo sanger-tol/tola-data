@@ -115,6 +115,16 @@ class TolApiMarshal(TolBaseMarshal):
         else:
             raise Exception(f"filter {fltr} returned {count} {cls.__name__} objects")
 
+    def fetch_many(self, cls, spec=None, selector=None):
+        obj_type = cls.Meta.type_
+        if spec:
+            fltr = self.build_filter(cls, spec, selector)
+            return self.api_data_source.get_list(
+                obj_type, object_filters=DataSourceFilter(exact=fltr)
+            )
+        else:
+            return self.api_data_source.get_list(obj_type)
+
     def create(self, cls, spec, selector=None):
         obj_type = cls.Meta.type_
         id_ = self.pk_field_from_spec(cls, spec)
@@ -145,7 +155,7 @@ class TolApiMarshal(TolBaseMarshal):
             return self.create(cls, spec, selector)
 
     def all_keys_but_primary(self, cls, *arg_dicts):
-        """ Return a list of all the keys in the dict arguments
+        """Return a list of all the keys in the dict arguments
         which are not the primary key of the class.
         """
         class_pk = self.class_pimary_key(cls)
@@ -180,9 +190,16 @@ class TolSqlMarshal(TolBaseMarshal):
 
     def fetch_one_or_none(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
-
         query = select(cls).filter_by(**fltr)
         return self.session.scalars(query).one_or_none()
+
+    def fetch_many(self, cls, spec=None, selector=None):
+        if spec:
+            fltr = self.build_filter(cls, spec, selector)
+            query = select(cls).filter_by(**fltr)
+        else:
+            query = select(cls)
+        return self.session.scalars(query)
 
     def create(self, cls, spec, selector=None):
         ssn = self.session
@@ -229,9 +246,3 @@ class TolSqlMarshal(TolBaseMarshal):
         query = select(Project).where(Project.lims_id is not None)
         # query = select(Project).where(Project.lims_id == 6327)
         return tuple(self.session.scalars(query))
-
-    def fetch_sci_taxon_dict(self):
-        sci_taxon = {}
-        for species in self.session.scalars(select(Species)):
-            sci_taxon[species.species_id] = species.taxon_id
-        return sci_taxon

@@ -2,8 +2,9 @@ import inspect
 import logging
 import re
 import sys
-import tola.marshals
+from functools import cache
 
+from tola.goat_client import GoatClient
 from main.model import (
     Accession,
     Allocation,
@@ -16,6 +17,8 @@ from main.model import (
     Species,
     Specimen,
 )
+
+import tola.marshals
 from tola import db_connection
 
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     mrshl, _ = tola.marshals.marshal_from_command_line(
-        "Import sequencing run data from the MLWH"
+        "Import sequencing run data from the MLWH",
     )
     mlwh = db_connection.mlwh_db()
     sts = db_connection.sts_db()
@@ -36,36 +39,33 @@ def isoformat_if_date(dt):
 
 
 def load_mlwh_data(mrshl, mlwh, sts):
-    sci_taxon = mrshl.fetch_sci_taxon_dict()
     centre = mrshl.fetch_one(Centre, {"name": "Wellcome Sanger Institute"}, ("name",))
-    species_fetcher = sts_species_fetcher(sts)
+    goat_client = GoatClient()
     # Iterate through projects
     for project in mrshl.list_projects():
         for run_data_fetcher in illumina_fetcher, pacbio_fetcher:
             for row in run_data_fetcher(mlwh, project):
                 try:
                     store_row_data(
-                        mrshl, centre, row, species_fetcher, project, sci_taxon
+                        mrshl,
+                        centre,
+                        row,
+                        goat_client,
+                        project,
                     )
                 except Exception as err:
                     msg = f"Error saving row:\n{format_row(row)}\n{err}"
                     raise ValueError(msg) from err
 
 
-def store_row_data(mrshl, centre, row, species_fetcher, project, sci_taxon):
+def store_row_data(mrshl, centre, row, goat_client, project):
     # Species
-    species_info = species_fetcher(row["taxon_id"], row["scientific_name"])
-    species = None
-    if species_info:
-        if stored_tax_id := sci_taxon.get(species_info["species_id"]):
-            if stored_tax_id != species_info["taxon_id"]:
-                row_info(
-                    row, f"Have different taxon_id={stored_tax_id} for scientific_name"
-                )
-                return
-        else:
-            sci_taxon[species_info["species_id"]] = species_info["taxon_id"]
-        species = mrshl.fetch_or_create(Species, species_info, ("taxon_id",))
+    species = mrshl.fetch_one_or_none(
+        Species, {"taxon_id": row["taxon_id"]}, ("taxon_id",)
+    )
+    if not species:
+        if species_info := goat_client.get_species_info(row["taxon_id"]):
+            species = mrshl.update_or_create(Species, species_info, ("taxon_id",))
 
     # specimen Accession
     specimen_acc = None
@@ -150,7 +150,7 @@ def store_row_data(mrshl, centre, row, species_fetcher, project, sci_taxon):
     data = mrshl.update_or_create(Data, data_spec, ("name_root",))
 
     # Allocation
-    allocation = mrshl.update_or_create(
+    mrshl.update_or_create(
         Allocation,
         {
             "project_id": project.project_id,
@@ -161,12 +161,13 @@ def store_row_data(mrshl, centre, row, species_fetcher, project, sci_taxon):
 
     # File
     if row["irods_path"]:
-        file = mrshl.update_or_create(
+        # irods_path may have a trailing "/"
+        remote_path = row["irods_path"].rstrip("/") + "/" + row["irods_file"]
+        mrshl.update_or_create(
             File,
             {
                 "data_id": data.data_id,
-                "name": row["irods_file"],
-                "remote_path": row["irods_path"].rstrip("/"),
+                "remote_path": remote_path,
             },
             ("data_id",),
         )
@@ -182,7 +183,7 @@ def sts_species_fetcher(sts):
           , genome_size
         FROM species
         WHERE taxonid = %s
-        """
+        """,
     )
     crsr = sts.cursor()
 
@@ -193,9 +194,12 @@ def sts_species_fetcher(sts):
                 minimal_species_info(taxon_id, mlwh_sci_name) if mlwh_sci_name else None
             )
         elif crsr.rowcount != 1:
-            raise Exception(
-                f"Expecting one row for taxon_id='{taxon_id}' got '{crsr.rowcount}' rows"
+            msg = (
+                f"Expecting one row for taxon_id='{taxon_id}'"
+                f" got '{crsr.rowcount}' rows"
             )
+            raise ValueError(msg)
+
         row = crsr.fetchone()
         sci_name = row["scientific_name"]
         hierarchy_name = re.sub(r"\s+", "_", sci_name)
@@ -206,7 +210,7 @@ def sts_species_fetcher(sts):
             "taxon_id": taxon_id,
             "taxon_family": row["family"],
             "taxon_order": row["order_group"],
-            # "genome_size": row["genome_size"],  # BigInteger required
+            "genome_size": row["genome_size"],
         }
 
     return fetcher
@@ -261,6 +265,7 @@ def pacbio_fetcher(mlwh, project):
         yield row
 
 
+@cache
 def illumina_sql():
     return inspect.cleandoc(
         """
@@ -275,9 +280,9 @@ def illumina_sql():
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
           , flowcell.pipeline_id_lims AS pipeline_id_lims
-          , CONVERT(run_lane_metrics.id_run, CHAR) AS run_id
-          , CONVERT(flowcell.position, CHAR) AS position
-          , CONVERT(flowcell.tag_index, CHAR) AS tag_index
+          , CONVERT(product_metrics.id_run, CHAR) AS run_id
+          , CONVERT(product_metrics.position, CHAR) AS position
+          , CONVERT(product_metrics.tag_index, CHAR) AS tag_index
           , run_lane_metrics.run_complete AS run_complete
           , IF(product_metrics.qc IS NULL, NULL
             , IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
@@ -299,7 +304,9 @@ def illumina_sql():
           ON component_metrics.id_run = run_lane_metrics.id_run
           AND component_metrics.position = run_lane_metrics.position
         JOIN iseq_product_components AS components
-          ON component_metrics.id_iseq_pr_metrics_tmp = components.id_iseq_pr_component_tmp
+          ON component_metrics.id_iseq_pr_metrics_tmp
+                  = components.id_iseq_pr_component_tmp
+          AND components.component_index = 1
         JOIN iseq_product_metrics AS product_metrics
           ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
         JOIN seq_product_irods_locations AS irods
@@ -307,10 +314,11 @@ def illumina_sql():
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
           AND study.id_study_lims = %s
-        """
+        """,
     )
 
 
+@cache
 def pacbio_sql():
     return inspect.cleandoc(
         """
@@ -343,7 +351,8 @@ def pacbio_sql():
         JOIN pac_bio_product_metrics AS product_metrics
           ON run.id_pac_bio_tmp = product_metrics.id_pac_bio_tmp
         JOIN pac_bio_run_well_metrics AS well_metrics
-          ON product_metrics.id_pac_bio_rw_metrics_tmp = well_metrics.id_pac_bio_rw_metrics_tmp
+          ON product_metrics.id_pac_bio_rw_metrics_tmp
+              = well_metrics.id_pac_bio_rw_metrics_tmp
         JOIN study
           ON run.id_study_tmp = study.id_study_tmp
         LEFT JOIN seq_product_irods_locations AS irods
@@ -351,7 +360,7 @@ def pacbio_sql():
         WHERE product_metrics.qc IS NOT NULL
           AND sample.taxon_id IS NOT NULL
           AND study.id_study_lims = %s
-        """
+        """,
     )
 
 
@@ -371,5 +380,5 @@ def format_row(row):
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
