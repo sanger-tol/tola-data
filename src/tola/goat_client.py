@@ -58,7 +58,6 @@ class GoatResult:
     def make_info(self):
         info = {
             "species_id": self.scientific_name,
-            # "hierarchy_name": re.sub(r"\s+", "_", self.get_lineage("species")),
             "hierarchy_name": re.sub(r"\s+", "_", self.scientific_name),
             "strain": self.get_strain(),
             "common_name": self.get_name("common name"),
@@ -66,7 +65,7 @@ class GoatResult:
             "taxon_family": self.get_lineage("family"),
             "taxon_order": self.get_lineage("order"),
             "taxon_phylum": self.get_lineage("phylum"),
-            # "taxon_group": None,
+            "taxon_group": self.get_taxon_group(),
             "genome_size": self.get_value("genome_size"),
             "chromosome_number": self.get_value("chromosome_number"),
         }
@@ -80,6 +79,7 @@ class GoatResult:
             return None
 
     def get_name(self, name):
+        """Returns the first instance found of 'name' argument"""
         for tn in self.taxon_names:
             if tn["class"] == name:
                 return tn["name"]
@@ -96,6 +96,43 @@ class GoatResult:
             return fld["value"]
         else:
             return None
+
+    # Copied from tol-qc/asm2json which is based on:
+    #   https://github.com/VGP/vgp-assembly/blob/master/VGP_specimen_naming_scheme.md
+    LETTER_GROUP = {
+        "a": "amphibians",
+        "b": "birds",
+        "c": "non-vascular-plants",
+        "d": "dicots",
+        "e": "echinoderms",
+        "f": "fish",
+        "g": "fungi",
+        "h": "platyhelminths",
+        "i": "insects",
+        "j": "jellyfish",
+        "k": "chordates",
+        "l": "monocots",
+        "m": "mammals",
+        "n": "nematodes",
+        "o": "sponges",
+        "p": "protists",
+        "q": "arthropods",
+        "r": "reptiles",
+        "s": "sharks",
+        "t": "ctenophores",
+        "u": "algae",
+        "v": "vascular-plants",
+        "w": "annelids",
+        "x": "molluscs",
+        "y": "bacteria",
+        "z": "archaea",
+    }
+
+    def get_taxon_group(self):
+        tol_id = self.get_name("tol_id")
+        if not tol_id:
+            return
+        return self.LETTER_GROUP.get(tol_id[0])
 
 
 if __name__ == "__main__":
