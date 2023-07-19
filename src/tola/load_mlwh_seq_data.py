@@ -309,10 +309,11 @@ def illumina_sql():
           AND components.component_index = 1
         JOIN iseq_product_metrics AS product_metrics
           ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
-        JOIN seq_product_irods_locations AS irods
+        LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
+          AND product_metrics.num_reads IS NOT NULL
           AND study.id_study_lims = %s
         """,
     )
