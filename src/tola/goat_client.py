@@ -4,7 +4,7 @@ import requests
 import sys
 
 
-class GoatClient:
+class GoaTClient:
     def __init__(self):
         self.goat_url = "https://goat.genomehubs.org/api/v2"
 
@@ -15,42 +15,50 @@ class GoatClient:
         else:
             r.raise_for_status()
 
-    def one_result_or_none(self, query, fields=None):
-        payload = {
-            "result": "taxon",
-            "includeEstimates": "true",
-            "taxonomy": "ncbi",
-            "query": query,
-            # "offset": 0,
-        }
-        if fields:
-            payload["fields"] = ",".join(fields)
+    def raw_result_list(self, payload):
+        data = self.json_get(payload)
+        if results := data.get("results"):
+            return [r["result"] for r in results]
+        else:
+            return []
+
+    def one_result_or_none(self, payload):
         data = self.json_get(payload)
         results = data.get("results")
         if len(results) == 1:
-            return GoatResult(results[0]["result"])
+            return GoaTResult(results[0]["result"])
         else:
             return None
 
-    def one_result(self, query, fields=None):
-        if rslt := self.one_result_or_none(self, query, fields):
+    def one_result(self, payload):
+        if rslt := self.one_result_or_none(payload):
             return rslt
         else:
-            msg = (
-                f"Expecting unique result for query '{query}'"
-                f" but found '{len(results)}'"
-            )
+            msg = f"No result for query '{payload['query']}'"
             raise ValueError(msg)
 
+    def taxon_id_payload(self, taxon_id, fields=("genome_size", "chromosome_number")):
+        payload = {
+            "query": f"tax_eq({taxon_id})",
+            "includeEstimates": "true",
+            "result": "taxon",
+            "taxonomy": "ncbi",
+        }
+        if fields:
+            payload["fields"] = ",".join(fields)
+        return payload
+
     def get_species_info(self, taxon_id):
-        rslt = self.one_result_or_none(
-            f"tax_eq({taxon_id})",
-            fields=("genome_size", "chromosome_number"),
-        )
+        payload = self.taxon_id_payload(taxon_id)
+        rslt = self.one_result_or_none(payload)
         return rslt.make_info() if rslt else None
 
+    def raw_results_from_taxon_id(self, taxon_id):
+        payload = self.taxon_id_payload(taxon_id)
+        return self.raw_result_list(payload)
 
-class GoatResult:
+
+class GoaTResult:
     def __init__(self, args):
         for name, val in args.items():
             setattr(self, name, val)
@@ -58,7 +66,7 @@ class GoatResult:
     def make_info(self):
         info = {
             "species_id": self.scientific_name,
-            "hierarchy_name": re.sub(r"\s+", "_", self.scientific_name),
+            "hierarchy_name": self.hierarchy_name(),
             "strain": self.get_strain(),
             "common_name": self.get_name("common name"),
             "taxon_id": self.taxon_id,
@@ -71,10 +79,19 @@ class GoatResult:
         }
         return info
 
+    def hierarchy_name(self):
+        hn = re.sub(r"\W+", "_", self.scientific_name)
+        return hn.strip("_")
+
     def get_strain(self):
-        # How will "strain" appear in GOAT?
         if self.taxon_rank == "subspecies":
             return self.scientific_name.split()[-1]
+        elif m := re.search(
+            r"\bstrain\s+(\S+)",
+            self.scientific_name,
+            re.IGNORECASE,
+        ):
+            return m.group(1)
         else:
             return None
 
@@ -136,10 +153,11 @@ class GoatResult:
 
 
 if __name__ == "__main__":
-    gc = GoatClient()
+    gc = GoaTClient()
     tax_list = sys.argv[1:]
     if len(tax_list) == 0:
-        tax_list = 13579, 116150, 348721
+        tax_list = 13579, 116150, 348721, 2980486, 237398
     for taxon_id in tax_list:
+        # print(json.dumps(gc.raw_results_from_taxon_id(taxon_id), indent=2))
         species_info = gc.get_species_info(taxon_id)
         print(json.dumps(species_info, indent=2))

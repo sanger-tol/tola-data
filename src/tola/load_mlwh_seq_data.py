@@ -4,7 +4,7 @@ import re
 import sys
 from functools import cache
 
-from tola.goat_client import GoatClient
+from tola.goat_client import GoaTClient
 from main.model import (
     Accession,
     Allocation,
@@ -40,7 +40,7 @@ def isoformat_if_date(dt):
 
 def load_mlwh_data(mrshl, mlwh, sts):
     centre = mrshl.fetch_one(Centre, {"name": "Wellcome Sanger Institute"}, ("name",))
-    goat_client = GoatClient()
+    goat_client = GoaTClient()
     # Iterate through projects
     for project in mrshl.list_projects():
         for run_data_fetcher in illumina_fetcher, pacbio_fetcher:
