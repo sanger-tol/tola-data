@@ -37,16 +37,18 @@ class GoaTClient:
             msg = f"No result for query '{payload['query']}'"
             raise ValueError(msg)
 
-    def taxon_id_payload(self, taxon_id, fields=("genome_size", "chromosome_number")):
-        payload = {
+    def taxon_id_payload(
+        self,
+        taxon_id,
+        fields=("genome_size", "chromosome_number"),
+    ):
+        return {
             "query": f"tax_eq({taxon_id})",
-            "includeEstimates": "true",
+            "fields": ",".join(fields),
             "result": "taxon",
             "taxonomy": "ncbi",
+            "includeEstimates": "true",
         }
-        if fields:
-            payload["fields"] = ",".join(fields)
-        return payload
 
     def get_species_info(self, taxon_id):
         payload = self.taxon_id_payload(taxon_id)
@@ -152,12 +154,28 @@ class GoaTResult:
         return self.LETTER_GROUP.get(tol_id[0])
 
 
+def command_line_args(args=sys.argv[1:]):
+    raw_flag = False
+    tax_list = []
+    for r in args:
+        if re.match(r"-+raw", r):
+            raw_flag = True
+        elif re.fullmatch(r"\d+", r):
+            tax_list.append(r)
+        else:
+            print(f"Unrecognised argument: '{r}'", file=sys.stderr)
+    return raw_flag, tax_list
+
+
 if __name__ == "__main__":
     gc = GoaTClient()
-    tax_list = sys.argv[1:]
+    raw_flag, tax_list = command_line_args()
     if len(tax_list) == 0:
         tax_list = 13579, 116150, 348721, 2980486, 237398
-    for taxon_id in tax_list:
-        # print(json.dumps(gc.raw_results_from_taxon_id(taxon_id), indent=2))
-        species_info = gc.get_species_info(taxon_id)
-        print(json.dumps(species_info, indent=2))
+    if raw_flag:
+        for taxon_id in tax_list:
+            print(json.dumps(gc.raw_results_from_taxon_id(taxon_id), indent=2))
+    else:
+        for taxon_id in tax_list:
+            species_info = gc.get_species_info(taxon_id)
+            print(json.dumps(species_info, indent=2))
