@@ -149,9 +149,7 @@ class GoaTResult:
 
     def get_taxon_group(self):
         tol_id = self.get_name("tol_id")
-        if not tol_id:
-            return
-        return self.LETTER_GROUP.get(tol_id[0])
+        return self.LETTER_GROUP.get(tol_id[0]) if tol_id else None
 
 
 def command_line_args(args=sys.argv[1:]):

@@ -11,6 +11,7 @@ from main.model import (
     Centre,
     Data,
     File,
+    PacbioRunMetrics,
     Platform,
     Run,
     Sample,
@@ -56,6 +57,31 @@ def load_mlwh_data(mrshl, mlwh, sts):
                 except Exception as err:
                     msg = f"Error saving row:\n{format_row(row)}\n{err}"
                     raise ValueError(msg) from err
+
+
+PACBIO_RUN_METRICS_FIELDS = (
+    "run_id",
+    "movie_minutes",
+    "binding_kit",
+    "sequencing_kit",
+    "include_kinetics",
+    "loading_conc",
+    "control_num_reads",
+    "control_read_length_mean",
+    "polymerase_read_bases",
+    "polymerase_num_reads",
+    "polymerase_read_length_mean",
+    "polymerase_read_length_n50",
+    "insert_length_mean",
+    "insert_length_n50",
+    "unique_molecular_bases",
+    "p0_num",
+    "p1_num",
+    "p2_num",
+    "hifi_read_bases",
+    "hifi_num_reads",
+    "hifi_low_quality_num_reads",
+)
 
 
 def store_row_data(mrshl, centre, row, goat_client, project):
@@ -125,21 +151,31 @@ def store_row_data(mrshl, centre, row, goat_client, project):
     # Run
     run = None
     if row["run_id"]:
-        run = mrshl.update_or_create(
-            Run,
-            {
-                "run_id": row["run_id"],
-                "platform_id": platform.id,
-                "centre_id": centre.id,
-                "complete": row["run_complete"],
-            },
+        run_spec = {
+            "run_id": row["run_id"],
+            "platform_id": platform.id,
+            "centre_id": centre.id,
+            "start": isoformat_if_date(row.get("run_start")),
+            "complete": isoformat_if_date(row["run_complete"]),
+        }
+        if lrid := row.get("lims_run_id"):
+            run_spec["lims_id"] = lrid
+        if elmnt := row.get("well_label"):
+            run_spec["element"] = elmnt
+        run = mrshl.update_or_create(Run, run_spec)
+
+    # PacbioRunMetrics
+    if platform.name == "PacBio":
+        mrshl.update_or_create(
+            PacbioRunMetrics,
+            {col: row[col] for col in PACBIO_RUN_METRICS_FIELDS},
         )
 
     # Data
     data_spec = {
         "name_root": row["name_root"],
         "sample_id": sample.sample_id,
-        "tag_index": row["tag_index"],
+        "tag_index": row.get("tag_index"),
         "tag1_id": row["tag1_id"],
         "tag2_id": row["tag2_id"],
         "lims_qc": row["lims_qc"],
@@ -173,49 +209,6 @@ def store_row_data(mrshl, centre, row, goat_client, project):
         )
 
 
-def sts_species_fetcher(sts):
-    sql = inspect.cleandoc(
-        """
-        SELECT scientific_name
-          , common_name
-          , family
-          , order_group
-          , genome_size
-        FROM species
-        WHERE taxonid = %s
-        """,
-    )
-    crsr = sts.cursor()
-
-    def fetcher(taxon_id, mlwh_sci_name):
-        crsr.execute(sql, (str(taxon_id),))
-        if crsr.rowcount == 0:
-            return (
-                minimal_species_info(taxon_id, mlwh_sci_name) if mlwh_sci_name else None
-            )
-        elif crsr.rowcount != 1:
-            msg = (
-                f"Expecting one row for taxon_id='{taxon_id}'"
-                f" got '{crsr.rowcount}' rows"
-            )
-            raise ValueError(msg)
-
-        row = crsr.fetchone()
-        sci_name = row["scientific_name"]
-        hierarchy_name = re.sub(r"\s+", "_", sci_name)
-        return {
-            "species_id": sci_name,
-            "hierarchy_name": hierarchy_name,
-            "common_name": row["common_name"],
-            "taxon_id": taxon_id,
-            "taxon_family": row["family"],
-            "taxon_order": row["order_group"],
-            "genome_size": row["genome_size"],
-        }
-
-    return fetcher
-
-
 def minimal_species_info(taxon_id, sci_name):
     hierarchy_name = re.sub(r"\s+", "_", sci_name)
     return {
@@ -247,7 +240,7 @@ def pacbio_fetcher(mlwh, project):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project.lims_id,))
     for row in crsr:
-        if name_root := row["movie_name"]:
+        if name_root := row["run_id"]:
             if row["tag1_id"]:
                 name_root += "#" + row["tag1_id"]
                 if row["tag2_id"]:
@@ -287,7 +280,6 @@ def illumina_sql():
           , IF(product_metrics.qc IS NULL, NULL
             , IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
           , run_lane_metrics.qc_complete AS qc_date
-          , CONVERT(flowcell.tag_index, CHAR) AS tag_index
           , flowcell.tag_identifier AS tag1_id
           , flowcell.tag2_identifier AS tag2_id
           , flowcell.id_library_lims AS library_id
@@ -334,9 +326,10 @@ def pacbio_sql():
           , 'PacBio' AS platform_type
           , well_metrics.instrument_type AS instrument_model
           , run.pipeline_id_lims AS pipeline_id_lims
-          , well_metrics.pac_bio_run_name AS run_id
-          , well_metrics.movie_name AS movie_name
-          , run.well_label AS tag_index
+          , well_metrics.movie_name AS run_id
+          , well_metrics.pac_bio_run_name AS lims_run_id
+          , well_metrics.well_label AS well_label
+          , well_metrics.run_start AS run_start
           , well_metrics.run_complete AS run_complete
           , IF(well_metrics.qc_seq IS NULL, NULL
             , IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
@@ -344,6 +337,31 @@ def pacbio_sql():
           , run.tag_identifier AS tag1_id
           , run.tag2_identifier AS tag2_id
           , run.pac_bio_library_tube_name AS library_id
+
+          -- Fields for PacbioRunMetrics:
+          , well_metrics.movie_minutes AS movie_minutes
+          , well_metrics.binding_kit AS binding_kit
+          , well_metrics.sequencing_kit AS sequencing_kit
+          , IF(well_metrics.include_kinetics IS NULL, NULL,
+              IF(well_metrics.include_kinetics = 1, 'true', 'false')
+            ) AS include_kinetics
+          , well_metrics.loading_conc AS loading_conc
+          , well_metrics.control_num_reads AS control_num_reads
+          , well_metrics.control_read_length_mean AS control_read_length_mean
+          , well_metrics.polymerase_read_bases AS polymerase_read_bases
+          , well_metrics.polymerase_num_reads AS polymerase_num_reads
+          , well_metrics.polymerase_read_length_mean AS polymerase_read_length_mean
+          , well_metrics.polymerase_read_length_n50 AS polymerase_read_length_n50
+          , well_metrics.insert_length_mean AS insert_length_mean
+          , well_metrics.insert_length_n50 AS insert_length_n50
+          , well_metrics.unique_molecular_bases AS unique_molecular_bases
+          , well_metrics.p0_num AS p0_num
+          , well_metrics.p1_num AS p1_num
+          , well_metrics.p2_num AS p2_num
+          , well_metrics.hifi_read_bases AS hifi_read_bases
+          , well_metrics.hifi_num_reads AS hifi_num_reads
+          , well_metrics.hifi_low_quality_num_reads AS hifi_low_quality_num_reads
+
           , irods.irods_root_collection AS irods_path
           , irods.irods_data_relative_path AS irods_file
         FROM sample
@@ -360,6 +378,7 @@ def pacbio_sql():
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
           AND sample.taxon_id IS NOT NULL
+          AND well_metrics.movie_name IS NOT NULL
           AND study.id_study_lims = %s
         """,
     )
