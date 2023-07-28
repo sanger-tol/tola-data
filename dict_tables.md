@@ -23,7 +23,7 @@ M?                     | Male (uncertain)
 F?                     | Female (uncertain)
 H                      | Hermaphrodite
 H/M                    | Hermaphrodite, monoecious
-NA                     | Not available
+NA                     | Not applicable
 U                      | Unknown
 
 #### `specimen_status_type`

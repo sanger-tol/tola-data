@@ -1,6 +1,5 @@
 import inspect
 import logging
-import re
 import sys
 from functools import cache
 
@@ -11,6 +10,8 @@ from main.model import (
     Centre,
     Data,
     File,
+    Library,
+    LibraryType,
     PacbioRunMetrics,
     Platform,
     Run,
@@ -171,6 +172,19 @@ def store_row_data(mrshl, centre, row, goat_client, project):
             {col: row[col] for col in PACBIO_RUN_METRICS_FIELDS},
         )
 
+    # Library
+    library = None
+    if row["library_id"]:
+        lib_spec = {
+            "library_id": row["library_id"],
+        }
+
+        # LibraryType
+        if lib_type := library_type_from_pipeline_id(mrshl, row["pipeline_id_lims"]):
+            lib_spec["library_type_id"] = lib_type.library_type_id
+
+        library = mrshl.update_or_create(Library, lib_spec)
+
     # Data
     data_spec = {
         "name_root": row["name_root"],
@@ -183,6 +197,8 @@ def store_row_data(mrshl, centre, row, goat_client, project):
     }
     if run:
         data_spec["run_id"] = run.run_id
+    if library:
+        data_spec["library_id"] = library.library_id
     data = mrshl.update_or_create(Data, data_spec, ("name_root",))
 
     # Allocation
@@ -209,13 +225,23 @@ def store_row_data(mrshl, centre, row, goat_client, project):
         )
 
 
-def minimal_species_info(taxon_id, sci_name):
-    hierarchy_name = re.sub(r"\s+", "_", sci_name)
-    return {
-        "species_id": sci_name,
-        "taxon_id": taxon_id,
-        "hierarchy_name": hierarchy_name,
-    }
+PIPELINE_TO_LIBRARY_TYPE = {
+    "PacBio_Ultra_Low_Input": "PacBio - HiFi (ULI)",
+    "PacBio_Ultra_Low_Input_mplx": "PacBio - HiFi (ULI)",
+    "Pacbio_HiFi": "PacBio - HiFi",
+    "Pacbio_HiFi_mplx": "PacBio - HiFi",
+    "Pacbio_IsoSeq":  "PacBio - IsoSeq",
+    "PacBio_IsoSeq_mplx": "PacBio - IsoSeq",
+    "Pacbio_Microbial_mplx": "PacBio - HiFi (Microbial)",
+}
+
+
+@cache
+def library_type_from_pipeline_id(mrshl, pipeline_id_lims):
+    if pipeline_id_lims is None:
+        return None
+    lib_type = PIPELINE_TO_LIBRARY_TYPE.get(pipeline_id_lims, pipeline_id_lims)
+    return mrshl.fetch_or_create(LibraryType, {"library_type_id": lib_type})
 
 
 def illumina_fetcher(mlwh, project):
