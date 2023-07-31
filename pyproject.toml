@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tola"
+version = "1.0.0"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "SQLAlchemy ~= 1.4",
+    "mysql-connector-python",
+    "psycopg2", # PostgreSQL connector
+    "requests",
+    'importlib-metadata; python_version>="3.8"',
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
