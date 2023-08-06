@@ -499,7 +499,7 @@ class File(Base):
     name = Column(String)
     relative_path = Column(String)
     remote_path = Column(String)
-    size_bytes = Column(Integer)
+    size_bytes = Column(BigInteger)
     md5 = Column(String)
 
     data = relationship("Data", back_populates="files")
@@ -843,7 +843,7 @@ class Species(LogBase):
         id_column = "species_id"
 
     species_id = Column(String, primary_key=True)
-    hierarchy_name = Column(String, nullable=False, unique=True)
+    hierarchy_name = Column(String, nullable=False, index=True)
     strain = Column(String)
     common_name = Column(String)
     taxon_id = Column(Integer, index=True)
