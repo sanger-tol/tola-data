@@ -31,8 +31,7 @@ def main():
         "Import sequencing run data from the MLWH",
     )
     mlwh = db_connection.mlwh_db()
-    sts = db_connection.sts_db()
-    load_mlwh_data(mrshl, mlwh, sts)
+    load_mlwh_data(mrshl, mlwh)
     mrshl.commit()
 
 
@@ -40,7 +39,7 @@ def isoformat_if_date(dt):
     return dt.isoformat() if hasattr(dt, "isoformat") else dt
 
 
-def load_mlwh_data(mrshl, mlwh, sts):
+def load_mlwh_data(mrshl, mlwh):
     centre = mrshl.fetch_one(Centre, {"name": "Wellcome Sanger Institute"}, ("name",))
     goat_client = GoaTClient()
     # Iterate through projects
