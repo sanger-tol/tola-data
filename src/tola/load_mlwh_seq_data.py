@@ -156,8 +156,8 @@ def store_row_data(mrshl, centre, row, goat_client, project):
             "run_id": row["run_id"],
             "platform_id": platform.id,
             "centre_id": centre.id,
-            "start": isoformat_if_date(row.get("run_start")),
-            "complete": isoformat_if_date(row["run_complete"]),
+            "start": row.get("run_start"),
+            "complete": row["run_complete"],
         }
         if lrid := row.get("lims_run_id"):
             run_spec["lims_id"] = lrid
@@ -193,7 +193,7 @@ def store_row_data(mrshl, centre, row, goat_client, project):
         "tag1_id": row["tag1_id"],
         "tag2_id": row["tag2_id"],
         "lims_qc": row["lims_qc"],
-        "date": isoformat_if_date(row["qc_date"]),
+        "date": row["qc_date"],
     }
     if run:
         data_spec["run_id"] = run.run_id
@@ -230,7 +230,7 @@ PIPELINE_TO_LIBRARY_TYPE = {
     "PacBio_Ultra_Low_Input_mplx": "PacBio - HiFi (ULI)",
     "Pacbio_HiFi": "PacBio - HiFi",
     "Pacbio_HiFi_mplx": "PacBio - HiFi",
-    "Pacbio_IsoSeq":  "PacBio - IsoSeq",
+    "Pacbio_IsoSeq": "PacBio - IsoSeq",
     "PacBio_IsoSeq_mplx": "PacBio - IsoSeq",
     "Pacbio_Microbial_mplx": "PacBio - HiFi (Microbial)",
 }
