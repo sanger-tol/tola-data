@@ -79,18 +79,24 @@ def main():
 
 class ProjectGroupBundle(Bundle):
     def create_row_processor(self, query, getters, labels):
-        """ """
+        """
+        Combine the "proj" and "taxon_group" columns if the "proj" column
+        contains "{}", else returns the "proj" itself.
+        e.g. ("darwin/{}", "birds") becomes "darwin/birds"
+        """
+
         get_proj, get_taxon_group = getters
 
         def processor(row):
             proj = get_proj(row)
             taxon_group = get_taxon_group(row)
-            if proj is None:
-                return
-            elif "{}" in proj:
-                group = proj.format(taxon_group)
-            else:
-                group = proj
+            group = None
+            if proj is not None:
+                if "{}" in proj:
+                    if taxon_group is not None:
+                        group = proj.format(taxon_group)
+                else:
+                    group = proj
             return group
 
         return processor
@@ -98,7 +104,10 @@ class ProjectGroupBundle(Bundle):
 
 class IsoDayBundle(Bundle):
     def create_row_processor(self, query, getters, labels):
-        """ """
+        """
+        Returns just the day portion of a datetime column
+        in ISO 8601 format if it contains a value.
+        """
 
         (get_datetime,) = getters
 

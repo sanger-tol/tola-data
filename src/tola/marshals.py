@@ -2,10 +2,13 @@ import argparse
 import datetime
 import os
 import pwd
+import pytz
 import sys
 
-from main.model import Project, Species, User
+from functools import cache
 from sqlalchemy import select
+
+from main.model import Data, File, Project, User
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core import DataSourceFilter
 from tola import db_connection
@@ -69,17 +72,21 @@ class TolBaseMarshal:
             msg = f"No {cls.__name__} matching {selector} in {spec}"
             raise ValueError(msg)
 
-    @staticmethod
-    def class_pimary_key(cls):
+    @cache
+    def class_pimary_key(self, cls):
         if hasattr(cls.Meta, 'id_column'):
             return cls.Meta.id_column
         else:
             return 'id'
 
-    @staticmethod
-    def pk_field_from_spec(cls, spec):
-        pk = TolBaseMarshal.class_pimary_key(cls)
+    def pk_field_from_spec(self, cls, spec):
+        pk = self.class_pimary_key(cls)
         return spec.get(pk)
+
+    @cache
+    def fetch_dict_item(self, cls, pk_val):
+        pk = self.class_pimary_key(cls)
+        return self.fetch_one(cls, {pk: pk_val})
 
     def commit(self):
         pass
@@ -221,6 +228,11 @@ class TolSqlMarshal(TolBaseMarshal):
             changed = False
             for prop, val in spec.items():
                 if val != getattr(obj, prop):
+                    old = getattr(obj, prop)
+                    print(
+                        f"Changed: {prop} '{'NULL' if old is None else old}' to '{val}'",
+                        file=sys.stderr,
+                    )
                     setattr(obj, prop, val)
                     changed = True
             if changed and cls.has_log_details():
@@ -231,7 +243,7 @@ class TolSqlMarshal(TolBaseMarshal):
 
     @staticmethod
     def now():
-        return datetime.datetime.now(datetime.timezone.utc)
+        return datetime.datetime.now(tz=pytz.timezone("Europe/London"))
 
     def update_log_fields(self, obj):
         now = self.now()

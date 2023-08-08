@@ -6,6 +6,7 @@ from functools import cache
 from tola.goat_client import GoaTClient
 from main.model import (
     Accession,
+    AccessionTypeDict,
     Allocation,
     Centre,
     Data,
@@ -84,29 +85,59 @@ PACBIO_RUN_METRICS_FIELDS = (
 )
 
 
-def store_row_data(mrshl, centre, row, goat_client, project):
-    # Species
-    species = mrshl.fetch_one_or_none(
-        Species, {"taxon_id": row["taxon_id"]}, ("taxon_id",)
-    )
-    if not species:
-        if species_info := goat_client.get_species_info(row["taxon_id"]):
-            species = mrshl.update_or_create(Species, species_info, ("taxon_id",))
+def species_from_taxon_id(mrshl, goat_client, taxon_id):
+    """
+    Given a taxon_id, retrieves a Species object from the database,
+    or else creates a new Species entry using taxonomy data from
+    the GoAT database.
+    """
+    species = None
+    if taxon_id:
+        species = mrshl.fetch_one_or_none(
+            Species, {"taxon_id": taxon_id}, ("taxon_id",)
+        )
+        if not species:
+            if species_info := goat_client.get_species_info(taxon_id):
+                species = mrshl.update_or_create(Species, species_info, ("taxon_id",))
+    return species
 
-    # specimen Accession
-    specimen_acc = None
-    if row["biospecimen_accession"]:
-        specimen_acc = mrshl.update_or_create(
+
+def valid_accession(mrshl, accn_type, accn):
+    if accn:
+        atd = mrshl.fetch_dict_item(AccessionTypeDict, accn_type)
+        if atd.valid_accession(accn):
+            return True
+    return False
+
+
+def accession_if_valid(mrshl, accn_type, accn):
+    """
+    Returns an Accession object if the accn argument matches the regular
+    expression for the AccessionType of the accn_type argument
+    """
+    if valid_accession(mrshl, accn_type, accn):
+        return mrshl.update_or_create(
             Accession,
             {
-                "accession_id": row["biospecimen_accession"],
-                "accession_type_id": "Bio Sample",
+                "accession_id": accn,
+                "accession_type_id": accn_type,
             },
         )
+    return None
+
+
+def store_row_data(mrshl, centre, row, goat_client, project):
+
+    # specimen Accession
+    specimen_acc = accession_if_valid(mrshl, "Bio Sample", row["biospecimen_accession"])
 
     # Specimen
     specimen = None
-    if row["tol_specimen_id"]:
+    if valid_accession(mrshl, "ToL Specimen ID", row["tol_specimen_id"]):
+
+        # Species - only created for valid ToL specimens
+        species = species_from_taxon_id(mrshl, goat_client, row["taxon_id"])
+
         specimen_spec = {
             "specimen_id": row["tol_specimen_id"],
         }
@@ -117,20 +148,11 @@ def store_row_data(mrshl, centre, row, goat_client, project):
         specimen = mrshl.update_or_create(Specimen, specimen_spec)
 
     # sample Accession
-    sample_acc = None
-    if row["biosample_accession"]:
-        sample_acc = mrshl.update_or_create(
-            Accession,
-            {
-                "accession_id": row["biosample_accession"],
-                "accession_type_id": "Bio Sample",
-            },
-        )
+    sample_acc = accession_if_valid(mrshl, "Bio Sample", row["biosample_accession"])
 
     # Sample
     sample_spec = {
         "sample_id": row["sample_name"],
-        "specimen_id": row["tol_specimen_id"],
     }
     if specimen:
         sample_spec["specimen_id"] = specimen.specimen_id
