@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 
+import re
 import sys
+from functools import cached_property
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -72,7 +74,7 @@ class Accession(Base):
     )
     secondary = Column(String)
     submission = Column(String)
-    date_submitted = Column(DateTime)
+    date_submitted = Column(DateTime(timezone=True))
     title = Column(String)
     description = Column(String)
 
@@ -95,6 +97,17 @@ class AccessionTypeDict(Base):
     url = Column(String)
 
     accessions = relationship("Accession", back_populates="accession_type")
+
+    @cached_property
+    def compiled_regexp(self):
+        print(
+            f"Caching compled RegExp '{self.regxep}' for {self.accession_type_id}",
+            file=sys.stderr,
+        )
+        return re.compile(self.regexp)
+
+    def valid_accession(self, accn):
+        return True if self.compiled_regexp.search(accn) else False
 
 
 class Allocation(Base):
@@ -254,7 +267,7 @@ class AssemblyStatus(LogBase):
     status_type_id = Column(
         String, ForeignKey("assembly_status_type.status_type_id"), nullable=False
     )
-    status_time = Column(DateTime, nullable=False)
+    status_time = Column(DateTime(timezone=True), nullable=False)
 
     assembly = relationship(
         "Assembly", foreign_keys=[assembly_id], back_populates="status_history"
@@ -300,7 +313,7 @@ class BuscoLineage(Base):
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
-    date_created = Column(DateTime)
+    date_created = Column(DateTime(timezone=True))
     species_count = Column(Integer)
     gene_count = Column(Integer)
     busco_metrics = relationship("BuscoMetrics", back_populates="busco_lineage")
@@ -381,7 +394,7 @@ class Data(LogBase):
     tag_index = Column(String)
     tag1_id = Column(String)
     tag2_id = Column(String)
-    date = Column(DateTime)
+    date = Column(DateTime(timezone=True))
     lims_qc = Column(String, ForeignKey("qc_dict.qc_state"))
     auto_qc = Column(String, ForeignKey("qc_dict.qc_state"))
     qc = Column(String, ForeignKey("qc_dict.qc_state"))
@@ -466,7 +479,7 @@ class DatasetStatus(LogBase):
     status_type_id = Column(
         String, ForeignKey("dataset_status_type.status_type_id"), nullable=False
     )
-    status_time = Column(DateTime, nullable=False)
+    status_time = Column(DateTime(timezone=True), nullable=False)
 
     dataset = relationship(
         "Dataset", foreign_keys=[dataset_id], back_populates="status_history"
@@ -764,8 +777,8 @@ class Run(Base):
     lims_id = Column(String)
     element = Column(String)
     instrument_name = Column(String)
-    start = Column(DateTime)
-    complete = Column(DateTime)
+    start = Column(DateTime(timezone=True))
+    complete = Column(DateTime(timezone=True))
 
     data = relationship("Data", back_populates="run")
     platform = relationship("Platform", back_populates="run")
@@ -916,7 +929,7 @@ class SpecimenStatus(LogBase):
     status_type_id = Column(
         String, ForeignKey("specimen_status_type.status_type_id"), nullable=False
     )
-    status_time = Column(DateTime, nullable=False)
+    status_time = Column(DateTime(timezone=True), nullable=False)
 
     specimen = relationship(
         "Specimen", foreign_keys=[specimen_id], back_populates="status_history"

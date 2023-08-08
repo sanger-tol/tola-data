@@ -144,8 +144,8 @@ def snake_and_camel(name):
 
 def uglify_model_code(code):
     code_db_types = re.sub(
-        r"(?<!db\.)(BigInteger|Boolean|DateTime|Float|Integer|JSON|String)(\(\))?",
-        r"db.\1()",
+        r"(?<!db\.)(BigInteger|Boolean|DateTime|Float|Integer|JSON|String)(?:\(([^)]+)\))?",
+        r"db.\1(\2)",
         code,
     )
     return re.sub(
@@ -203,9 +203,15 @@ def file_templates(snake, camel, class_code):
         else "BaseSchema, setup_schema"
     )
     ugly_code = uglify_model_code(class_code)
-    assn_proxy_import = (
-        "from sqlalchemy.ext.associationproxy import association_proxy"
+    imports = "import re\n\n" if re.search(r"\bre\.", class_code) else ""
+    imports += (
+        "from sqlalchemy.ext.associationproxy import association_proxy\n"
         if "association_proxy(" in class_code
+        else ""
+    )
+    imports += (
+        "from functools import cached_property\n"
+        if "@cached_property" in class_code
         else ""
     )
     base_flavour = get_base_flavour(class_code)
@@ -221,8 +227,7 @@ def file_templates(snake, camel, class_code):
         "model": f"""
             {header}
 
-            {assn_proxy_import}
-
+            {indent_all_but_first_line(12, imports)}
             from tol.api_base.model import {base_flavour}, db, setup_model
 
 
