@@ -100,10 +100,6 @@ class AccessionTypeDict(Base):
 
     @cached_property
     def compiled_regexp(self):
-        print(
-            f"Caching compled RegExp '{self.regexp}' for {self.accession_type_id}",
-            file=sys.stderr,
-        )
         return re.compile(self.regexp)
 
     def valid_accession(self, accn):
