@@ -258,3 +258,25 @@ class TolSqlMarshal(TolBaseMarshal):
         query = select(Project).where(Project.lims_id is not None)
         # query = select(Project).where(Project.lims_id == 6327)
         return tuple(self.session.scalars(query))
+
+    def add_run_accession(self, acc, file):
+        ssn = self.session
+        query = (
+            select(Data)
+            .where(Data.accession_id.is_(None))
+            .join(Data.files)
+            .where(File.remote_path == file)
+        )
+        data_rslt = tuple(ssn.scalars(query))
+        data_lgth = len(data_rslt)
+        if data_lgth == 1:
+            data = data_rslt[0]
+            data.accession_id = acc
+            self.update_log_fields(data)
+            ssn.merge(data)
+        elif data_lgth > 1:
+            msg = (
+                f"Expected zero or one Data objects matching"
+                f" acc='{acc} 'file='{file}' but found {data_lgth}"
+            )
+            raise ValueError(msg)

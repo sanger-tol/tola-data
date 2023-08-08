@@ -17,7 +17,11 @@ def main():
         "Import accession data from the tol_subtrack.fofn (or similar) file"
     )
     for file in acc_files:
+        i = 0
         for row in accession_data_from_file(file):
+            i += 1
+            if i > 100:
+                break
             mrshl.fetch_or_create(
                 Accession,
                 {
@@ -43,6 +47,8 @@ def main():
                     "accession_type_id": "Bio Sample",
                 },
             )
+
+            mrshl.add_run_accession(row["run_acc"], row["file"])
     mrshl.commit()
 
 
