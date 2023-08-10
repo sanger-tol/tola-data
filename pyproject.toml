@@ -8,12 +8,17 @@ version = "1.0.0"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+    "click",
     "SQLAlchemy ~= 1.4",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "requests",
     'importlib-metadata; python_version>="3.8"',
 ]
+
+[project.scripts]
+load_mlwh_seq_data="tola.load_mlwh_seq_data:main"
+pacbio_run_report="tola.pacbio_run_report_orm:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

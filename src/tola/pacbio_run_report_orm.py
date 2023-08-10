@@ -1,12 +1,11 @@
-import inspect
-import sys
-from sqlalchemy import select, text
+import click
+import logging
+from sqlalchemy import select
 from sqlalchemy.orm import Bundle
 from tola import db_connection
 from tola.tolqc_schema import (
     Allocation,
     Data,
-    File,
     PacbioRunMetrics,
     Platform,
     Project,
@@ -17,8 +16,23 @@ from tola.tolqc_schema import (
 )
 
 
-def main():
-    engine, Session = db_connection.tola_db_engine()
+@click.command(help="Fetch PacBio data report from the ToL QC database")
+@click.option(
+    "--json",
+    "format",
+    flag_value="json",
+    default=True,
+    help="Print report in JSON format [default]",
+)
+@click.option(
+    "--tsv",
+    "format",
+    flag_value="tsv",
+    help="Print report in TSV format",
+)
+@db_connection.tolqc_db
+def main(tolqc_db, format):
+    engine, Session = db_connection.tola_db_engine(tolqc_db)
     header = (
         "Group",
         "Specimen",
@@ -56,13 +70,14 @@ def main():
                 Species.species_id.label("species"),
             )
             .select_from(Data)
-            .outerjoin(File)
             .outerjoin(Sample)
             .outerjoin(Specimen)
             .outerjoin(Species)
             .join(Run)
             .join(Platform)
             .outerjoin(PacbioRunMetrics)
+            # Cannot do many-to-many join between Data and Project directly.
+            # Must explicitly go through Allocation:
             .join(Allocation)
             .join(Project)
             .where(Platform.name == 'PacBio')
@@ -71,7 +86,7 @@ def main():
                 Specimen.specimen_id,
             )
         )
-        # print(query)
+        logging.debug(f"PacBio run report SQL: {query}")
 
         for row in session.execute(query).all():
             print(tsv_row(row))
@@ -92,9 +107,8 @@ class ProjectGroupBundle(Bundle):
             taxon_group = get_taxon_group(row)
             group = None
             if proj is not None:
-                if "{}" in proj:
-                    if taxon_group is not None:
-                        group = proj.format(taxon_group)
+                if "{}" in proj and taxon_group is not None:
+                    group = proj.format(taxon_group)
                 else:
                     group = proj
             return group
@@ -106,7 +120,7 @@ class IsoDayBundle(Bundle):
     def create_row_processor(self, query, getters, labels):
         """
         Returns just the day portion of a datetime column
-        in ISO 8601 format if it contains a value.
+        in ISO 8601 format, if it contains a value.
         """
 
         (get_datetime,) = getters
@@ -121,7 +135,3 @@ class IsoDayBundle(Bundle):
 def tsv_row(row):
     strings = ("" if x is None else str(x) for x in row)
     return "\t".join(strings)
-
-
-if __name__ == "__main__":
-    main()

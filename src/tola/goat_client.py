@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import requests
 import sys
@@ -161,7 +162,7 @@ def command_line_args(args=sys.argv[1:]):
         elif re.fullmatch(r"\d+", r):
             tax_list.append(r)
         else:
-            print(f"Unrecognised argument: '{r}'", file=sys.stderr)
+            logging.warning(f"Unrecognised argument: '{r}'")
     return raw_flag, tax_list
 
 

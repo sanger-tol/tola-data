@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import logging
 import os
 import pwd
 import pytz
@@ -229,7 +230,7 @@ class TolSqlMarshal(TolBaseMarshal):
             for prop, val in spec.items():
                 if val != getattr(obj, prop):
                     old = getattr(obj, prop)
-                    print(
+                    logging.info(
                         f"Changed: {prop} '{'NULL' if old is None else old}' to '{val}'",
                         file=sys.stderr,
                     )

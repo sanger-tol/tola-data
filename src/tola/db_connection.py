@@ -1,3 +1,4 @@
+import click
 import os
 import mysql.connector
 import psycopg2
@@ -10,7 +11,16 @@ from sqlalchemy.orm import sessionmaker
 from psycopg2.extras import DictCursor
 
 
-def tola_db_engine(db_alias=os.getenv('TOLA_DB', 'tol-local'), **kwargs):
+tolqc_db = click.option(
+    '--tolqc-db',
+    envvar="TOLQC_DB",
+    default="tolqc-staging",
+    show_default=True,
+    help="Alias of database in ~/.connection_params.json to connect to",
+)
+
+
+def tola_db_engine(db_alias="tol-staging", **kwargs):
     engine = create_engine(get_connection_url(db_alias), **kwargs)
     return engine, sessionmaker(bind=engine, future=True)
 
@@ -53,5 +63,17 @@ def get_connection_url(db_alias):
 
 
 def get_connection_params_entry(db_alias):
-    params_json = Path().home() / ".connection_params.json"
-    return json.loads(params_json.read_text())[db_alias]
+    params_name = ".connection_params.json"
+    params_file = Path().home() / params_name
+
+    # Check permissions are 0600
+    mode = params_file.stat().st_mode & 0o777
+    if mode != 0o600:
+        msg = f"~/{params_name} must be mode 0600 but is mode 0{mode:o}"
+        raise Exception(msg)
+
+    if db_params := json.loads(params_file.read_text()).get(db_alias):
+        return db_params
+    else:
+        msg = f"Database alias '{db_alias}' not found in ~/{params_name} file"
+        raise Exception(msg)
