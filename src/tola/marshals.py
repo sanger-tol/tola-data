@@ -232,7 +232,6 @@ class TolSqlMarshal(TolBaseMarshal):
                     old = getattr(obj, prop)
                     logging.info(
                         f"Changed: {prop} '{'NULL' if old is None else old}' to '{val}'",
-                        file=sys.stderr,
                     )
                     setattr(obj, prop, val)
                     changed = True

@@ -20,7 +20,7 @@ tolqc_db = click.option(
 )
 
 
-def tola_db_engine(db_alias="tol-staging", **kwargs):
+def tola_db_engine(db_alias="tolqc-staging", **kwargs):
     engine = create_engine(get_connection_url(db_alias), **kwargs)
     return engine, sessionmaker(bind=engine, future=True)
 
