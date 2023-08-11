@@ -1,5 +1,6 @@
 import click
 import logging
+import tola.query_result_formaters
 from sqlalchemy import select
 from sqlalchemy.orm import Bundle
 from tola import db_connection
@@ -33,21 +34,6 @@ from tola.tolqc_schema import (
 @db_connection.tolqc_db
 def main(tolqc_db, format):
     engine, Session = db_connection.tola_db_engine(tolqc_db)
-    header = (
-        "Group",
-        "Specimen",
-        "Date",
-        "Run",
-        "Movie Name",
-        "Well",
-        "Tag",
-        "Sample Accession",
-        "Run Accession",
-        "Yield",
-        "N50",
-        "Species",
-    )
-    print("\t".join(header))
 
     with Session() as session:
         query = (
@@ -57,7 +43,7 @@ def main(tolqc_db, format):
                     Project.hierarchy_name,
                     Species.taxon_group,
                 ),
-                Specimen.specimen_id,
+                Specimen.specimen_id.label("specimen"),
                 IsoDayBundle("date", Data.date),
                 Run.lims_id.label("run"),
                 Run.run_id.label("movie_name"),
@@ -80,7 +66,7 @@ def main(tolqc_db, format):
             # Must explicitly go through Allocation:
             .join(Allocation)
             .join(Project)
-            .where(Platform.name == 'PacBio')
+            .where(Platform.name == "PacBio")
             .order_by(
                 Data.date.desc(),
                 Specimen.specimen_id,
@@ -88,8 +74,10 @@ def main(tolqc_db, format):
         )
         logging.debug(f"PacBio run report SQL: {query}")
 
-        for row in session.execute(query).all():
-            print(tsv_row(row))
+        if format == "tsv":
+            tola.query_result_formaters.output_tsv(session, query)
+        elif format == "json":
+            tola.query_result_formaters.output_json(session, query)
 
 
 class ProjectGroupBundle(Bundle):
@@ -130,8 +118,3 @@ class IsoDayBundle(Bundle):
             return dt.date().isoformat() if dt else None
 
         return processor
-
-
-def tsv_row(row):
-    strings = ("" if x is None else str(x) for x in row)
-    return "\t".join(strings)
