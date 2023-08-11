@@ -17,8 +17,8 @@ dependencies = [
 ]
 
 [project.scripts]
-load_mlwh_seq_data="tola.load_mlwh_seq_data:main"
-pacbio_run_report="tola.pacbio_run_report_orm:main"
+load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
+pacbio-run-report="tola.pacbio_run_report_orm:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

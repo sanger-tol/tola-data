@@ -16,7 +16,7 @@ from tola.tolqc_schema import (
 )
 
 
-@click.command(help="Fetch PacBio data report from the ToL QC database")
+@click.command(help="Fetch PacBio run report from the ToL QC database")
 @click.option(
     "--json",
     "format",
