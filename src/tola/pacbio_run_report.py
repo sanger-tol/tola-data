@@ -1,10 +1,38 @@
-import inspect
-from sqlalchemy import text
+import click
+import logging
+from sqlalchemy import select
+from sqlalchemy.orm import Bundle
 from tola import db_connection
+from tola.tolqc_schema import (
+    Allocation,
+    Data,
+    PacbioRunMetrics,
+    Platform,
+    Project,
+    Run,
+    Sample,
+    Species,
+    Specimen,
+)
 
 
-def main():
-    engine, _ = db_connection.tola_db_engine()
+@click.command(help="Fetch PacBio run report from the ToL QC database")
+@click.option(
+    "--json",
+    "format",
+    flag_value="json",
+    default=True,
+    help="Print report in JSON format [default]",
+)
+@click.option(
+    "--tsv",
+    "format",
+    flag_value="tsv",
+    help="Print report in TSV format",
+)
+@db_connection.tolqc_db
+def main(tolqc_db, format):
+    engine, Session = db_connection.tola_db_engine(tolqc_db)
     header = (
         "Group",
         "Specimen",
@@ -21,93 +49,89 @@ def main():
     )
     print("\t".join(header))
 
-    with engine.connect() as connection:
-        result = connection.execute(pacbio_table_sql())
-        for (
-            proj,
-            taxon_group,
-            specimen,
-            date,
-            run,
-            movie_name,
-            well,
-            tag,
-            sample_acc,
-            run_acc,
-            yld,
-            n50,
-            species,
-        ) in result:
-            if "{}" in proj:
-                group = proj.format(taxon_group)
-            else:
-                group = proj
-            print(
-                tsv_row(
-                    group,
-                    specimen,
-                    date.date().isoformat(),
-                    run,
-                    movie_name,
-                    well,
-                    tag,
-                    sample_acc,
-                    run_acc,
-                    yld,
-                    n50,
-                    species,
-                )
+    with Session() as session:
+        query = (
+            select(
+                ProjectGroupBundle(
+                    "group",
+                    Project.hierarchy_name,
+                    Species.taxon_group,
+                ),
+                Specimen.specimen_id,
+                IsoDayBundle("date", Data.date),
+                Run.lims_id.label("run"),
+                Run.run_id.label("movie_name"),
+                Run.element.label("well"),
+                Data.tag1_id.label("tag"),
+                Sample.accession_id.label("sample_accession"),
+                Data.accession_id.label("run_accession"),
+                PacbioRunMetrics.hifi_read_bases.label("yield"),
+                PacbioRunMetrics.insert_length_n50.label("n50"),
+                Species.species_id.label("species"),
             )
-
-
-def tsv_row(*args):
-    strings = ("" if x is None else str(x) for x in args)
-    return "\t".join(strings)
-
-
-def pacbio_table_sql():
-    return text(
-        inspect.cleandoc(
-            """
-            SELECT project.hierarchy_name proj
-              , species.taxon_group
-              , specimen.specimen_id
-              , data.date
-              , run.lims_id run
-              , run.run_id movie_name
-              , run.element well
-              , data.tag1_id tag
-              , sample.accession_id sample_accession
-              , data.accession_id run_accession
-              , metrics.hifi_read_bases yield
-              , metrics.insert_length_n50 n50
-              , species.species_id species
-            FROM species
-            JOIN specimen
-              ON species.species_id = specimen.species_id
-            JOIN sample
-              ON specimen.specimen_id = sample.specimen_id
-            JOIN data
-              ON sample.sample_id = data.sample_id
-            JOIN library
-              ON data.library_id = library.library_id
-            JOIN run
-              ON data.run_id = run.run_id
-            JOIN platform
-              ON run.platform_id = platform.id
-            JOIN pacbio_run_metrics metrics
-              ON run.run_id = metrics.run_id
-            JOIN allocation
-              ON data.data_id = allocation.data_id
-            JOIN project
-              ON allocation.project_id = project.project_id
-            WHERE platform.name = 'PacBio'
-            ORDER BY data.date DESC
-              , specimen.specimen_id ASC
-            """
+            .select_from(Data)
+            .outerjoin(Sample)
+            .outerjoin(Specimen)
+            .outerjoin(Species)
+            .join(Run)
+            .join(Platform)
+            .outerjoin(PacbioRunMetrics)
+            # Cannot do many-to-many join between Data and Project directly.
+            # Must explicitly go through Allocation:
+            .join(Allocation)
+            .join(Project)
+            .where(Platform.name == 'PacBio')
+            .order_by(
+                Data.date.desc(),
+                Specimen.specimen_id,
+            )
         )
-    )
+        logging.debug(f"PacBio run report SQL: {query}")
+
+        for row in session.execute(query).all():
+            print(tsv_row(row))
 
 
-if __name__ == "__main__":
-    main()
+class ProjectGroupBundle(Bundle):
+    def create_row_processor(self, query, getters, labels):
+        """
+        Combine the "proj" and "taxon_group" columns if the "proj" column
+        contains "{}", else returns the "proj" itself.
+        e.g. ("darwin/{}", "birds") becomes "darwin/birds"
+        """
+
+        get_proj, get_taxon_group = getters
+
+        def processor(row):
+            proj = get_proj(row)
+            taxon_group = get_taxon_group(row)
+            group = None
+            if proj is not None:
+                if "{}" in proj and taxon_group is not None:
+                    group = proj.format(taxon_group)
+                else:
+                    group = proj
+            return group
+
+        return processor
+
+
+class IsoDayBundle(Bundle):
+    def create_row_processor(self, query, getters, labels):
+        """
+        Returns just the day portion of a datetime column
+        in ISO 8601 format, if it contains a value.
+        """
+
+        (get_datetime,) = getters
+
+        def processor(row):
+            dt = get_datetime(row)
+            return dt.date().isoformat() if dt else None
+
+        return processor
+
+
+def tsv_row(row):
+    strings = ("" if x is None else str(x) for x in row)
+    return "\t".join(strings)
