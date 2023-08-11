@@ -50,7 +50,7 @@ CASE_EXCEPTIONS = {
     "hifi": "HiFi",
     "id": "ID",
     "json": "JSON",
-    "kcov": "kcov"
+    "kcov": "kcov",
     "kmer": "k-mer",
     "lims": "LIMS",
     "md5": "md5",
