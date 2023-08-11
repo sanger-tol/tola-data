@@ -7,6 +7,7 @@ from tola import db_connection
 from tola.tolqc_schema import (
     Allocation,
     Data,
+    Library,
     PacbioRunMetrics,
     Platform,
     Project,
@@ -44,6 +45,10 @@ def main(tolqc_db, format):
                     Species.taxon_group,
                 ),
                 Specimen.specimen_id.label("specimen"),
+                Library.library_type_id.label("pipeline"),
+                Platform.name.label("platform"),
+                Platform.model,
+                Sample.sample_id.label("sample"),
                 IsoDayBundle("date", Data.date),
                 Run.lims_id.label("run"),
                 Run.run_id.label("movie_name"),
@@ -54,6 +59,11 @@ def main(tolqc_db, format):
                 PacbioRunMetrics.hifi_read_bases.label("yield"),
                 PacbioRunMetrics.insert_length_n50.label("n50"),
                 Species.species_id.label("species"),
+                PacbioRunMetrics.loading_conc,
+                PacbioRunMetrics.movie_minutes,
+                PacbioRunMetrics.binding_kit,
+                PacbioRunMetrics.sequencing_kit,
+                PacbioRunMetrics.include_kinetics,
             )
             .select_from(Data)
             .outerjoin(Sample)
@@ -61,6 +71,7 @@ def main(tolqc_db, format):
             .outerjoin(Species)
             .join(Run)
             .join(Platform)
+            .outerjoin(Library)
             .outerjoin(PacbioRunMetrics)
             # Cannot do many-to-many join between Data and Project directly.
             # Must explicitly go through Allocation:
