@@ -16,7 +16,9 @@ def output_json(session, query, file=sys.stdout):
     if first_row := row_itr.fetchone():
         print(json.dumps(dict(first_row), separators=(",", ":")), end="", file=file)
         while row := row_itr.fetchone():
-            print(",\n" + json.dumps(dict(row), separators=(",", ":")), end="", file=file)
+            print(
+                ",\n" + json.dumps(dict(row), separators=(",", ":")), end="", file=file
+            )
     print("]", file=file)
 
 
@@ -38,8 +40,29 @@ def munge_header(header):
 
 
 CASE_EXCEPTIONS = {
+    "aun": "auN",
+    "bold": "BoLD",
+    "busco": "BUSCO",
+    "cksum": "cksum",
+    "cpg": "CpG",
+    "dna": "DNA",
+    "goat": "GoAT",
+    "hifi": "HiFi",
     "id": "ID",
+    "json": "JSON",
+    "kcov": "kcov"
+    "kmer": "k-mer",
+    "lims": "LIMS",
+    "md5": "md5",
+    "mlwh": "MLWH",
     "mrna": "mRNA",
+    "ont": "ONT",
+    "pacbio": "PacBio",
+    "qc": "QC",
+    "qv": "QV",
+    "rna": "RNA",
+    "tol": "ToL",
+    "url": "URL",
 }
 
 
