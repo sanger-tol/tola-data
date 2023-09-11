@@ -127,14 +127,12 @@ def accession_if_valid(mrshl, accn_type, accn):
 
 
 def store_row_data(mrshl, centre, row, goat_client, project):
-
     # specimen Accession
     specimen_acc = accession_if_valid(mrshl, "Bio Sample", row["biospecimen_accession"])
 
     # Specimen
     specimen = None
     if valid_accession(mrshl, "ToL Specimen ID", row["tol_specimen_id"]):
-
         # Species - only created for valid ToL specimens
         species = species_from_taxon_id(mrshl, goat_client, row["taxon_id"])
 
@@ -177,6 +175,7 @@ def store_row_data(mrshl, centre, row, goat_client, project):
             "run_id": row["run_id"],
             "platform_id": platform.id,
             "centre_id": centre.id,
+            "instrument_name": row["instrument_name"],
             "start": row.get("run_start"),
             "complete": row["run_complete"],
         }
@@ -319,6 +318,7 @@ def illumina_sql():
           , sample.taxon_id AS taxon_id
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
+          , run_lane_metrics.instrument_name AS instrument_name
           , flowcell.pipeline_id_lims AS pipeline_id_lims
           , CONVERT(product_metrics.id_run, CHAR) AS run_id
           , CONVERT(product_metrics.position, CHAR) AS position
@@ -372,6 +372,7 @@ def pacbio_sql():
           , sample.taxon_id AS taxon_id
           , 'PacBio' AS platform_type
           , well_metrics.instrument_type AS instrument_model
+          , well_metrics.instrument_name AS instrument_name
           , run.pipeline_id_lims AS pipeline_id_lims
           , well_metrics.movie_name AS run_id
           , well_metrics.pac_bio_run_name AS lims_run_id
