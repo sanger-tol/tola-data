@@ -34,7 +34,7 @@ from tola.tolqc_schema import (
 )
 @db_connection.tolqc_db
 def main(tolqc_db, format):
-    engine, Session = db_connection.tola_db_engine(tolqc_db)
+    engine, Session = tolqc_db
 
     with Session() as session:
         query = (
@@ -61,7 +61,7 @@ def main(tolqc_db, format):
                 Sample.accession_id.label("sample_accession"),
                 Data.accession_id.label("run_accession"),
                 Data.library_id.label("library_load_name"),
-                PacbioRunMetrics.polymerase_num_reads.label("reads"),
+                PacbioRunMetrics.hifi_num_reads.label("reads"),
                 PacbioRunMetrics.hifi_read_bases.label("bases"),
                 PacbioRunMetrics.insert_length_mean.label("mean"),
                 PacbioRunMetrics.insert_length_n50.label("n50"),

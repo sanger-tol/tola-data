@@ -11,8 +11,19 @@ from sqlalchemy.orm import sessionmaker
 from psycopg2.extras import DictCursor
 
 
+class TolQCDBEngineParamType (click.ParamType):
+    name = "tolqc-db-engine"
+
+    def convert(self, value, param, ctx):
+        try:
+            return tola_db_engine(value)
+        except ValueError as ve:
+            self.fail(ve)
+
+
 tolqc_db = click.option(
     '--tolqc-db',
+    type=TolQCDBEngineParamType(),
     envvar="TOLQC_DB",
     default="tolqc-staging",
     show_default=True,
@@ -53,7 +64,8 @@ def get_connection_url(db_alias):
     elif dbd == "Pg":
         lib_spec = "postgresql+psycopg2"
     else:
-        raise f"Unsupported database type '{dbd}'"
+        msg = f"Unsupported database type '{dbd}'"
+        raise ValueError(msg)
 
     # dialect+driver://username:password@host:port/database
     return (
@@ -70,10 +82,10 @@ def get_connection_params_entry(db_alias):
     mode = params_file.stat().st_mode & 0o777
     if mode != 0o600:
         msg = f"~/{params_name} must be mode 0600 but is mode 0{mode:o}"
-        raise Exception(msg)
+        raise ValueError(msg)
 
     if db_params := json.loads(params_file.read_text()).get(db_alias):
         return db_params
     else:
         msg = f"Database alias '{db_alias}' not found in ~/{params_name} file"
-        raise Exception(msg)
+        raise ValueError(msg)

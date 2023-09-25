@@ -38,8 +38,12 @@ def main():
         "include_kinetics",
     )
 
-    json_row_data = process_file(headers, "pacbio_tolqc_data.json", "json")
-    rprt_row_data = process_file(headers, "pacbio_run_report.json", "rprt")
+    json_row_data, json_csv_file = process_file(
+        headers, "pacbio_tolqc_data.json", "json"
+    )
+    rprt_row_data, rprt_csv_file = process_file(
+        headers, "pacbio_run_report.json", "rprt"
+    )
 
     json_dict = merge_by_idx(json_row_data)
     rprt_dict = merge_by_idx(rprt_row_data)
@@ -87,9 +91,9 @@ def process_file(headers, filename, source):
     for row in data:
         row_data.append(process_row(headers, source, row, alt_column_names))
 
-    store_csv(file, headers, row_data)
+    csv_file = store_csv(file, headers, row_data)
 
-    return row_data
+    return row_data, csv_file
 
 
 def store_csv(file, headers, data):
@@ -99,6 +103,7 @@ def store_csv(file, headers, data):
         writer.writerow(headers)
         for row in data:
             writer.writerow(row[k] for k in headers)
+    return csv_file
 
 
 def merge_by_idx(row_data):
