@@ -1,3 +1,4 @@
+import click
 import csv
 import json
 import pathlib
@@ -5,7 +6,54 @@ import re
 import sys
 
 
-def main():
+FILE_TYPE = click.Path(
+    dir_okay=False,
+    exists=True,
+    readable=True,
+    path_type=pathlib.Path,
+)
+DEFAULT_FILENAMES = "pacbio_tolqc_data.json", "pacbio_run_report.json"
+
+
+@click.command(
+    help="Compare PacBio data.json from TolQC website to run report from database"
+)
+@click.option(
+    "--compare",
+    type=(FILE_TYPE, FILE_TYPE),
+    default=DEFAULT_FILENAMES,
+    help=(
+        "data.json file from TolQC website"
+        " and JSON formatted report from pacbio-run-report script"
+    ),
+    show_default=True,
+)
+@click.option(
+    "--diff-fields",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Only show fields in each record which differ"
+)
+@click.option(
+    "--key-counts",
+    type=FILE_TYPE,
+    is_flag=False,
+    flag_value=DEFAULT_FILENAMES[0],
+    default=DEFAULT_FILENAMES[0],
+    show_default=True,
+    help="Show occupation count of keys in file",
+)
+def cli(compare, diff_fields, key_counts):
+
+    if key_counts:
+        show_key_count(key_counts)
+    else:
+        main(*compare, diff_fields)
+
+
+def main(json_input, rprt_input, diff_fields):
+
     headers = (
         "idx",
         "source",
@@ -38,43 +86,6 @@ def main():
         "include_kinetics",
     )
 
-    json_row_data, json_csv_file = process_file(
-        headers, "pacbio_tolqc_data.json", "json"
-    )
-    rprt_row_data, rprt_csv_file = process_file(
-        headers, "pacbio_run_report.json", "rprt"
-    )
-
-    json_dict = merge_by_idx(json_row_data)
-    rprt_dict = merge_by_idx(rprt_row_data)
-
-    idx_count = count_keys(json_dict)
-    count_keys(rprt_dict, idx_count)
-    for idx in idx_count:
-        json_dat = json_dict.get(idx)
-        rprt_dat = rprt_dict.get(idx)
-        if json_dat and rprt_dat:
-            if diffs := diff(json_dat, rprt_dat):
-                # print(f"Diff for index '{idx}':\n" + format_rows(*diffs))
-                print(f"Diff for index '{idx}':\n" + format_rows(json_dat, rprt_dat))
-        elif json_dat:
-            print("Only in data.json:\n" + format_rows(json_dat))
-        else:
-            print("Only in PacBio run report:\n" + format_rows(rprt_dat))
-
-
-def count_keys(dict, count_dict=None):
-    if not count_dict:
-        count_dict = {}
-    for k in dict:
-        count_dict[k] = 1 + count_dict.get(k, 0)
-
-    return count_dict
-
-
-def process_file(headers, filename, source):
-    file = pathlib.Path(filename)
-    data = json.loads(file.read_text())
     alt_column_names = {
         "insert_size": "InsertSize",
         "movie_length": "MovieLength",
@@ -87,9 +98,72 @@ def process_file(headers, filename, source):
         "bases": "sum",
     }
 
+    json_row_data, json_csv_file = process_file(
+        headers, alt_column_names, json_input, "json"
+    )
+    rprt_row_data, rprt_csv_file = process_file(
+        headers, alt_column_names, rprt_input, "rprt"
+    )
+
+    json_dict = merge_by_idx(json_row_data)
+    rprt_dict = merge_by_idx(rprt_row_data)
+
+    idx_count = {}
+    count_keys(idx_count, json_dict)
+    count_keys(idx_count, rprt_dict)
+    for idx in idx_count:
+        json_dat = json_dict.get(idx)
+        rprt_dat = rprt_dict.get(idx)
+        if json_dat and rprt_dat:
+            if diffs := diff(json_dat, rprt_dat):
+                if diff_fields:
+                    print(f"Diff for index '{idx}':\n" + format_rows(*diffs))
+                else:
+                    print(f"Diff for index '{idx}':\n" + format_rows(json_dat, rprt_dat))
+        elif json_dat:
+            print("Only in data.json:\n" + format_rows(json_dat))
+        else:
+            print("Only in PacBio run report:\n" + format_rows(rprt_dat))
+
+
+def show_key_count(file):
+    data = json.loads(file.read_text())
+    counts = {}
+    max_count = 0
+    for row in data:
+        for k, v in row.items():
+            if v is not None and v != "":
+                c = counts[k] = 1 + counts.get(k, 0)
+                if c > max_count:
+                    max_count = c
+
+    def hoist_acgt(item):
+        k = item[0]
+        hoist = 0 if k in "acgt" else 1
+        return hoist, k
+
+    click.echo(f"Key counts for '{file}':")
+    for k, v in sorted(counts.items(), key=hoist_acgt):
+        if v == max_count:
+            click.echo(click.style(f"{v:7d}", bold=True) + f"  {k}")
+        else:
+            click.echo(f"{v:7d}  {k}")
+
+
+def count_keys(count_dict, dict):
+    for k, v in dict.items():
+        if v is not None and v != "":
+            count_dict[k] = 1 + count_dict.get(k, 0)
+
+    return count_dict
+
+
+def process_file(headers, alt_column_names, file, source):
+    data = json.loads(file.read_text())
+
     row_data = []
     for row in data:
-        row_data.append(process_row(headers, source, row, alt_column_names))
+        row_data.append(process_row(headers, alt_column_names, source, row))
 
     csv_file = store_csv(file, headers, row_data)
 
@@ -169,7 +243,7 @@ def diff(a, b):
         return None
 
 
-def process_row(headers, source, row, alt_column_names):
+def process_row(headers, alt_column_names, source, row):
     dat = {}
     for col in headers:
         if col == "source":
@@ -211,91 +285,4 @@ def json_file_key_counts(file):
 
 
 if __name__ == '__main__':
-    main()
-
-"""
-
-Tag occupation in ToL QC data.json
-
-    tolqc = {
-        "ExtensionTime": 2552,
-        "InsertSize": 2552,
-        "L100": 7202,
-        "L50": 7202,
-        "L60": 7202,
-        "L70": 7202,
-        "L80": 7202,
-        "L90": 7202,
-        "MovieLength": 2552,
-        "N100": 7202,
-        "N50": 7202,
-        "N60": 7202,
-        "N70": 7202,
-        "N80": 7202,
-        "N90": 7202,
-        "a": 7208,
-        "accession_number": 6998,
-        "barcode": 7208,
-        "boldcheck": 2706,
-        "boldstats": 4454,
-        "c": 7208,
-        "date": 7208,
-        "dups": 7208,
-        "exp_accession": 4014,
-        "filtered": 7208,
-        "g": 7208,
-        "group": 7182,
-        "input": 7208,
-        "instrument": 7208,
-        "largest": 7204,
-        "library_load_name": 6996,
-        "match": 4796,
-        "mean": 7204,
-        "model": 7208,
-        "movie": 7208,
-        "n": 7204,
-        "pipeline": 7208,
-        "pipeline_id_lims": 6996,
-        "platform": 7208,
-        "plot-all_readlength_hist": 908,
-        "plot-base_yield": 6165,
-        "plot-bq_histogram": 992,
-        "plot-ccs_accuracy_hist": 3753,
-        "plot-ccs_all_readlength_hist": 2876,
-        "plot-ccs_hifi_read_length_yield": 2845,
-        "plot-ccs_npasses_hist": 3761,
-        "plot-ccs_readlength_hist": 3753,
-        "plot-concordance": 5999,
-        "plot-hexbin_length": 6165,
-        "plot-insertLenDist0": 2437,
-        "plot-interAdapterDist0": 6189,
-        "plot-m5c_detections": 1737,
-        "plot-m5c_detections_hist": 1729,
-        "plot-nreads": 989,
-        "plot-nreads_histogram": 989,
-        "plot-raw_read_length": 6166,
-        "plot-readLenDist0": 6169,
-        "plot-readlength": 5999,
-        "plot-readlength_histogram": 989,
-        "plot-readlength_qv_hist2d.hexbin": 3784,
-        "plot-subread_lengths": 2412,
-        "run": 6998,
-        "run_accession": 4014,
-        "rundir": 6998,
-        "sanger_id": 6996,
-        "smallest": 7204,
-        "species": 7208,
-        "species_lims": 6996,
-        "species_name": 7208,
-        "specimen": 7208,
-        "study_accession": 4014,
-        "submission_date": 4014,
-        "sum": 7204,
-        "t": 7208,
-        "tag_index": 4875,
-        "tag_sequence": 6996,
-        "type": 7208,
-        "well_label": 6998,
-    }
-
-"""
+    cli()

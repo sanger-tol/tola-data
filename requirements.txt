@@ -1,3 +1,4 @@
+duckdb
 sqlalchemy~=1.4.0
 flask
 Flask-SQLAlchemy

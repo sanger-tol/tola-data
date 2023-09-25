@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from psycopg2.extras import DictCursor
 
 
-class TolQCDBEngineParamType (click.ParamType):
+class TolQCDBEngineParamType(click.ParamType):
     name = "tolqc-db-engine"
 
     def convert(self, value, param, ctx):
