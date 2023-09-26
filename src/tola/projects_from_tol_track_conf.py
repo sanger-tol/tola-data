@@ -2,16 +2,27 @@
 #
 # SPDX-License-Identifier: MIT
 
+import click
 import re
 import pathlib
 import tola.marshals
 
 from main.model import Project
 
-def main():
-    mrshl, file_list = tola.marshals.marshal_from_command_line(
-        "Update list of Projects from tol_track.conf (or similar) file"
-    )
+
+@click.command(help="Update list of Projects from tol_track.conf (or similar) file")
+@click.argument(
+    "file_list",
+    nargs=-1,
+    type=click.Path(
+        dir_okay=False,
+        exists=True,
+        readable=True,
+        path_type=pathlib.Path,
+    ),
+)
+@tola.marshals.mrshl
+def main(mrshl, file_list):
     for file in file_list:
         load_project_conf_file(mrshl, file)
     mrshl.commit()
@@ -23,7 +34,7 @@ def load_project_conf_file(mrshl, file):
 
 
 def conf_file_project_specs(conf_file):
-    for line in pathlib.Path(conf_file).open():
+    for line in conf_file.open():
         if re.match(r"^\s*#", line):
             continue
         if not re.search(r"\w", line):

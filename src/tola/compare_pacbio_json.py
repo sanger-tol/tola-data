@@ -33,7 +33,7 @@ DEFAULT_FILENAMES = "pacbio_tolqc_data.json", "pacbio_run_report.json"
     is_flag=True,
     default=False,
     show_default=True,
-    help="Only show fields in each record which differ"
+    help="Only show fields in each record which differ",
 )
 @click.option(
     "--key-counts",
@@ -45,7 +45,6 @@ DEFAULT_FILENAMES = "pacbio_tolqc_data.json", "pacbio_run_report.json"
     help="Show occupation count of keys in file",
 )
 def cli(compare, diff_fields, key_counts):
-
     if key_counts:
         show_key_count(key_counts)
     else:
@@ -53,7 +52,6 @@ def cli(compare, diff_fields, key_counts):
 
 
 def main(json_input, rprt_input, diff_fields):
-
     headers = (
         "idx",
         "source",
@@ -119,7 +117,9 @@ def main(json_input, rprt_input, diff_fields):
                 if diff_fields:
                     print(f"Diff for index '{idx}':\n" + format_rows(*diffs))
                 else:
-                    print(f"Diff for index '{idx}':\n" + format_rows(json_dat, rprt_dat))
+                    print(
+                        f"Diff for index '{idx}':\n" + format_rows(json_dat, rprt_dat)
+                    )
         elif json_dat:
             print("Only in data.json:\n" + format_rows(json_dat))
         else:

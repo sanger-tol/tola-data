@@ -1,27 +1,33 @@
-#!/usr/bin/env python3
-
+import click
 import os
+import pathlib
 import re
 import subprocess
 import sys
 import tola.marshals
 
 from main.model import Accession
-from pathlib import Path
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core.datasource_error import DataSourceError
 
 
-def main():
-    mrshl, acc_files = tola.marshals.marshal_from_command_line(
-        "Import accession data from the tol_subtrack.fofn (or similar) file"
-    )
+@click.command(
+    help="Import accession data from the tol_subtrack.fofn (or similar) file"
+)
+@click.argument(
+    "acc_files",
+    nargs=-1,
+    type=click.Path(
+        dir_okay=False,
+        exists=True,
+        readable=True,
+        path_type=pathlib.Path,
+    ),
+)
+@tola.marshals.mrshl
+def main(mrshl, acc_files):
     for file in acc_files:
-        i = 0
         for row in accession_data_from_file(file):
-            i += 1
-            if i > 100:
-                break
             mrshl.fetch_or_create(
                 Accession,
                 {
@@ -66,7 +72,7 @@ def accession_data_from_file(file):
         "biosample_acc",
         "run_submission_date",
     )
-    for line in Path(file).open():
+    for line in file.open():
         # Skip blank lines
         if not re.search(r"\w", line):
             continue

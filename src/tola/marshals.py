@@ -1,4 +1,5 @@
 import argparse
+import click
 import datetime
 import logging
 import os
@@ -15,38 +16,33 @@ from tol.core import DataSourceFilter
 from tola import db_connection
 
 
-def marshal_from_command_line(desc):
-    prsr = argparse.ArgumentParser(
-        description=desc,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    prsr.add_argument(
-        "files",
-        nargs="*",
-        help="List of one or more input files.",
-        metavar="FILE_LIST",
-    )
+class MarshalParamType(click.ParamType):
+    name = "marshal-type"
 
-    prsr_api_choice = prsr.add_mutually_exclusive_group()
-    prsr_api_choice.add_argument(
-        "--api",
-        action="store_const",
-        const=True,
-        default=False,
-        help="Use ToL API Marshal to store data.",
-    )
-    prsr_api_choice.add_argument(
-        "--sql",
-        action="store_const",
-        dest="api",
-        const=False,
-        default=True,
-        help="Use ToL SQL Marshal to store data.",
-    )
+    def convert(self, value, param, ctx):
+        print(f"value='{value}' param='{param}'", file=sys.stderr)
+        try:
+            if value == "sql":
+                return TolSqlMarshal()
+            elif value == "api":
+                return TolApiMarshal()
+            else:
+                msg = f"Unknown Marshall type '{value}': must be either 'sql' or 'api'"
+                raise ValueError(msg)
+        except ValueError as ve:
+            self.fail(ve)
 
-    ns_obj = prsr.parse_args()
-    mrshl = TolApiMarshal() if ns_obj.api else TolSqlMarshal()
-    return mrshl, ns_obj.files
+
+mrshl = click.option(
+    "--mrshl",
+    "--marshal-type",
+    "mrshl",
+    type=MarshalParamType(),
+    envvar="TOLQC_MARSHAL",
+    default="sql",
+    show_default=True,
+    help="Connect using the Tol API ('api'), or else via SQL",
+)
 
 
 class TolBaseMarshal:

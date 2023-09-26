@@ -1,13 +1,13 @@
+import click
 import tola.marshals
 from main.model import Species
 from tola.goat_client import GoaTClient
 
 
-def main():
+@click.command(help="Patch all species with data from GoaT")
+@tola.marshals.mrshl
+def main(mrshl):
     gc = GoaTClient()
-    mrshl, _ = tola.marshals.marshal_from_command_line(
-        "Patch all species with data from GOAT",
-    )
 
     for sp in mrshl.fetch_many(Species):
         if spec_info := gc.get_species_info(sp.taxon_id):

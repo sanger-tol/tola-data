@@ -1,3 +1,4 @@
+import click
 import inspect
 import logging
 import sys
@@ -27,10 +28,9 @@ from tola import db_connection
 logging.basicConfig(level=logging.INFO)
 
 
-def main():
-    mrshl, _ = tola.marshals.marshal_from_command_line(
-        "Import sequencing run data from the MLWH",
-    )
+@click.command(help="Import sequencing run data from the MLWH")
+@tola.marshals.mrshl
+def main(mrshl):
     mlwh = db_connection.mlwh_db()
     load_mlwh_data(mrshl, mlwh)
     mrshl.commit()
