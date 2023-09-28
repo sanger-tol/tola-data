@@ -110,7 +110,7 @@ def report_multi_specimen_idx(con, csv_file):
 
     Counting the number of specimens within a WINDOW is a little awkward. The
     DENSE_RANK function counts the number of unique entries seen in a column.
-    By using two WINDOWS, one ascending and the other descending they can be
+    By using two WINDOWS, one ascending and the other descending, they can be
     added togther to get the number of unique values in the column.
     """
 

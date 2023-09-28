@@ -1,3 +1,5 @@
+import click
+
 from main.model import Base
 from sqlalchemy import MetaData
 from sqlalchemy.ext.compiler import compiles
@@ -16,8 +18,10 @@ def compile_drop_table(element, compiler, **kw):
     return compiler.visit_drop_table(element, **kw) + " CASCADE"
 
 
-def main():
-    engine, Session = db_connection.tola_db_engine(echo=True)
+@click.command(help="Create TolQC database tables, but preserve user, auth and role tables")
+@db_connection.tolqc_db
+def main(tolqc_db):
+    engine, Session = tolqc_db
 
     old_db = MetaData()
     old_db.reflect(engine)
