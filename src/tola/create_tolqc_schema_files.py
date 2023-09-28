@@ -203,15 +203,15 @@ def file_templates(snake, camel, class_code):
         else "BaseSchema, setup_schema"
     )
     ugly_code = uglify_model_code(class_code)
-    imports = "import re\n\n" if re.search(r"\bre\.", class_code) else ""
-    imports += (
-        "from sqlalchemy.ext.associationproxy import association_proxy\n"
-        if "association_proxy(" in class_code
-        else ""
-    )
+    imports = "import re\n" if re.search(r"\bre\.", class_code) else ""
     imports += (
         "from functools import cached_property\n"
         if "@cached_property" in class_code
+        else ""
+    )
+    imports += (
+        "\nfrom sqlalchemy.ext.associationproxy import association_proxy\n"
+        if "association_proxy(" in class_code
         else ""
     )
     base_flavour = get_base_flavour(class_code)
