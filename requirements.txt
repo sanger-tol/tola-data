@@ -1,6 +1,6 @@
 click
 duckdb
-sqlalchemy~=1.4.0
+sqlalchemy
 flask
 Flask-SQLAlchemy
 flask-restx

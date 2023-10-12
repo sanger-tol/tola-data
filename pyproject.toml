@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "click",
-    "SQLAlchemy ~= 1.4",
+    "SQLAlchemy ~= 2.0",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "requests",

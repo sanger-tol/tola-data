@@ -14,10 +14,10 @@ def output_json(session, query, file=sys.stdout):
     print("[", end="", file=file)
     row_itr = session.execute(query)
     if first_row := row_itr.fetchone():
-        print(json.dumps(dict(first_row), separators=(",", ":")), end="", file=file)
+        print(json.dumps(first_row._asdict(), separators=(",", ":")), end="", file=file)
         while row := row_itr.fetchone():
             print(
-                ",\n" + json.dumps(dict(row), separators=(",", ":")), end="", file=file
+                ",\n" + json.dumps(row._asdict(), separators=(",", ":")), end="", file=file
             )
     print("]", file=file)
 
