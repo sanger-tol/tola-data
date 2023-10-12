@@ -1,25 +1,35 @@
+import click
 import pathlib
 import sys
 
+import tola.marshals
 from tola import db_connection
 from main.model import Base
 
 
-def main(dict_tsv_file_names):
-    engine, Session = db_connection.tola_db_engine(echo=True)
+@click.command(help="Populate dictionary table in ToL QC db from TSV files")
+@tola.marshals.mrshl
+@click.argument(
+    "TSV_FILE",
+    nargs=-1,
+    type=click.Path(
+        dir_okay=False,
+        exists=True,
+        readable=True,
+        path_type=pathlib.Path,
+    ),
+)
+def main(mrshl, tsv_file):
 
     table_class = table_name_to_class()
 
-    for tn in table_class:
-        print(f"table = '{tn}'")
+    for dict_file in tsv_file:
+        table_name = dict_file.stem
+        cls = table_class[table_name]
+        for spec in read_tsv(dict_file):
+            mrshl.update_or_create(cls, spec)
 
-    with Session() as ssn:
-        for dict_tsv_file in (pathlib.Path(x) for x in dict_tsv_file_names):
-            table_name = dict_tsv_file.stem
-            cls = table_class[table_name]
-            for obj in read_tsv(cls, dict_tsv_file):
-                ssn.merge(obj)
-        ssn.commit()
+    mrshl.commit()
 
 
 def table_name_to_class():
@@ -29,15 +39,15 @@ def table_name_to_class():
     }
 
 
-def read_tsv(cls, path):
+def read_tsv(path):
     with path.open() as fh:
         header_line = split_tsv_line(fh.readline())
         for line in fh:
-            obj = cls()
             cols = split_tsv_line(line)
+            spec = {}
             for attr, val in zip(header_line, cols):
-                setattr(obj, attr, val)
-            yield obj
+                spec[attr] = val
+            yield spec
 
 
 def split_tsv_line(line):
