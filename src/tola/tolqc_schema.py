@@ -64,9 +64,9 @@ def tola_db_engine(**kwargs):
 class Accession(Base):
     __tablename__ = "accession"
 
-    class Meta:
-        type_ = "accessions"
-        id_column = "accession_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "accession_id"
 
     accession_id = Column(String, primary_key=True)
     accession_type_id = Column(
@@ -88,9 +88,9 @@ class Accession(Base):
 class AccessionTypeDict(Base):
     __tablename__ = "accession_type_dict"
 
-    class Meta:
-        type_ = "accession_types"
-        id_column = "accession_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "accession_type_id"
 
     accession_type_id = Column(String, primary_key=True)
     regexp = Column(String)
@@ -109,9 +109,6 @@ class AccessionTypeDict(Base):
 class Allocation(Base):
     __tablename__ = "allocation"
 
-    class Meta:
-        type_ = "allocations"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     project_id = Column(Integer, ForeignKey("project.project_id"))
     data_id = Column(Integer, ForeignKey("data.data_id"))
@@ -126,9 +123,9 @@ class Allocation(Base):
 class Assembly(LogBase):
     __tablename__ = "assembly"
 
-    class Meta:
-        type_ = "assemblies"
-        id_column = "assembly_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "assembly_id"
 
     assembly_id = Column(Integer, primary_key=True)  # noqa: A003
     software_version_id = Column(
@@ -182,9 +179,9 @@ class Assembly(LogBase):
 class AssemblyComponentType(Base):
     __tablename__ = "assembly_component_type"
 
-    class Meta:
-        type_ = "component_types"
-        id_column = "component_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "component_type_id"
 
     component_type_id = Column(String, primary_key=True)
     description = Column(String)
@@ -194,9 +191,6 @@ class AssemblyComponentType(Base):
 
 class AssemblyMetrics(Base):
     __tablename__ = "assembly_metrics"
-
-    class Meta:
-        type_ = "assembly_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -230,9 +224,6 @@ class AssemblyMetrics(Base):
 class AssemblySource(Base):
     __tablename__ = "assembly_source"
 
-    class Meta:
-        type_ = "assembly_sources"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
     source_assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -254,9 +245,9 @@ class AssemblySource(Base):
 class AssemblyStatus(LogBase):
     __tablename__ = "assembly_status"
 
-    class Meta:
-        type_ = "assembly_statuses"
-        id_column = "assembly_status_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "assembly_status_id"
 
     assembly_status_id = Column(Integer, primary_key=True)
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"), nullable=False)
@@ -274,9 +265,9 @@ class AssemblyStatus(LogBase):
 class AssemblyStatusType(Base):
     __tablename__ = "assembly_status_type"
 
-    class Meta:
-        type_ = "assembly_status_types"
-        id_column = "status_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "status_type_id"
 
     status_type_id = Column(String, primary_key=True)
     description = Column(String)
@@ -287,9 +278,6 @@ class AssemblyStatusType(Base):
 
 class BarcodeMetrics(Base):
     __tablename__ = "barcode_metrics"
-
-    class Meta:
-        type_ = "barcode_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
@@ -304,9 +292,6 @@ class BarcodeMetrics(Base):
 class BuscoLineage(Base):
     __tablename__ = "busco_lineage"
 
-    class Meta:
-        type_ = "busco_lineages"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
     date_created = Column(DateTime(timezone=True))
@@ -317,9 +302,6 @@ class BuscoLineage(Base):
 
 class BuscoMetrics(Base):
     __tablename__ = "busco_metrics"
-
-    class Meta:
-        type_ = "busco_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -343,9 +325,6 @@ class BuscoMetrics(Base):
 class Centre(Base):
     __tablename__ = "centre"
 
-    class Meta:
-        type_ = "centres"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
     hierarchy_name = Column(String)
@@ -355,9 +334,6 @@ class Centre(Base):
 
 class ContigvizMetrics(Base):
     __tablename__ = "contigviz_metrics"
-
-    class Meta:
-        type_ = "contigviz_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -375,9 +351,9 @@ class ContigvizMetrics(Base):
 class Data(LogBase):
     __tablename__ = "data"
 
-    class Meta:
-        type_ = "data"
-        id_column = "data_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "data_id"
 
     data_id = Column(Integer, primary_key=True)
     name_root = Column(String, index=True)
@@ -419,9 +395,9 @@ class Data(LogBase):
 class Dataset(LogBase):
     __tablename__ = "dataset"
 
-    class Meta:
-        type_ = "datasets"
-        id_column = "dataset_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "dataset_id"
 
     dataset_id = Column(String, primary_key=True)
     dataset_status_id = Column(Integer, ForeignKey("dataset_status.dataset_status_id"))
@@ -450,9 +426,6 @@ class Dataset(LogBase):
 class DatasetElement(Base):
     __tablename__ = "dataset_element"
 
-    class Meta:
-        type_ = "dataset_elements"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
     dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
@@ -466,9 +439,9 @@ class DatasetElement(Base):
 class DatasetStatus(LogBase):
     __tablename__ = "dataset_status"
 
-    class Meta:
-        type_ = "dataset_statuses"
-        id_column = "dataset_status_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "dataset_status_id"
 
     dataset_status_id = Column(Integer, primary_key=True)
     dataset_id = Column(String, ForeignKey("dataset.dataset_id"), nullable=False)
@@ -486,9 +459,9 @@ class DatasetStatus(LogBase):
 class DatasetStatusType(Base):
     __tablename__ = "dataset_status_type"
 
-    class Meta:
-        type_ = "dataset_status_types"
-        id_column = "status_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "status_type_id"
 
     status_type_id = Column(String, primary_key=True)
     description = Column(String)
@@ -499,9 +472,6 @@ class DatasetStatusType(Base):
 
 class File(Base):
     __tablename__ = "file"
-
-    class Meta:
-        type_ = "files"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
@@ -516,9 +486,6 @@ class File(Base):
 
 class GenomescopeMetrics(LogBase):
     __tablename__ = "genomescope_metrics"
-
-    class Meta:
-        type_ = "genomescope_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
@@ -549,9 +516,9 @@ class GenomescopeMetrics(LogBase):
 class Library(Base):
     __tablename__ = "library"
 
-    class Meta:
-        type_ = "libraries"
-        id_column = "library_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "library_id"
 
     library_id = Column(String, primary_key=True)
     library_type_id = Column(String, ForeignKey("library_type.library_type_id"))
@@ -564,9 +531,9 @@ class Library(Base):
 class LibraryType(Base):
     __tablename__ = "library_type"
 
-    class Meta:
-        type_ = "library_types"
-        id_column = "library_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "library_type_id"
 
     library_type_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
@@ -580,9 +547,6 @@ class LibraryType(Base):
 
 class MarkerscanMetrics(Base):
     __tablename__ = "markerscan_metrics"
-
-    class Meta:
-        type_ = "markerscan_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -599,9 +563,6 @@ class MarkerscanMetrics(Base):
 
 class MerquryMetrics(Base):
     __tablename__ = "merqury_metrics"
-
-    class Meta:
-        type_ = "merqury_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     assembly_id = Column(Integer, ForeignKey("assembly.assembly_id"))
@@ -628,9 +589,6 @@ class MerquryMetrics(Base):
 class Offspring(Base):
     __tablename__ = "offspring"
 
-    class Meta:
-        type_ = "offspring"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     specimen_id = Column(String, ForeignKey("specimen.specimen_id"))
     offspring_specimen_id = Column(String, ForeignKey("specimen.specimen_id"))
@@ -652,9 +610,9 @@ class Offspring(Base):
 class PacbioRunMetrics(Base):
     __tablename__ = "pacbio_run_metrics"
 
-    class Meta:
-        type_ = "pacbio_run_metrics"
-        id_column = "run_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "run_id"
 
     run_id = Column(String, ForeignKey("run.run_id"), primary_key=True)
     movie_minutes = Column(Integer)
@@ -684,9 +642,6 @@ class PacbioRunMetrics(Base):
 class Platform(Base):
     __tablename__ = "platform"
 
-    class Meta:
-        type_ = "platforms"
-
     id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
     model = Column(String)
@@ -696,9 +651,6 @@ class Platform(Base):
 
 class PloidyplotMetrics(Base):
     __tablename__ = "ploidyplot_metrics"
-
-    class Meta:
-        type_ = "ploidyplot_metrics"
 
     id = Column(Integer, primary_key=True)  # noqa: A003
     dataset_id = Column(String, ForeignKey("dataset.dataset_id"))
@@ -720,9 +672,9 @@ class PloidyplotMetrics(Base):
 class Project(Base):
     __tablename__ = "project"
 
-    class Meta:
-        type_ = "projects"
-        id_column = "project_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "project_id"
 
     project_id = Column(Integer, primary_key=True)
     hierarchy_name = Column(String)
@@ -738,9 +690,9 @@ class Project(Base):
 class QCDict(Base):
     __tablename__ = "qc_dict"
 
-    class Meta:
-        type_ = "qc_dict"
-        id_column = "qc_state"
+    @classmethod
+    def get_id_column_name(cls):
+        return "qc_state"
 
     qc_state = Column(String, primary_key=True)
 
@@ -748,9 +700,9 @@ class QCDict(Base):
 class ReviewDict(Base):
     __tablename__ = "review_dict"
 
-    class Meta:
-        type_ = "review_dicts"
-        id_column = "review_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "review_id"
 
     review_id = Column(String, primary_key=True)
     description = Column(String)
@@ -761,9 +713,9 @@ class ReviewDict(Base):
 class Run(Base):
     __tablename__ = "run"
 
-    class Meta:
-        type_ = "runs"
-        id_column = "run_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "run_id"
 
     run_id = Column(String, primary_key=True)
     name = Column(String)
@@ -785,9 +737,9 @@ class Run(Base):
 class Sample(LogBase):
     __tablename__ = "sample"
 
-    class Meta:
-        type_ = "samples"
-        id_column = "sample_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "sample_id"
 
     sample_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
@@ -803,9 +755,9 @@ class Sample(LogBase):
 class Sex(Base):
     __tablename__ = "sex"
 
-    class Meta:
-        type_ = "sexes"
-        id_column = "sex_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "sex_id"
 
     sex_id = Column(String, primary_key=True)
     description = Column(String)
@@ -816,9 +768,9 @@ class Sex(Base):
 class SoftwareVersion(Base):
     __tablename__ = "software_version"
 
-    class Meta:
-        type_ = "software_versions"
-        id_column = "software_version_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "software_version_id"
 
     software_version_id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String)
@@ -847,9 +799,9 @@ class SoftwareVersion(Base):
 class Species(LogBase):
     __tablename__ = "species"
 
-    class Meta:
-        type_ = "species"
-        id_column = "species_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "species_id"
 
     species_id = Column(String, primary_key=True)
     hierarchy_name = Column(String, nullable=False, index=True)
@@ -869,9 +821,9 @@ class Species(LogBase):
 class Specimen(LogBase):
     __tablename__ = "specimen"
 
-    class Meta:
-        type_ = "specimens"
-        id_column = "specimen_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "specimen_id"
 
     specimen_id = Column(String, primary_key=True)
     hierarchy_name = Column(String)
@@ -916,9 +868,9 @@ class Specimen(LogBase):
 class SpecimenStatus(LogBase):
     __tablename__ = "specimen_status"
 
-    class Meta:
-        type_ = "specimen_statuses"
-        id_column = "specimen_status_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "specimen_status_id"
 
     specimen_status_id = Column(Integer, primary_key=True)
     specimen_id = Column(String, ForeignKey("specimen.specimen_id"), nullable=False)
@@ -936,9 +888,9 @@ class SpecimenStatus(LogBase):
 class SpecimenStatusType(Base):
     __tablename__ = "specimen_status_type"
 
-    class Meta:
-        type_ = "specimen_status_types"
-        id_column = "status_type_id"
+    @classmethod
+    def get_id_column_name(cls):
+        return "status_type_id"
 
     status_type_id = Column(String, primary_key=True)
     description = Column(String)
