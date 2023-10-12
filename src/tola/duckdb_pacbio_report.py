@@ -37,11 +37,26 @@ FILE_TYPE = click.Path(
 @click.pass_context
 def cli(ctx, csv_files, duckdb_file):
     db_exists = duckdb_file.exists()
-    con = duckdb.connect(str(duckdb_file))
 
+    create_flag = False
     if db_exists:
-        click.echo(f"DuckDB database file '{duckdb_file}' already exists", err=True)
+        csv_mtime = max(modification_timestamp(p) for p in csv_files)
+        ddb_mtime = modification_timestamp(duckdb_file)
+        if csv_mtime > ddb_mtime:
+            create_flag = True
+            duckdb_file.unlink()
+            click.echo(
+                f"DuckDB database file '{duckdb_file}' is older than"
+                " most recent CSV: recreating",
+                err=True,
+            )
+        else:
+            click.echo(f"DuckDB database file '{duckdb_file}' already exists", err=True)
     else:
+        create_flag = True
+
+    con = duckdb.connect(str(duckdb_file))
+    if create_flag:
         click.echo(
             f"Creating and populating DuckDB database '{duckdb_file}' from CSV files {csv_files}",
             err=True,
@@ -203,6 +218,12 @@ def report_table_sql():
         )
         """
     )
+
+
+def modification_timestamp(pth):
+    if type(pth) is str:
+        pth = pathlib.Path(pth)
+    return pth.lstat().st_mtime
 
 
 if __name__ == "__main__":
