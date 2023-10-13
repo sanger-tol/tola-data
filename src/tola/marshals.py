@@ -5,6 +5,7 @@ import logging
 import os
 import pwd
 import pytz
+import re
 import sys
 
 from functools import cache
@@ -20,15 +21,19 @@ class MarshalParamType(click.ParamType):
     name = "marshal-type"
 
     def convert(self, value, param, ctx):
-        print(f"value='{value}' param='{param}'", file=sys.stderr)
+        print(f"value='{value}' params='{ctx.params}'", file=sys.stderr)
+
+        if m := re.search(r"^(sql|api)(?::(.+))?$", value):
+            cls, db_alias = m.groups()
+        else:
+            msg = f"Unknown Marshal type '{value}'; Valid types: api | sql[:db_alias]"
+            raise ValueError(msg)
+
         try:
-            if value == "sql":
-                return TolSqlMarshal()
-            elif value == "api":
+            if cls == "sql":
+                return TolSqlMarshal(db_alias)
+            elif cls == "api":
                 return TolApiMarshal()
-            else:
-                msg = f"Unknown Marshall type '{value}': must be either 'sql' or 'api'"
-                raise ValueError(msg)
         except ValueError as ve:
             self.fail(ve)
 
@@ -41,7 +46,12 @@ mrshl = click.option(
     envvar="TOLQC_MARSHAL",
     default="sql",
     show_default=True,
-    help="Connect using the Tol API ('api'), or else via SQL",
+    help=(
+        "Valid marshal types are 'api' to connect via the ToL http API,"
+        " or 'sql[:db_alias]' to connect via SQLAlchemy with optional"
+        " db_alias parameter. Can also be set via the TOLQC_MARSHAL"
+        " environment variable."
+    ),
 )
 
 
@@ -175,9 +185,12 @@ class TolApiMarshal(TolBaseMarshal):
 
 
 class TolSqlMarshal(TolBaseMarshal):
-    def __init__(self):
-        # engine, Session = db_connection.tola_db_engine(echo=True)
-        engine, Session = db_connection.tola_db_engine()
+    def __init__(self, db_alias=None):
+        engine, Session = (
+            db_connection.tola_db_engine(db_alias)
+            if db_alias
+            else db_connection.tola_db_engine()
+        )
         self.session = Session()
         self.user_id = self.effective_user_id(self.session)
 
