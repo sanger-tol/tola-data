@@ -433,7 +433,7 @@ def pacbio_sql():
 
 
 def row_info(row, msg):
-    print(row_message(row, msg), file=sys.stderr)
+    logging.info(row_message(row, msg))
 
 
 def row_message(row, msg):

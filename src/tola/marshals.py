@@ -8,7 +8,7 @@ import pytz
 import re
 import sys
 
-from functools import cache
+from functools import cache, cached_property
 from sqlalchemy import select
 
 from main.model import Data, File, Project, User
@@ -21,8 +21,6 @@ class MarshalParamType(click.ParamType):
     name = "marshal-type"
 
     def convert(self, value, param, ctx):
-        print(f"value='{value}' params='{ctx.params}'", file=sys.stderr)
-
         if m := re.search(r"^(sql|api)(?::(.+))?$", value):
             cls, db_alias = m.groups()
         else:
@@ -185,7 +183,7 @@ class TolApiMarshal(TolBaseMarshal):
 
 
 class TolSqlMarshal(TolBaseMarshal):
-    def __init__(self, db_alias=None):
+    def __init__(self, db_alias=None, tz="Europe/London"):
         engine, Session = (
             db_connection.tola_db_engine(db_alias)
             if db_alias
@@ -193,6 +191,7 @@ class TolSqlMarshal(TolBaseMarshal):
         )
         self.session = Session()
         self.user_id = self.effective_user_id(self.session)
+        self.local_tz = pytz.timezone(tz)
 
     @staticmethod
     def effective_user_id(ssn):
@@ -237,6 +236,8 @@ class TolSqlMarshal(TolBaseMarshal):
         if obj := self.fetch_one_or_none(cls, spec, selector):
             changed = False
             for prop, val in spec.items():
+                if type(val) == datetime.datetime:
+                    val = self.localize(val, prop)
                 if val != getattr(obj, prop):
                     old = getattr(obj, prop)
                     logging.info(
@@ -250,17 +251,24 @@ class TolSqlMarshal(TolBaseMarshal):
         else:
             return self.create(cls, spec, selector)
 
-    @staticmethod
-    def now():
-        return datetime.datetime.now(tz=pytz.timezone("Europe/London"))
+    @cached_property
+    def now(self):
+        return datetime.datetime.now(tz=self.local_tz)
+
+    def localize(self, dt, prop):
+        if dt.tzinfo and dt.tzinfo.utcoffset(dt) != None:
+            # datetime is "aware"
+            return dt
+        else:
+            # datetime is "naive"
+            return self.local_tz.localize(dt)
 
     def update_log_fields(self, obj):
-        now = self.now()
         if not obj.created_at:
-            obj.created_at = now
+            obj.created_at = self.now
         if not obj.created_by:
             obj.created_by = self.user_id
-        obj.last_modified_at = now
+        obj.last_modified_at = self.now
         obj.last_modified_by = self.user_id
 
     def list_projects(self):
