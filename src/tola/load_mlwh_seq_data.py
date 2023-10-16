@@ -335,7 +335,9 @@ def illumina_sql():
         FROM sample
         JOIN iseq_flowcell AS flowcell
           ON sample.id_sample_tmp = flowcell.id_sample_tmp
-        JOIN study
+        JOIN study USE INDEX ()  -- Work around MySQL optimisation problem with
+                                 -- seeminly unavoidable full table scan somewhere
+                                 -- in query, forcing it onto the smalles table.
           ON flowcell.id_study_tmp = study.id_study_tmp
         JOIN iseq_product_metrics AS component_metrics
           ON flowcell.id_iseq_flowcell_tmp = component_metrics.id_iseq_flowcell_tmp
