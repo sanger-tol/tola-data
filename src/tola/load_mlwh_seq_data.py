@@ -332,13 +332,11 @@ def illumina_sql():
           , flowcell.id_library_lims AS library_id
           , irods.irods_root_collection AS irods_path
           , irods.irods_data_relative_path AS irods_file
-        FROM sample
+        FROM study
         JOIN iseq_flowcell AS flowcell
-          ON sample.id_sample_tmp = flowcell.id_sample_tmp
-        JOIN study USE INDEX ()  -- Work around MySQL optimisation problem with
-                                 -- seeminly unavoidable full table scan somewhere
-                                 -- in query, forcing it onto the smalles table.
-          ON flowcell.id_study_tmp = study.id_study_tmp
+          ON study.id_study_tmp = flowcell.id_study_tmp
+        JOIN sample
+          ON flowcell.id_sample_tmp = sample.id_sample_tmp
         JOIN iseq_product_metrics AS component_metrics
           ON flowcell.id_iseq_flowcell_tmp = component_metrics.id_iseq_flowcell_tmp
         JOIN iseq_run_lane_metrics AS run_lane_metrics
@@ -355,6 +353,7 @@ def illumina_sql():
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND sample.taxon_id IS NOT NULL
           AND product_metrics.num_reads IS NOT NULL
+          AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
         """,
     )
@@ -414,21 +413,22 @@ def pacbio_sql():
 
           , irods.irods_root_collection AS irods_path
           , irods.irods_data_relative_path AS irods_file
-        FROM sample
+        FROM study
         JOIN pac_bio_run AS run
-          ON sample.id_sample_tmp = run.id_sample_tmp
+          ON study.id_study_tmp = run.id_study_tmp
+        JOIN sample
+          ON run.id_sample_tmp = sample.id_sample_tmp
         JOIN pac_bio_product_metrics AS product_metrics
           ON run.id_pac_bio_tmp = product_metrics.id_pac_bio_tmp
         JOIN pac_bio_run_well_metrics AS well_metrics
           ON product_metrics.id_pac_bio_rw_metrics_tmp
               = well_metrics.id_pac_bio_rw_metrics_tmp
-        JOIN study
-          ON run.id_study_tmp = study.id_study_tmp
         LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
           AND sample.taxon_id IS NOT NULL
           AND well_metrics.movie_name IS NOT NULL
+          AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
         """,
     )
