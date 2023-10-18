@@ -71,6 +71,7 @@ def cli(ctx, csv_files, duckdb_file):
     table_row_counts(con)
     full_report_grouped_by_idx(con, "pacbio_partitioned.csv")
     report_multi_specimen_idx(con, "pacbio_multi_samples.csv")
+    missing_from_rprt(con, "pacbio_missing_from_rprt.csv")
 
 
 def create_and_populate_database(con, ducbdk_file, csv_files):
@@ -92,6 +93,28 @@ def create_and_populate_database(con, ducbdk_file, csv_files):
     con.execute("INSERT INTO u SELECT * FROM r")
 
     con.commit()
+
+
+def missing_from_rprt(con, csv_file):
+    sql = """
+        SELECT j.idx
+          , ROW_NUMBER() OVER same_idx AS dup
+          , COUNT(*) OVER same_idx AS n_dup
+          , j.source
+          , j.project
+          , j.specimen
+          , j.* EXCLUDE(idx, source, project, specimen)
+        FROM j
+        LEFT JOIN r
+          ON j.idx = r.idx
+        WHERE r.idx IS NULL
+        WINDOW same_idx AS (
+          PARTITION BY j.idx
+          ORDER BY j.source, j.project, j.specimen
+          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        )
+    """
+    sql_to_csv(con, sql, csv_file)
 
 
 def full_report_grouped_by_idx(con, csv_file):
