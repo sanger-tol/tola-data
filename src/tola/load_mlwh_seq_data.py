@@ -107,6 +107,8 @@ def valid_accession(mrshl, accn_type, accn):
         atd = mrshl.fetch_dict_item(AccessionTypeDict, accn_type)
         if atd.valid_accession(accn):
             return True
+        else:
+            logging.info(f"Invalid '{accn_type}': '{accn}'")
     return False
 
 
@@ -265,6 +267,7 @@ def library_type_from_pipeline_id(mrshl, pipeline_id_lims):
 
 
 def illumina_fetcher(mlwh, project):
+    logging.info(f"Fetching Illumina data for project '{project.lims_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project.lims_id,))
     for row in crsr:
@@ -283,6 +286,7 @@ def illumina_fetcher(mlwh, project):
 
 
 def pacbio_fetcher(mlwh, project):
+    logging.info(f"Fetching PacBio data for project '{project.lims_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project.lims_id,))
     for row in crsr:
@@ -351,7 +355,6 @@ def illumina_sql():
         LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
-          AND sample.taxon_id IS NOT NULL
           AND product_metrics.num_reads IS NOT NULL
           AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
@@ -426,7 +429,6 @@ def pacbio_sql():
         LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
-          AND sample.taxon_id IS NOT NULL
           AND well_metrics.movie_name IS NOT NULL
           AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
