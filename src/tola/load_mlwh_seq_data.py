@@ -428,8 +428,7 @@ def pacbio_sql():
               = well_metrics.id_pac_bio_rw_metrics_tmp
         LEFT JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
-        WHERE product_metrics.qc IS NOT NULL
-          AND well_metrics.movie_name IS NOT NULL
+        WHERE well_metrics.movie_name IS NOT NULL
           AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
         """,
