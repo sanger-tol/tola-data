@@ -39,8 +39,6 @@ DEFAULT_FILENAMES = "pacbio_tolqc_data.json", "pacbio_run_report.json"
     "--key-counts",
     type=FILE_TYPE,
     is_flag=False,
-    flag_value=DEFAULT_FILENAMES[0],
-    default=DEFAULT_FILENAMES[0],
     show_default=True,
     help="Show occupation count of keys in file",
 )

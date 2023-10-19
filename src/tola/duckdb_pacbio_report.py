@@ -1,7 +1,9 @@
+import csv
 import click
 import duckdb
 import inspect
 import pathlib
+import re
 import sys
 import textwrap
 
@@ -70,8 +72,56 @@ def cli(ctx, csv_files, duckdb_file):
 
     table_row_counts(con)
     full_report_grouped_by_idx(con, "pacbio_partitioned.csv")
-    report_multi_specimen_idx(con, "pacbio_multi_samples.csv")
+    multi_specimen_csv = "pacbio_multi_specimens.csv"
+    report_multi_specimen_idx(con, multi_specimen_csv)
+    filter_sample_swaps(multi_specimen_csv, "pacbio_multi_specimen_swaps.csv")
     missing_from_rprt(con, "pacbio_missing_from_rprt.csv")
+
+
+def filter_sample_swaps(multi_specimen_csv, csv_out):
+    in_path = pathlib.Path(multi_specimen_csv)
+    out_path = pathlib.Path(csv_out)
+    out_rows = []
+    for chunk in idx_chunks(in_path):
+        tol_id_specimens = valid_speciemns_in_chunk(chunk)
+        if len(tol_id_specimens) > 1:
+            # click.echo(f"Specimens: {tol_id_specimens}", err=True)
+            out_rows.extend(chunk)
+    if out_rows:
+        header = tuple(out_rows[0])
+        csv_wrtr = csv.DictWriter(out_path.open("w"), header)
+        csv_wrtr.writeheader()
+        for row in out_rows:
+            csv_wrtr.writerow(row)
+    click.echo(f"\nWrote likely specimen swaps into file: '{csv_out}'", err=True)
+
+
+def idx_chunks(path):
+    chunk = []
+    current_idx = ""
+    for row in csv.DictReader(path.open()):
+        if row["idx"] != current_idx:
+            if chunk:
+                yield chunk
+            chunk = [row]
+            current_idx = row["idx"]
+        else:
+            chunk.append(row)
+    if chunk:
+        # chunk_rows = "".join(f"  {x['idx']}  {x['dup']}  {x['specimen']}\n" for x in chunk)
+        # click.echo(f"Last chunk:\n{chunk_rows}", err=True)
+        yield chunk
+        chunk = None
+
+
+def valid_speciemns_in_chunk(chunk):
+    tol_dict = {}
+    for row in chunk:
+        if m := re.search(
+            r"([a-z]{1,2}[A-Z][a-z]{2}[A-Z][a-z]{2,3}\d+)", row["specimen"]
+        ):
+            tol_dict[m.group(1)] = True
+    return tuple(tol_dict)
 
 
 def create_and_populate_database(con, ducbdk_file, csv_files):
