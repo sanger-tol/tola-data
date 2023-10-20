@@ -1,5 +1,6 @@
 import csv
 import click
+import datetime
 import duckdb
 import inspect
 import pathlib
@@ -14,6 +15,12 @@ FILE_TYPE = click.Path(
     exists=True,
     readable=True,
 )
+
+
+@cache
+def today_dir():
+    today = datetime.date.today().isoformat()
+    return pathlib.Path(f"pacbio_{today}")
 
 
 @click.command(
@@ -31,13 +38,22 @@ FILE_TYPE = click.Path(
 )
 @click.option(
     "--duckdb-file",
-    default="pacbio.duckdb",
     type=click.Path(path_type=pathlib.Path),
     help="Name of duckdb database file.",
     show_default=True,
 )
+@click.option(
+    "--dir", "report_dir",
+    default=today_dir(),
+    type=click.Path(path_type=pathlib.Path),
+    help="Directory to store duckdb database and report in",
+    show_default=True,
+)
 @click.pass_context
-def cli(ctx, csv_files, duckdb_file):
+def cli(ctx, csv_files, report_dir, duckdb_file):
+    report_dir.mkdir(exist_ok=True, parents=True)
+    if duckdb_file is None:
+        duckdb_file = report_dir / "pacbio.duckdb"
     db_exists = duckdb_file.exists()
 
     create_flag = False
@@ -71,11 +87,11 @@ def cli(ctx, csv_files, duckdb_file):
             raise Exception(msg) from e
 
     table_row_counts(con)
-    full_report_grouped_by_idx(con, "pacbio_partitioned.csv")
-    multi_specimen_csv = "pacbio_multi_specimens.csv"
+    full_report_grouped_by_idx(con, report_dir / "pacbio_partitioned.csv")
+    multi_specimen_csv = report_dir / "pacbio_multi_specimens.csv"
     report_multi_specimen_idx(con, multi_specimen_csv)
-    filter_sample_swaps(multi_specimen_csv, "pacbio_multi_specimen_swaps.csv")
-    missing_from_rprt(con, "pacbio_missing_from_rprt.csv")
+    filter_sample_swaps(multi_specimen_csv, report_dir / "pacbio_multi_specimen_swaps.csv")
+    missing_from_rprt(con, report_dir / "pacbio_missing_from_rprt.csv")
 
 
 def filter_sample_swaps(multi_specimen_csv, csv_out):
@@ -238,7 +254,7 @@ def report_multi_specimen_idx(con, csv_file):
 
 def sql_to_csv(con, raw_sql, csv_file):
     sql = inspect.cleandoc(raw_sql)
-    con.sql(sql).write_csv(csv_file, header=True)
+    con.sql(sql).write_csv(str(csv_file), header=True)
     info_sql = textwrap.indent(sql, "  ")
     click.echo(f"\nWrote query:\n{info_sql}\nto file: '{csv_file}'")
 
