@@ -115,13 +115,13 @@ def idx_chunks(path):
 
 
 def valid_speciemns_in_chunk(chunk):
-    tol_dict = {}
+    tol_set = set()
     for row in chunk:
         if m := re.search(
             r"([a-z]{1,2}[A-Z][a-z]{2}[A-Z][a-z]{2,3}\d+)", row["specimen"]
         ):
-            tol_dict[m.group(1)] = True
-    return tuple(tol_dict)
+            tol_set.add(m.group(1))
+    return tol_set
 
 
 def create_and_populate_database(con, ducbdk_file, csv_files):
