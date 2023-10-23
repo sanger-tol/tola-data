@@ -174,6 +174,7 @@ def missing_from_rprt(con, csv_file):
         LEFT JOIN r
           ON j.idx = r.idx
         WHERE r.idx IS NULL
+          AND j.model IN ('Sequel IIe', 'Revio')
         WINDOW same_idx AS (
           PARTITION BY j.idx
           ORDER BY j.source, j.project, j.specimen

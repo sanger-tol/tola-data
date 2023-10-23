@@ -375,8 +375,9 @@ def pacbio_sql():
           , sample.common_name AS scientific_name
           , sample.taxon_id AS taxon_id
           , 'PacBio' AS platform_type
-          , well_metrics.instrument_type AS instrument_model
-          , well_metrics.instrument_name AS instrument_name
+          , REGEXP_REPLACE(instrument_type
+            , '^Sequel2', 'Sequel II') AS instrument_model
+          , CONCAT('m', LOWER(instrument_name)) AS instrument_name
           , run.pipeline_id_lims AS pipeline_id_lims
           , well_metrics.movie_name AS run_id
           , well_metrics.pac_bio_run_name AS lims_run_id
