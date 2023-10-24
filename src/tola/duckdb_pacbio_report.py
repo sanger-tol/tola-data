@@ -34,7 +34,7 @@ def today_dir():
     "csv_files",
     nargs=2,
     type=(FILE_TYPE, FILE_TYPE),
-    default=("pacbio_tolqc_data.csv", "pacbio_run_report.csv"),
+    default=("data/pacbio_tolqc_data.csv", "data/pacbio_run_report.csv"),
 )
 @click.option(
     "--duckdb-file",
@@ -180,6 +180,7 @@ def missing_from_rprt(con, csv_file):
           ORDER BY j.source, j.project, j.specimen
           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
         )
+        ORDER BY j.date, j.idx, dup
     """
     sql_to_csv(con, sql, csv_file)
 
@@ -205,6 +206,7 @@ def full_report_grouped_by_idx(con, csv_file):
           ORDER BY source, project, specimen
           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
         )
+        ORDER BY idx, dup
     """
     sql_to_csv(con, sql, csv_file)
 

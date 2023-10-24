@@ -49,7 +49,7 @@ def main(tolqc_db, format):
                 Platform.name.label("platform"),
                 Platform.model,
                 Sample.sample_id.label("sanger_id"),
-                IsoDayBundle("date", Run.complete),
+                IsoDayBundle("date", Run.start),
                 Data.lims_qc,
                 Run.lims_id.label("run"),
                 Run.run_id.label("movie_name"),

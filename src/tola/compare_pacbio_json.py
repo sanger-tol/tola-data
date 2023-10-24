@@ -12,7 +12,7 @@ FILE_TYPE = click.Path(
     readable=True,
     path_type=pathlib.Path,
 )
-DEFAULT_FILENAMES = "pacbio_tolqc_data.json", "pacbio_run_report.json"
+DEFAULT_FILENAMES = "data/pacbio_tolqc_data.json", "data/pacbio_run_report.json"
 
 
 @click.command(
