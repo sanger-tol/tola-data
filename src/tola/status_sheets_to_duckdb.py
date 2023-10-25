@@ -1,8 +1,6 @@
 import click
-import csv
 import datetime
 import duckdb
-import io
 import os
 import pathlib
 import re
@@ -37,23 +35,24 @@ def cli(duckdb_file):
     # ID of "Tree of Life assembly informatics" Google Sheet
     document_id = "1RKubj10g13INd4W7alHkwcSVX_0CRvNq0-SRe21m-GM"
 
-    db_sheets = {
-        "Status": "status",
-        "ASG": "asg",
-        "Cobiont Submission": "cobiont_sub",
-        "Primary Metagenome Submission": "primary_meta_sub",
-        "Binned Metagenome Submission": "binned_meta_sub",
-        "Raw data submission": "raw_data_sub",
-        "BioProjects": "bio_projects",
+    # GID for a sheet can be found in the URL when its tab is selected
+    db_sheets_gid = {
+        "status": "1442224132",
+        "asg": "1822055132",
+        "cobiont_sub": "791221292",
+        "primary_meta_sub": "1641921323",
+        "binned_meta_sub": "688995138",
+        "raw_data_sub": "249200423",
+        "bio_projects": "728482940",
     }
 
-    for sheet_name, sheet_table in db_sheets.items():
+    for sheet_table, gid in db_sheets_gid.items():
         try:
-            data = fetch_sheet_io(document_id, sheet_name)
-            create_table(con, sheet_table, data)
+            row_itr = fetch_sheet_lines(document_id, sheet_table, gid)
+            create_table(con, sheet_table, row_itr)
         except Exception as e:
             con.rollback()
-            msg = f"Error creating table '{sheet_table}' from sheet '{sheet_name}'"
+            msg = f"Error creating table '{sheet_table}' from sheet gid = '{gid}'"
             raise Exception(msg) from e
 
     con.execute("ALTER TABLE status RENAME COLUMN sample TO specimen")
@@ -66,10 +65,9 @@ def cli(duckdb_file):
         os.execlp("duckdb", "duckdb", str(duckdb_file))
 
 
-def create_table(con, table_name, data):
-    csv_in = csv.reader(data)
+def create_table(con, table_name, row_itr):
     try:
-        header = next(csv_in)
+        header = next(row_itr)
     except StopIteration:
         msg = "No header. Empty file?"
         raise ValueError(msg)
@@ -78,7 +76,7 @@ def create_table(con, table_name, data):
     first_col, last_col = None, None
     for i, v in enumerate(header):
         if v:
-            if not first_col:
+            if first_col is None:
                 first_col = i
             last_col = i + 1
     if first_col is None:
@@ -87,40 +85,61 @@ def create_table(con, table_name, data):
 
     header = cleanup_header(header[first_col:last_col])
 
-    # Create temporary CSV file and write header and body
-    csv_tmp = tempfile.NamedTemporaryFile(
-        "w", prefix="sheets_to_duckdb_", suffix=".csv"
+    # Create temporary TSV file and write header and body
+    tsv_tmp = tempfile.NamedTemporaryFile(
+        "w", prefix=f"status__{table_name}_", suffix=".tsv"
     )
-    csv_out = csv.writer(csv_tmp)
-    csv_out.writerow(header)
-    for line in csv_in:
-        csv_out.writerow(line[first_col:last_col])
+    tsv_tmp.write("\t".join(header) + "\n")
+    for row in row_itr:
+        tsv_tmp.write("\t".join(row[first_col:last_col]) + "\n")
 
     # Ensure data is flushed to storage
-    csv_tmp.flush()
-    os.fsync(csv_tmp.fileno())
+    tsv_tmp.flush()
+    os.fsync(tsv_tmp.fileno())
 
     # Import the data from the temporary CSV file into duckdb
     stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto(?)"
-    con.execute(stmt, (csv_tmp.name,))
+    con.execute(stmt, (tsv_tmp.name,))
 
 
-def fetch_sheet_io(document_id, sheet_name):
-    url = f"https://docs.google.com/spreadsheets/d/{document_id}/gviz/tq"
-    r = requests.get(url, params={"sheet": sheet_name, "tqx": "out:csv"})
+def fetch_sheet_lines(document_id, sheet_name, gid):
+    url = f"https://docs.google.com/spreadsheets/d/{document_id}/export"
+    r = requests.get(url, params={"gid": gid, "format": "tsv"})
     if r.status_code == requests.codes.ok:
-        return io.StringIO(r.text)
+        # Encoding was 'ISO-8859-1'.  Setting to apparent sets 'utf-8',
+        # correctly encoding bullet characters in spreadsheet.
+        r.encoding = r.apparent_encoding
+
+        for line in r.iter_lines(decode_unicode=True):
+            # Skip blank lines
+            if not re.search(r"\w", line):
+                continue
+            yield tuple(line.rstrip("\r\n").split("\t"))
     else:
         r.raise_for_status()
 
 
 def cleanup_header(dirty):
-    return tuple(make_identifier(x) for x in dirty)
+    clean = tuple(make_identifier(x) for x in dirty)
+
+    # If all column headers are all upper case, convert them to lower case
+    all_caps = True
+    for col in clean:
+        if re.search(r"[^A-Z_]", col):
+            all_caps = False
+            break
+
+    if all_caps:
+        return tuple(x.lower() for x in clean)
+    else:
+        return clean
 
 
 def make_identifier(txt):
-    idtfyr = re.sub(r"\W+", "_", re.sub(r"&+", "_and_", txt))
-    return idtfyr.strip("_")
+    txt = re.sub(r"&+", " and ", txt)
+    txt = re.sub(r"%+", " pct ", txt)
+    txt = re.sub(r"\W+", "_", txt)
+    return txt.strip("_")
 
 
 if __name__ == "__main__":
