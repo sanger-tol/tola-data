@@ -1,11 +1,12 @@
-import click
 import datetime
-import duckdb
 import os
 import re
-import requests
 import sys
 import tempfile
+
+import click
+import duckdb
+import requests
 
 
 def status_db_today():
@@ -17,7 +18,7 @@ def status_db_today():
     help=(
         "Download ToL QC Status spreadsheets and"
         " construct a duckdb database from them"
-    )
+    ),
 )
 @click.option(
     "--duckdb-file",
@@ -46,7 +47,7 @@ def cli(duckdb_file):
 
     for sheet_table, gid in db_sheets_gid.items():
         try:
-            row_itr = fetch_sheet_lines(document_id, sheet_table, gid)
+            row_itr = fetch_sheet_lines(document_id, gid)
             create_table(con, sheet_table, row_itr)
         except Exception as e:
             con.rollback()
@@ -68,7 +69,7 @@ def create_table(con, table_name, row_itr):
         header = next(row_itr)
     except StopIteration:
         msg = "No header. Empty file?"
-        raise ValueError(msg)
+        raise ValueError(msg) from None
 
     # Exclue any leading and trailing columns with an empty header
     first_col, last_col = None, None
@@ -85,7 +86,9 @@ def create_table(con, table_name, row_itr):
 
     # Create temporary TSV file and write header and body
     tsv_tmp = tempfile.NamedTemporaryFile(
-        "w", prefix=f"status__{table_name}_", suffix=".tsv"
+        "w",
+        prefix=f"status__{table_name}_",
+        suffix=".tsv",
     )
     tsv_tmp.write("\t".join(header) + "\n")
     for row in row_itr:
@@ -101,7 +104,7 @@ def create_table(con, table_name, row_itr):
     con.execute(stmt, (tsv_tmp.name,))
 
 
-def fetch_sheet_lines(document_id, sheet_name, gid):
+def fetch_sheet_lines(document_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{document_id}/export"
     r = requests.get(url, params={"gid": gid, "format": "tsv"})
     if r.status_code == requests.codes.ok:
@@ -130,8 +133,8 @@ def cleanup_header(dirty):
 
     if all_caps:
         return tuple(x.lower() for x in clean)
-    else:
-        return clean
+
+    return clean
 
 
 def make_identifier(txt):
@@ -150,13 +153,15 @@ strip_commas = str.maketrans({",": None})
 
 def cleanup_cell(cell):
     txt = cell.strip()
+
     if txt == "-":
         return ""
+
     # Remove commas from numbers. e.g. "1,200" becomes "1200"
-    elif re.match(r"\d[\d,]+(\.\d+)?$", txt):
+    if re.match(r"\d[\d,]+(\.\d+)?$", txt):
         return txt.translate(strip_commas)
-    else:
-        return txt
+
+    return txt
 
 
 if __name__ == "__main__":
