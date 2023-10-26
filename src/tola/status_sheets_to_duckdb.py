@@ -89,7 +89,8 @@ def create_table(con, table_name, row_itr):
     )
     tsv_tmp.write("\t".join(header) + "\n")
     for row in row_itr:
-        tsv_tmp.write("\t".join(row[first_col:last_col]) + "\n")
+        clean = cleanup_row(row[first_col:last_col])
+        tsv_tmp.write("\t".join(clean) + "\n")
 
     # Ensure data is flushed to storage
     tsv_tmp.flush()
@@ -138,6 +139,24 @@ def make_identifier(txt):
     txt = re.sub(r"%+", " pct ", txt)
     txt = re.sub(r"\W+", "_", txt)
     return txt.strip("_")
+
+
+def cleanup_row(dirty):
+    return tuple(cleanup_cell(x) for x in dirty)
+
+
+strip_commas = str.maketrans({",": None})
+
+
+def cleanup_cell(cell):
+    txt = cell.strip()
+    if txt == "-":
+        return ""
+    # Remove commas from numbers. e.g. "1,200" becomes "1200"
+    elif re.match(r"\d[\d,]+(\.\d+)?$", txt):
+        return txt.translate(strip_commas)
+    else:
+        return txt
 
 
 if __name__ == "__main__":
