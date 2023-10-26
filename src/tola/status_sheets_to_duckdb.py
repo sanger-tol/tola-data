@@ -2,7 +2,6 @@ import click
 import datetime
 import duckdb
 import os
-import pathlib
 import re
 import requests
 import sys
@@ -23,12 +22,11 @@ def status_db_today():
 @click.option(
     "--duckdb-file",
     default=status_db_today(),
-    type=click.Path(path_type=pathlib.Path),
     help="Name of duckdb database file.",
     show_default=True,
 )
 def cli(duckdb_file):
-    con = duckdb.connect(str(duckdb_file))
+    con = duckdb.connect(duckdb_file)
     con.begin()
     click.echo(f"Created duckdb database is '{duckdb_file}'", err=True)
 
@@ -62,7 +60,7 @@ def cli(duckdb_file):
     # Start duckdb cli if run in a terminal
     if sys.stdout.isatty():
         con.close()
-        os.execlp("duckdb", "duckdb", str(duckdb_file))
+        os.execlp("duckdb", "duckdb", duckdb_file)
 
 
 def create_table(con, table_name, row_itr):
