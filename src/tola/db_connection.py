@@ -60,7 +60,7 @@ def get_connection_url(db_alias):
     enc_pass = urllib.parse.quote_plus(params["password"])
     dbd = params["dbd"]
     if dbd == "mysql":
-        lib_spec = "mysql+mysqlconnectory"
+        lib_spec = "mysql+mysqlconnector"
     elif dbd == "Pg":
         lib_spec = "postgresql+psycopg2"
     else:
