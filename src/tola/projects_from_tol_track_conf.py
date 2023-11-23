@@ -7,7 +7,7 @@ import re
 import pathlib
 import tola.marshals
 
-from main.model import Project
+from tolqc import Project
 
 
 @click.command(help="Update list of Projects from tol_track.conf (or similar) file")

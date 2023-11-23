@@ -4,7 +4,7 @@ import sys
 
 import tola.marshals
 from tola import db_connection
-from main.model import Base
+from tolqc.model import Base
 
 
 @click.command(help="Populate dictionary table in ToL QC db from TSV files")

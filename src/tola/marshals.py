@@ -11,7 +11,7 @@ import sys
 from functools import cache, cached_property
 from sqlalchemy import select
 
-from main.model import Data, File, Project, User
+from tolqc import Data, File, Project, User
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core import DataSourceFilter
 from tola import db_connection
@@ -57,7 +57,7 @@ class TolBaseMarshal:
     def build_filter(self, cls, spec, selector=None):
         # Use the primary key if there is no selector
         if not selector:
-            selector = (self.class_pimary_key(cls),)
+            selector = (cls.get_id_column_name(),)
 
         # Build a filter for the select query
         fltr = {}
@@ -77,20 +77,13 @@ class TolBaseMarshal:
             msg = f"No {cls.__name__} matching {selector} in {spec}"
             raise ValueError(msg)
 
-    @cache
-    def class_pimary_key(self, cls):
-        if hasattr(cls.Meta, 'id_column'):
-            return cls.Meta.id_column
-        else:
-            return 'id'
-
     def pk_field_from_spec(self, cls, spec):
-        pk = self.class_pimary_key(cls)
+        pk = cls.get_id_column_name()
         return spec.get(pk)
 
     @cache
     def fetch_dict_item(self, cls, pk_val):
-        pk = self.class_pimary_key(cls)
+        pk = cls.get_id_column_name()
         return self.fetch_one(cls, {pk: pk_val})
 
     def commit(self):
@@ -101,20 +94,20 @@ class TolApiMarshal(TolBaseMarshal):
     def __init__(self):
         self.api_data_source = ApiDataSource(
             {
-                'url': os.getenv('TOLQC_URL') + '/api/v1',
+                'url': os.getenv('TOLQC_URL') + '/tolqc',
                 'key': os.getenv('TOLQC_API_KEY'),
             }
         )
 
     def make_alchemy_object(self, cls, api_obj):
         spec = api_obj.attributes
-        if self.class_pimary_key(cls) == 'id':  ### Not necessary?
+        if cls.get_id_column_name() == 'id':  ### Not necessary?
             spec["id"] = api_obj.id
         return cls(**spec)
 
     def fetch_one_or_none(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
-        obj_type = cls.Meta.type_
+        obj_type = cls.__tablename__
         ads = self.api_data_source
         stored = list(
             ads.get_list(obj_type, object_filters=DataSourceFilter(exact=fltr))
@@ -128,7 +121,7 @@ class TolApiMarshal(TolBaseMarshal):
             raise Exception(f"filter {fltr} returned {count} {cls.__name__} objects")
 
     def fetch_many(self, cls, spec=None, selector=None):
-        obj_type = cls.Meta.type_
+        obj_type = cls.__tablename__
         if spec:
             fltr = self.build_filter(cls, spec, selector)
             return self.api_data_source.get_list(
@@ -138,7 +131,7 @@ class TolApiMarshal(TolBaseMarshal):
             return self.api_data_source.get_list(obj_type)
 
     def create(self, cls, spec, selector=None):
-        obj_type = cls.Meta.type_
+        obj_type = cls.__tablename__
         id_ = self.pk_field_from_spec(cls, spec)
         api_obj = ApiObject(obj_type, id_, attributes=spec)
         self.api_data_source.create(api_obj)
@@ -170,7 +163,7 @@ class TolApiMarshal(TolBaseMarshal):
         """Return a list of all the keys in the dict arguments
         which are not the primary key of the class.
         """
-        class_pk = self.class_pimary_key(cls)
+        class_pk = cls.get_id_column_name()
         all_props = set()
         for dct in arg_dicts:
             for prop in dct:

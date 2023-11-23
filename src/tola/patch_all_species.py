@@ -1,6 +1,6 @@
 import click
 import tola.marshals
-from main.model import Species
+from tolqc import Species
 from tola.goat_client import GoaTClient
 
 

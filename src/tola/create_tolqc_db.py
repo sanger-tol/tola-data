@@ -1,6 +1,6 @@
 import click
 
-from main.model import Base
+from tolqc import Base
 from sqlalchemy import MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.schema import DropTable

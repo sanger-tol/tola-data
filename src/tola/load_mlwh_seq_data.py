@@ -5,7 +5,7 @@ import sys
 from functools import cache
 
 from tola.goat_client import GoaTClient
-from main.model import (
+from tolqc import (
     Accession,
     AccessionTypeDict,
     Allocation,

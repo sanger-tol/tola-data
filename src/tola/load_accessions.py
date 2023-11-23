@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tola.marshals
 
-from main.model import Accession
+from tolqc import Accession
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core.datasource_error import DataSourceError
 
