@@ -1,6 +1,6 @@
 import click
 
-from tolqc import Base
+from tolqc.model import Base
 from sqlalchemy import MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.schema import DropTable
@@ -26,7 +26,7 @@ def main(tolqc_db):
     old_db = MetaData()
     old_db.reflect(engine)
 
-    keep_tables = {"user", "auth", "role"}
+    keep_tables = {"user", "auth", "role", "alembic_version"}
     drop_tables = []
     for name in old_db.tables:
         if name in keep_tables:

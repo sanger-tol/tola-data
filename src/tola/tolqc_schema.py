@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: MIT
 
 import re
-import sys
 from functools import cached_property
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -16,14 +16,13 @@ from sqlalchemy import (
     JSON,
     String,
     UniqueConstraint,
-    create_engine,
-    text,
 )
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker
+from tol.sql import model_base
 
-Base = declarative_base()
-LogBase = Base
+Base = model_base()
+LogBase = Base.Log
 
 
 def main(args):
@@ -42,7 +41,7 @@ def main(args):
         # SQLAlchemy cannot work out order of ..._status tables for drop_all
         # due to multiple foreign keys that link to their subject tables
         with engine.connect() as conn:
-            for table in ('specimen_status', 'dataset_status', 'assembly_status'):
+            for table in ("specimen_status", "dataset_status", "assembly_status"):
                 conn.execute(text(f"DROP TABLE {table} CASCADE"))
 
         Base.metadata.drop_all(engine)
@@ -59,6 +58,66 @@ def main(args):
 
 def tola_db_engine(**kwargs):
     return create_engine("postgresql+psycopg2://sts-dev@127.0.0.1:5435/tolqc", **kwargs)
+
+
+def models_list():
+    return [
+        Accession,
+        AccessionTypeDict,
+        Allocation,
+        Assembly,
+        AssemblyComponentType,
+        AssemblyMetrics,
+        AssemblySource,
+        AssemblyStatus,
+        AssemblyStatusType,
+        BarcodeMetrics,
+        BuscoLineage,
+        BuscoMetrics,
+        Centre,
+        ContigvizMetrics,
+        Data,
+        Dataset,
+        DatasetElement,
+        DatasetStatus,
+        DatasetStatusType,
+        File,
+        GenomescopeMetrics,
+        Library,
+        LibraryType,
+        MarkerscanMetrics,
+        MerquryMetrics,
+        Offspring,
+        PacbioRunMetrics,
+        Platform,
+        PloidyplotMetrics,
+        Project,
+        QCDict,
+        ReviewDict,
+        Run,
+        Sample,
+        Sex,
+        SoftwareVersion,
+        Species,
+        Specimen,
+        SpecimenStatus,
+        SpecimenStatusType,
+    ]
+
+
+class User(Base):
+    """
+    Temporary class while v2 API authentication is being developed.
+    """
+
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True)  # noqa: A003
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    organisation = Column(String)
+    # role = relationship('Role', lazy=False, back_populates='user')
+    # auth = relationship('Auth', lazy=False, back_populates='user')
 
 
 class Accession(Base):
@@ -103,7 +162,7 @@ class AccessionTypeDict(Base):
         return re.compile(self.regexp)
 
     def valid_accession(self, accn):
-        return True if self.compiled_regexp.search(accn) else False
+        return bool(self.compiled_regexp.search(accn))
 
 
 class Allocation(Base):
@@ -127,7 +186,7 @@ class Assembly(LogBase):
     def get_id_column_name(cls):
         return "assembly_id"
 
-    assembly_id = Column(Integer, primary_key=True)  # noqa: A003
+    assembly_id = Column(Integer, primary_key=True)
     software_version_id = Column(
         Integer, ForeignKey("software_version.software_version_id")
     )
@@ -282,7 +341,10 @@ class BarcodeMetrics(Base):
     id = Column(Integer, primary_key=True)  # noqa: A003
     data_id = Column(Integer, ForeignKey("data.data_id"))
     qc_id = Column(Integer)  # QCDict pass|fail ?
-    species_match_top = Column(String)  # Is this a foreign key to the species table?
+
+    # Is this a foreign key to the species table?
+    species_match_top = Column(String)
+
     species_match_identity = Column(Float)
     species_match_barcode = Column(String)
 
@@ -370,8 +432,12 @@ class Data(LogBase):
     lims_qc = Column(String, ForeignKey("qc_dict.qc_state"))
     auto_qc = Column(String, ForeignKey("qc_dict.qc_state"))
     qc = Column(String, ForeignKey("qc_dict.qc_state"))
-    withdrawn = Column(Boolean)
-    manually_withdrawn = Column(Boolean)
+    visibility = Column(
+        String,
+        ForeignKey("visibility_dict.visibility"),
+        default="Always",
+        index=True,
+    )
     reads = Column(Integer)
     bases = Column(BigInteger)
     read_length_mean = Column(Float)
@@ -772,7 +838,7 @@ class SoftwareVersion(Base):
     def get_id_column_name(cls):
         return "software_version_id"
 
-    software_version_id = Column(Integer, primary_key=True)  # noqa: A003
+    software_version_id = Column(Integer, primary_key=True)
     name = Column(String)
     version = Column(String)
     cmd = Column(String)
@@ -899,5 +965,12 @@ class SpecimenStatusType(Base):
     statuses = relationship("SpecimenStatus", back_populates="status_type")
 
 
-if __name__ == "__main__":
-    main(sys.argv[1:])
+class VisibilityDict(Base):
+    __tablename__ = "visibility_dict"
+
+    @classmethod
+    def get_id_column_name(cls):
+        return "visibility"
+
+    visibility = Column(String, primary_key=True)
+    description = Column(String)
