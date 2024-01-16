@@ -1,9 +1,7 @@
 import click
 import pathlib
-import sys
 
 import tola.marshals
-from tola import db_connection
 from tolqc.model import Base
 
 
@@ -55,4 +53,4 @@ def split_tsv_line(line):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

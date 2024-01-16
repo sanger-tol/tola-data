@@ -1,11 +1,10 @@
 import click
 import inspect
 import logging
-import sys
 from functools import cache
 
 from tola.goat_client import GoaTClient
-from tolqc import (
+from tolqc.sample_data_models import (
     Accession,
     AccessionTypeDict,
     Allocation,

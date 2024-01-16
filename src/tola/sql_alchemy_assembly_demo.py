@@ -144,7 +144,7 @@ def inheritance(obj):
 def test_creation_of_all_classes():
     for mapr in Base.registry.mappers:
         mapr_class = mapr.class_
-        t = mapr_class()
+        mapr_class()
 
 
 if __name__ == "__main__":

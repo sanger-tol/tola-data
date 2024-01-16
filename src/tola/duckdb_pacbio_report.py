@@ -5,7 +5,6 @@ import duckdb
 import inspect
 import pathlib
 import re
-import sys
 import textwrap
 
 from functools import cache
@@ -313,7 +312,7 @@ def report_table_sql():
 
 
 def modification_timestamp(pth):
-    if type(pth) is str:
+    if isinstance(pth, str):
         pth = pathlib.Path(pth)
     return pth.lstat().st_mtime
 

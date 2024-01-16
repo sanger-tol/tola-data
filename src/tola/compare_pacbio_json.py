@@ -3,7 +3,6 @@ import csv
 import json
 import pathlib
 import re
-import sys
 
 
 FILE_TYPE = click.Path(

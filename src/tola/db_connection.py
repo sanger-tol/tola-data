@@ -1,5 +1,4 @@
 import click
-import os
 import mysql.connector
 import psycopg2
 import json

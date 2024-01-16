@@ -1,4 +1,3 @@
-import argparse
 import click
 import datetime
 import logging
@@ -6,15 +5,32 @@ import os
 import pwd
 import pytz
 import re
-import sys
 
 from functools import cache, cached_property
-from sqlalchemy import select
+from sqlalchemy import select, Integer, String
+from sqlalchemy.orm import mapped_column
 
-from tolqc import Data, File, Project, User
+from tolqc import models_list
+from tolqc.model import Base, LogBase
+from tolqc.sample_data_models import Data, File, Project
 from tol.api_client import ApiDataSource, ApiObject
 from tol.core import DataSourceFilter
 from tola import db_connection
+
+from tol.sql.sql_converter import DefaultDataObjectConverter
+
+
+class User(Base):
+    __tablename__ = "user"
+
+    @classmethod
+    def get_id_column_name(cls):
+        return "accession_type_id"
+
+    id = mapped_column(Integer, primary_key=True)  # noqa A003
+    name = mapped_column(String, nullable=False)
+    email = mapped_column(String, nullable=False, unique=True)
+    organisation = mapped_column(String)
 
 
 class MarshalParamType(click.ParamType):
@@ -94,16 +110,16 @@ class TolApiMarshal(TolBaseMarshal):
     def __init__(self):
         self.api_data_source = ApiDataSource(
             {
-                'url': os.getenv('TOLQC_URL') + '/tolqc',
-                'key': os.getenv('TOLQC_API_KEY'),
+                "url": os.getenv("TOLQC_URL") + "/tolqc",
+                "key": os.getenv("TOLQC_API_KEY"),
             }
         )
+        self.model_factory = DefaultDataObjectConverter(
+            {m.get_table_name(): m for m in models_list()}
+        )
 
-    def make_alchemy_object(self, cls, api_obj):
-        spec = api_obj.attributes
-        if cls.get_id_column_name() == 'id':  ### Not necessary?
-            spec["id"] = api_obj.id
-        return cls(**spec)
+    def make_alchemy_object(self, api_obj):
+        return self.model_factory.convert(api_obj)
 
     def fetch_one_or_none(self, cls, spec, selector=None):
         fltr = self.build_filter(cls, spec, selector)
@@ -116,7 +132,7 @@ class TolApiMarshal(TolBaseMarshal):
         if count == 0:
             return None
         elif count == 1:
-            return stored[0]
+            return self.make_alchemy_object(stored[0])
         else:
             raise Exception(f"filter {fltr} returned {count} {cls.__name__} objects")
 
@@ -135,11 +151,11 @@ class TolApiMarshal(TolBaseMarshal):
         id_ = self.pk_field_from_spec(cls, spec)
         api_obj = ApiObject(obj_type, id_, attributes=spec)
         self.api_data_source.create(api_obj)
-        return self.make_alchemy_object(cls, api_obj)
+        return self.make_alchemy_object(api_obj)
 
     def fetch_or_create(self, cls, spec, selector=None):
         if api_obj := self.fetch_one_or_none(cls, spec, selector):
-            return self.make_alchemy_object(cls, api_obj)
+            return self.make_alchemy_object(api_obj)
         else:
             return self.create(cls, spec, selector)
 
@@ -155,7 +171,7 @@ class TolApiMarshal(TolBaseMarshal):
                     changed = True
             if changed:
                 self.api_data_source.update(api_obj)
-            return self.make_alchemy_object(cls, api_obj)
+            return self.make_alchemy_object(api_obj)
         else:
             return self.create(cls, spec, selector)
 
@@ -172,7 +188,7 @@ class TolApiMarshal(TolBaseMarshal):
         return all_props
 
     def list_projects(self):
-        return tuple(self.api_data_source.get_list('projects'))
+        return tuple(self.api_data_source.get_list("project"))
 
 
 class TolSqlMarshal(TolBaseMarshal):
@@ -213,7 +229,7 @@ class TolSqlMarshal(TolBaseMarshal):
     def create(self, cls, spec, selector=None):
         ssn = self.session
         obj = cls(**spec)
-        if cls.has_log_details():
+        if issubclass(cls, LogBase):
             self.update_log_fields(obj)
         ssn.add(obj)
         ssn.flush()  # Fetches any auto-generated primary IDs
@@ -238,7 +254,7 @@ class TolSqlMarshal(TolBaseMarshal):
                     )
                     setattr(obj, prop, val)
                     changed = True
-            if changed and cls.has_log_details():
+            if changed and issubclass(cls, LogBase):
                 self.update_log_fields(obj)
             return self.session.merge(obj)
         else:
@@ -249,7 +265,7 @@ class TolSqlMarshal(TolBaseMarshal):
         return datetime.datetime.now(tz=self.local_tz)
 
     def localize(self, dt, prop):
-        if dt.tzinfo and dt.tzinfo.utcoffset(dt) != None:
+        if dt.tzinfo and dt.tzinfo.utcoffset(dt) is not None:
             # datetime is "aware"
             return dt
         else:
@@ -257,12 +273,8 @@ class TolSqlMarshal(TolBaseMarshal):
             return self.local_tz.localize(dt)
 
     def update_log_fields(self, obj):
-        if not obj.created_at:
-            obj.created_at = self.now
-        if not obj.created_by:
-            obj.created_by = self.user_id
-        obj.last_modified_at = self.now
-        obj.last_modified_by = self.user_id
+        obj.modified_at = self.now
+        obj.modified_by = self.user_id
 
     def list_projects(self):
         query = select(Project).where(Project.lims_id is not None)

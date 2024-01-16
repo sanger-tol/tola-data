@@ -1,14 +1,9 @@
 import click
-import os
 import pathlib
 import re
-import subprocess
-import sys
 import tola.marshals
 
 from tolqc import Accession
-from tol.api_client import ApiDataSource, ApiObject
-from tol.core.datasource_error import DataSourceError
 
 
 @click.command(
