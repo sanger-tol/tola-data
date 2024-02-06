@@ -4,7 +4,7 @@ import requests
 
 
 class TolClient:
-    def __init__(self, tolqc_url=None):
+    def __init__(self, tolqc_url=None, api_token=None):
         self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url)
         self.api_token = self._get_cfg_or_raise("API_TOKEN", api_token)
 
@@ -20,9 +20,27 @@ class TolClient:
             raise ValueError(msg)
         return val
 
+    def _headers(self):
+        return {"Token": self.api_token}
+
+    def json_get(self, path, payload):
+        r = requests.get(
+            f"{self.tolqc_url}/{path}",
+            headers=self._headers,
+            params=payload,
+        )
+        return self._check_response(r)
+
     def json_post(self, path, data):
-        r = requests.post(f"{self.tolqc_url}/path", data=data)
-        if r.status_code == requests.codes.ok:
-            return r.json()
+        r = requests.post(
+            f"{self.tolqc_url}/{path}",
+            headers=self._headers,
+            data=data,
+        )
+        return self._check_response(r)
+
+    def _check_response(self, response):
+        if response.status_code == requests.codes.ok:
+            return response.json()
         else:
-            r.raise_for_status()
+            response.raise_for_status()
