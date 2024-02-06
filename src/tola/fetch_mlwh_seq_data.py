@@ -8,6 +8,7 @@ from functools import cache
 from tola import db_connection
 from tola.nd_json import ndjson_row
 
+
 @click.command()
 @click.argument(
     "project_id_list",
@@ -31,7 +32,6 @@ def cli(project_id_list):
         for run_data_fetcher in pacbio_fetcher, illumina_fetcher:
             for row in run_data_fetcher(mlwh, project_id):
                 sys.stdout.write(ndjson_row(row))
-
 
 
 def illumina_fetcher(mlwh, project_id):
@@ -202,7 +202,6 @@ def pacbio_sql():
           AND study.id_study_lims = %s
         """,
     )
-
 
 
 if __name__ == "__main__":
