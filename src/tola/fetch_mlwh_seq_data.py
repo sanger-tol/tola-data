@@ -6,10 +6,13 @@ import sys
 from functools import cache
 
 from tola import db_connection
+from tola import tolqc_client
 from tola.nd_json import ndjson_row
 
 
 @click.command()
+@tolqc_client.tolqc_url
+@tolqc_client.api_token
 @click.argument(
     "project_id_list",
     metavar="PROJECT_ID",
@@ -17,7 +20,7 @@ from tola.nd_json import ndjson_row
     nargs=-1,
     required=True,
 )
-def cli(project_id_list):
+def cli(tolqc_url, api_token, project_id_list):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
@@ -27,11 +30,13 @@ def cli(project_id_list):
     Where each PROJECT_ID is a numeric project ID,
     e.g. 5901 (Darwin Tree of Life)
     """
+    client = tolqc_client.TolClient(tolqc_url, api_token)
     mlwh = db_connection.mlwh_db()
     for project_id in project_id_list:
         for run_data_fetcher in pacbio_fetcher, illumina_fetcher:
-            for row in run_data_fetcher(mlwh, project_id):
-                sys.stdout.write(ndjson_row(row))
+            row_itr = run_data_fetcher(mlwh, project_id)
+            rspns = client.json_post('loader/seq-data', row_itr)
+            print(rspns, file=sys.stderr)
 
 
 def illumina_fetcher(mlwh, project_id):
@@ -50,7 +55,7 @@ def illumina_fetcher(mlwh, project_id):
             raise ValueError(msg)
 
         row["name_root"] = name_root
-        yield row
+        yield ndjson_row(row)
 
 
 def pacbio_fetcher(mlwh, project_id):
@@ -73,7 +78,7 @@ def pacbio_fetcher(mlwh, project_id):
             continue
 
         row["name_root"] = name_root
-        yield row
+        yield ndjson_row(row)
 
 
 @cache

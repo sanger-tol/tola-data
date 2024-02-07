@@ -2,6 +2,23 @@ import json
 import os
 import requests
 
+import click
+
+
+tolqc_url = click.option(
+    "--tolqc-url",
+    envvar="TOLQC_URL",
+    help="URL of ToL QC database if TOLQC_URL environment variable is not set",
+    required=True,
+)
+
+api_token = click.option(
+    "--api-token",
+    envvar="API_TOKEN",
+    help="API token for ToL QC if API_TOKEN environment variable is not set",
+    required=True,
+)
+
 
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None):
@@ -26,7 +43,7 @@ class TolClient:
     def json_get(self, path, payload):
         r = requests.get(
             f"{self.tolqc_url}/{path}",
-            headers=self._headers,
+            headers=self._headers(),
             params=payload,
         )
         return self._check_response(r)
@@ -34,7 +51,7 @@ class TolClient:
     def json_post(self, path, data):
         r = requests.post(
             f"{self.tolqc_url}/{path}",
-            headers=self._headers,
+            headers=self._headers(),
             data=data,
         )
         return self._check_response(r)
