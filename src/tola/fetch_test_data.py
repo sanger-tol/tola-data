@@ -4,8 +4,10 @@
 
 import datetime
 import inspect
+import io
 import pathlib
 import subprocess
+import re
 import sys
 
 import black
@@ -26,6 +28,7 @@ from tolqc.sample_data_models import (
     Centre,
     Data,
     LibraryType,
+    Project,
     Platform,
     QCDict,
     Run,
@@ -88,7 +91,7 @@ def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db):
     # Fetch sample data
     engine = create_engine(db_uri, echo=echo_sql)
     sample_data = build_sample_data(sessionmaker(bind=engine))
-    print(code_string(sample_data))
+    sys.stdout.write(code_string(sample_data))
 
     if create_db:
         # Create empty database to receive test data
@@ -99,10 +102,6 @@ def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db):
 
         # Populate build database
         populate_database(sessionmaker(bind=build_engine), sample_data)
-
-    # # Dump SQL data file
-    # make_sql_data_file(build_url, sql_data_file)
-    # click.echo(f"Wrote sample data to file: '{sql_data_file}'")
 
     # # Cleanup build database unless it's wanted
     # if delete_build_db:
@@ -140,6 +139,10 @@ def build_sample_data(ssn_maker):
             entries = session.scalars(select(cls)).all()
             fetched.extend(entries)
 
+        # Projects required
+        lims_ids = 5822, 5901, 6327
+        fetched.extend(fetch_projects(session, lims_ids))
+
         # Fetch data for a list of test species
         species_list = "Juncus effusus", "Brachiomonas submarina"
         fetched.extend(fetch_species_data(session, species_list))
@@ -169,7 +172,7 @@ def create_build_db(build_url):
     except ProgrammingError as e:
         if isinstance(e.orig, DuplicateDatabase):
             url_str = build_url.render_as_string(hide_password=True)
-            click.echo(f"Error: database '{url_str}' already exists")
+            click.echo(f"Error: database '{url_str}' already exists", err=True)
             sys.exit(1)
         else:
             raise e
@@ -184,6 +187,11 @@ def drop_build_db(build_url):
 def pg_engine(url):
     pg_url = url.set(database="postgres")
     return create_engine(pg_url, isolation_level="AUTOCOMMIT")
+
+
+def fetch_projects(session, lims_ids):
+    statement = select(Project).where(Project.lims_id.in_(lims_ids))
+    return session.scalars(statement).all()
 
 
 def fetch_species_data(session, species_list):
@@ -207,7 +215,7 @@ def fetch_species_data(session, species_list):
             .selectinload(Specimen.samples)
             .selectinload(Sample.data)
             .selectinload(Data.project_assn)
-            .selectinload(Allocation.project)
+            # .selectinload(Allocation.project)
         )
         .options(
             selectinload(Species.specimens)
@@ -259,10 +267,11 @@ def new_repr(self):
     for name, rel in self.__mapper__.relationships.items():
         try:
             related_objs = getattr(self, name)
-            if not related_objs:
-                # Ignore empty lists
-                continue
         except DetachedInstanceError:
+            # Relationships which were not loaded are not followed
+            continue
+        if not related_objs:
+            # Ignore empty lists
             continue
         attribs.append(f"{name}={related_objs}")
     attrib_str = ", ".join(attribs)
@@ -272,23 +281,104 @@ def new_repr(self):
 Base.__repr__ = new_repr
 
 
-tolp_black_mode = black.Mode(
-    string_normalization=False,
-    line_length=79,
-    target_versions={
-        black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"],
-    },
-)
+def make_black_mode(max_line_length):
+    return black.Mode(
+        string_normalization=False,
+        line_length=max_line_length,
+        target_versions={
+            black.TargetVersion[f"PY{sys.version_info.major}{sys.version_info.minor}"],
+        },
+    )
 
 
-def code_string(obj):
+def code_string(obj, max_line_length=79):
+    tolp_black_mode = make_black_mode(max_line_length - 1)
     obj_repr = repr(obj)
     class_list_str = ", ".join(sorted(class_list))
     imports_header = f"\nfrom tolqc.sample_data_models import {class_list_str}\n\n"
-    return black.format_str(
-        license_string() + imports_header + "TEST_DATA = " + repr(obj),
-        mode=tolp_black_mode,
+    blk_fmt = io.StringIO()
+    blk_fmt.write(
+        black.format_str(
+            license_string() + imports_header + "TEST_DATA = " + repr(obj),
+            mode=tolp_black_mode,
+        )
     )
+    blk_fmt.seek(0)
+
+    out = io.StringIO()
+    for line in blk_fmt:
+        if "{}" in line:
+            line = line[:-1] + "  # noqa: P103\n"
+        if len(line) > max_line_length:
+            line = line.rstrip()
+            if wrapped_line := wrap_strings(line, max_line_length):
+                line = wrapped_line
+            else:
+                line = wrap_numbers(line, max_line_length)
+        out.write(line)
+    return out.getvalue().rstrip() + "\n"
+
+
+def wrap_strings(line, max_line_length):
+    m = re.fullmatch(r"(\s+)(\w+)='(.+)',", line)
+    if not m:
+        return
+    prefix, name, string = m.groups()
+
+    # Build array of wrapped lines
+    out = [f"{prefix}{name}=("]
+    indent = "    "
+    build_init = prefix + indent + "'"
+    build = build_init
+    chunks = split_string(string)
+    for cnk in chunks:
+        if len(build) + len(cnk) > max_line_length - 2:
+            out.append(build + "'")
+            build = build_init
+        build += cnk
+    if build != build_init:
+        out.append(build + "'")
+
+    out.append(f"{prefix}),")
+    return noqa_lines_too_long(out, max_line_length)
+
+
+def split_string(string):
+    chunks = [""]
+    for i, ele in enumerate(re.split(r"(\W+)", string)):
+        if i % 2:
+            chunks.append(ele)
+        else:
+            chunks[-1] += ele
+    return chunks
+
+
+def wrap_numbers(line, max_line_length):
+    m = re.fullmatch(r"(\s+)(\w+)=([\d\.]+),", line)
+    if not m:
+        msg = f"Failed to parse number line: <{line}>"
+        raise ValueError(msg)
+    prefix, name, number = m.groups()
+    indent = "    "
+    out = [
+        f"{prefix}{name}=(",
+        f"{prefix}{indent}{number}",
+        f"{prefix}),",
+    ]
+    return noqa_lines_too_long(out, max_line_length)
+
+
+def noqa_lines_too_long(out, max_line_length):
+    wrapped = io.StringIO()
+    for line in out:
+        wrapped.write(line)
+        if len(line) > max_line_length:
+            if "# noqa:" in line:
+                wrapped.write(", E501")
+            else:
+                wrapped.write("  # noqa: E501")
+        wrapped.write("\n")
+    return wrapped.getvalue()
 
 
 def license_string():
