@@ -270,17 +270,6 @@ def illumina_fetcher(mlwh, project):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project.lims_id,))
     for row in crsr:
-        # Either position (lane) or tag_index (plex) can be NULL
-        if name_root := row["run_id"]:
-            if row["position"]:
-                name_root += "_" + row["position"]
-            if row["tag_index"]:
-                name_root += "#" + row["tag_index"]
-        else:
-            msg = row_message(row, "No run_id for row")
-            raise ValueError(msg)
-
-        row["name_root"] = name_root
         yield row
 
 
@@ -311,7 +300,13 @@ def pacbio_fetcher(mlwh, project):
 def illumina_sql():
     return inspect.cleandoc(
         """
-        SELECT study.id_study_lims AS study_id
+        SELECT REGEXP_REPLACE(
+            -- Trim file suffix, i.e. ".cram"
+            irods.irods_data_relative_path
+              , '\.[[:alnum:]]+$'
+              , ''
+            ) AS name_root
+          , study.id_study_lims AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
           , sample.public_name AS tol_specimen_id
@@ -351,7 +346,7 @@ def illumina_sql():
           AND components.component_index = 1
         JOIN iseq_product_metrics AS product_metrics
           ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
-        LEFT JOIN seq_product_irods_locations AS irods
+        JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
           AND product_metrics.num_reads IS NOT NULL
