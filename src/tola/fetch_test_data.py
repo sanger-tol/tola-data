@@ -6,30 +6,26 @@ import datetime
 import inspect
 import io
 import pathlib
-import subprocess
 import re
+import subprocess
 import sys
 
 import black
 import click
-
 from psycopg2.errors import DuplicateDatabase
-
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
-
 from tolqc.model import Base
 from tolqc.sample_data_models import (
     AccessionTypeDict,
-    Allocation,
     Centre,
     Data,
     LibraryType,
-    Project,
     Platform,
+    Project,
     QCDict,
     Run,
     Sample,
@@ -39,7 +35,7 @@ from tolqc.sample_data_models import (
     VisibilityDict,
 )
 
-data_dir = pathlib.Path(".")
+data_dir = pathlib.Path()
 
 
 @click.command(
@@ -103,7 +99,7 @@ def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db):
         # Populate build database
         populate_database(sessionmaker(bind=build_engine), sample_data)
 
-    # # Cleanup build database unless it's wanted
+    # # Clean up build database unless it's wanted
     # if delete_build_db:
     #     build_engine.dispose()
     #     drop_build_db(build_url)
@@ -119,6 +115,7 @@ def make_sql_data_file(build_url, sql_data_file):
                 build_url.render_as_string(),
             ),
             stdout=sql_fh,
+            check=False,
         )
         sql_dump.check_returncode()
 
@@ -199,7 +196,6 @@ def fetch_species_data(session, species_list):
     Fetches a list of Species from the database, with all their data that
     we're interested in pre-fetched and attached via SELECT IN loads.
     """
-
     statement = (
         select(Species)
         .where(Species.species_id.in_(species_list))
@@ -215,7 +211,6 @@ def fetch_species_data(session, species_list):
             .selectinload(Specimen.samples)
             .selectinload(Sample.data)
             .selectinload(Data.project_assn)
-            # .selectinload(Allocation.project)
         )
         .options(
             selectinload(Species.specimens)
@@ -249,39 +244,50 @@ def fetch_species_data(session, species_list):
     return species_data
 
 
-class_list = set()
+def sqlalchemy_data_objects_repr(sql_alchemy_data):
+    """
+    Monkey patch in our `__repr__` for SQLAlchemy data objects, get a formatted
+    string of the data objects, then restore the original `__repr__`.
+    """
+    class_list = set()
+
+    def new_repr(self):
+        """
+        Replacement for SQLAlchemy's `__repr__` which produces valid python
+        code for building data objects.
+        """
+        class_name = self.__class__.__name__
+        class_list.add(class_name)
+        attribs = []
+        for col in self.__mapper__.columns:
+            name = col.name
+            value = getattr(self, name)
+            if value is not None:
+                if isinstance(value, datetime.datetime):
+                    attribs.append(f"{name}='{value.isoformat()}'")
+                else:
+                    attribs.append(f"{name}={value!r}")
+        for name, rel in self.__mapper__.relationships.items():
+            try:
+                related_objs = getattr(self, name)
+            except DetachedInstanceError:
+                # Relationships which were not loaded are not followed
+                continue
+            if not related_objs:
+                # Ignore empty lists
+                continue
+            attribs.append(f"{name}={related_objs}")
+        attrib_str = ", ".join(attribs)
+        return f"{class_name}({attrib_str})"
+
+    save_repr = Base.__repr__
+    Base.__repr__ = new_repr
+    code_repr = repr(sql_alchemy_data)
+    Base.__repr__ = save_repr
+    return code_repr, class_list
 
 
-def new_repr(self):
-    class_name = self.__class__.__name__
-    class_list.add(class_name)
-    attribs = []
-    for col in self.__mapper__.columns:
-        name = col.name
-        value = getattr(self, name)
-        if value is not None:
-            if isinstance(value, datetime.datetime):
-                attribs.append(f"{name}='{value.isoformat()}'")
-            else:
-                attribs.append(f"{name}={value!r}")
-    for name, rel in self.__mapper__.relationships.items():
-        try:
-            related_objs = getattr(self, name)
-        except DetachedInstanceError:
-            # Relationships which were not loaded are not followed
-            continue
-        if not related_objs:
-            # Ignore empty lists
-            continue
-        attribs.append(f"{name}={related_objs}")
-    attrib_str = ", ".join(attribs)
-    return f"{class_name}({attrib_str})"
-
-
-Base.__repr__ = new_repr
-
-
-def make_black_mode(max_line_length):
+def build_black_mode(max_line_length):
     return black.Mode(
         string_normalization=False,
         line_length=max_line_length,
@@ -291,38 +297,60 @@ def make_black_mode(max_line_length):
     )
 
 
+def black_formatted_string_io(code, black_mode):
+    blk_fmt = io.StringIO()
+    blk_fmt.write(black.format_str(code, mode=black_mode))
+    blk_fmt.seek(0)
+    return blk_fmt
+
+
 def code_string(obj, max_line_length=79):
-    tolp_black_mode = make_black_mode(max_line_length - 1)
-    obj_repr = repr(obj)
+    tolp_black_mode = build_black_mode(max_line_length - 1)
+    obj_repr, class_list = sqlalchemy_data_objects_repr(obj)
     class_list_str = ", ".join(sorted(class_list))
     imports_header = f"\nfrom tolqc.sample_data_models import {class_list_str}\n\n"
-    blk_fmt = io.StringIO()
-    blk_fmt.write(
-        black.format_str(
-            license_string() + imports_header + "TEST_DATA = " + repr(obj),
-            mode=tolp_black_mode,
-        )
+    blk_fmt = black_formatted_string_io(
+        license_string() + imports_header + "TEST_DATA = " + obj_repr,
+        tolp_black_mode,
     )
-    blk_fmt.seek(0)
 
+    wrapped = wrap_lines(blk_fmt, max_line_length)
+    return noqa_lines(wrapped, max_line_length).getvalue().rstrip() + "\n"
+
+
+def noqa_lines(input_io, max_line_length):
     out = io.StringIO()
-    for line in blk_fmt:
+    for line in input_io:
+        noqa = []
         if "{}" in line:
-            line = line[:-1] + "  # noqa: P103\n"
+            noqa.append("P103")
         if len(line) > max_line_length:
-            line = line.rstrip()
-            if wrapped_line := wrap_strings(line, max_line_length):
-                line = wrapped_line
-            else:
-                line = wrap_numbers(line, max_line_length)
+            noqa.append("E501")
+        if noqa:
+            noqa_str = ", ".join(noqa)
+            line = line.rstrip() + f"  # noqa: {noqa_str}\n"
         out.write(line)
-    return out.getvalue().rstrip() + "\n"
+    out.seek(0)
+    return out
+
+
+def wrap_lines(input_io, max_line_length):
+    out = io.StringIO()
+    for line in input_io:
+        if len(line) > max_line_length:
+            for wrapper in wrap_strings, wrap_numbers:
+                if wrapped_line := wrapper(line.rstrip(), max_line_length):
+                    line = wrapped_line
+                    break
+        out.write(line)
+    out.seek(0)
+    return out
 
 
 def wrap_strings(line, max_line_length):
     m = re.fullmatch(r"(\s+)(\w+)='(.+)',", line)
     if not m:
-        return
+        return None
     prefix, name, string = m.groups()
 
     # Build array of wrapped lines
@@ -340,24 +368,38 @@ def wrap_strings(line, max_line_length):
         out.append(build + "'")
 
     out.append(f"{prefix}),")
-    return noqa_lines_too_long(out, max_line_length)
+    return string_with_newlines(out)
 
 
 def split_string(string):
+    """
+    Split string into chunks on punctuation characters. "." is excluded from
+    punctuation characters so that numbers containing decimal points are not
+    split.
+    """
     chunks = [""]
-    for i, ele in enumerate(re.split(r"(\W+)", string)):
+    for i, ele in enumerate(re.split(r"([^\w\.]+)", string)):
         if i % 2:
+            # Begin chunks with punctuation characters. Strings look better
+            # beginning with "/" or " " rather being left on the end of the
+            # previous line.
             chunks.append(ele)
         else:
             chunks[-1] += ele
+
+    # Avoid having a single, trailing punctuation character in a separate
+    # string.
+    if len(chunks[-1]) == 1:
+        last = chunks.pop()
+        chunks[-1] += last
+
     return chunks
 
 
-def wrap_numbers(line, max_line_length):
+def wrap_numbers(line, _):
     m = re.fullmatch(r"(\s+)(\w+)=([\d\.]+),", line)
     if not m:
-        msg = f"Failed to parse number line: <{line}>"
-        raise ValueError(msg)
+        return None
     prefix, name, number = m.groups()
     indent = "    "
     out = [
@@ -365,20 +407,11 @@ def wrap_numbers(line, max_line_length):
         f"{prefix}{indent}{number}",
         f"{prefix}),",
     ]
-    return noqa_lines_too_long(out, max_line_length)
+    return string_with_newlines(out)
 
 
-def noqa_lines_too_long(out, max_line_length):
-    wrapped = io.StringIO()
-    for line in out:
-        wrapped.write(line)
-        if len(line) > max_line_length:
-            if "# noqa:" in line:
-                wrapped.write(", E501")
-            else:
-                wrapped.write("  # noqa: E501")
-        wrapped.write("\n")
-    return wrapped.getvalue()
+def string_with_newlines(lines):
+    return "".join(list(f"{x}\n" for x in lines))
 
 
 def license_string():
@@ -388,7 +421,7 @@ def license_string():
         # SPDX-FileCopyrightText: {this_year} Genome Research Ltd.
         #
         # SPDX-License-Identifier: MIT
-        """
+        """,
     )
 
 
