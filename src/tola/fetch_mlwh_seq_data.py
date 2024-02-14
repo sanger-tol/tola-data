@@ -73,7 +73,7 @@ def illumina_sql():
         SELECT REGEXP_REPLACE(
             -- Trim file suffix, i.e. ".cram"
             irods.irods_data_relative_path
-              , '\.[[:alnum:]]+$'
+              , '\\.[[:alnum:]]+$'
               , ''
             ) AS name_root
           , study.id_study_lims AS study_id
