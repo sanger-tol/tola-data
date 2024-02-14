@@ -7,12 +7,19 @@ from functools import cache
 
 from tola import db_connection
 from tola import tolqc_client
-from tola.nd_json import ndjson_row
+from tola.ndjson import ndjson_row
 
 
 @click.command()
 @tolqc_client.tolqc_url
 @tolqc_client.api_token
+@click.option(
+    '--stdout/--server',
+    'write_to_stdout',
+    default=False,
+    show_default=True,
+    help="Write output to STDOUT",
+)
 @click.argument(
     "project_id_list",
     metavar="PROJECT_ID",
@@ -20,7 +27,7 @@ from tola.nd_json import ndjson_row
     nargs=-1,
     required=True,
 )
-def cli(tolqc_url, api_token, project_id_list):
+def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
@@ -35,8 +42,12 @@ def cli(tolqc_url, api_token, project_id_list):
     for project_id in project_id_list:
         for run_data_fetcher in pacbio_fetcher, illumina_fetcher:
             row_itr = run_data_fetcher(mlwh, project_id)
-            rspns = client.json_post('loader/seq-data', row_itr)
-            print(rspns, file=sys.stderr)
+            if write_to_stdout:
+                for row in row_itr:
+                    sys.stdout.write(row)
+            else:
+                rspns = client.json_post('loader/seq-data', row_itr)
+                print(rspns, file=sys.stderr)
 
 
 def illumina_fetcher(mlwh, project_id):
@@ -52,21 +63,6 @@ def pacbio_fetcher(mlwh, project_id):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
     for row in crsr:
-        if name_root := row["run_id"]:
-            if row["tag1_id"]:
-                name_root += "#" + row["tag1_id"]
-                if row["tag2_id"]:
-                    name_root += "#" + row["tag2_id"]
-            elif row["tag2_id"]:
-                msg = row_message(row, "Do not expect tag2_id without tag1_id")
-                raise ValueError(msg)
-        else:
-            # We don't care about missing movie names for failed sequencing
-            if row["lims_qc"] == "pass":
-                row_info(row, "Missing movie_name")
-            continue
-
-        row["name_root"] = name_root
         yield ndjson_row(row)
 
 
@@ -134,7 +130,18 @@ def illumina_sql():
 def pacbio_sql():
     return inspect.cleandoc(
         """
-        SELECT study.id_study_lims AS study_id
+        SELECT
+          CASE
+            WHEN run.tag2_identifier THEN
+              CONCAT(well_metrics.movie_name
+                , '#', run.tag_identifier
+                , '#', run.tag2_identifier)
+            WHEN run.tag_identifier THEN
+              CONCAT(well_metrics.movie_name
+                , '#', run.tag_identifier)
+            ELSE well_metrics.movie_name
+          END AS name_root
+          , study.id_study_lims AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
           , sample.public_name AS tol_specimen_id
