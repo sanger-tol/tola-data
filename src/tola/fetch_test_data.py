@@ -304,13 +304,18 @@ def black_formatted_string_io(code, black_mode):
     return blk_fmt
 
 
-def code_string(obj, max_line_length=79):
+def code_string(obj, max_line_length=99):
     tolp_black_mode = build_black_mode(max_line_length - 1)
     obj_repr, class_list = sqlalchemy_data_objects_repr(obj)
     class_list_str = ", ".join(sorted(class_list))
     imports_header = f"\nfrom tolqc.sample_data_models import {class_list_str}\n\n"
     blk_fmt = black_formatted_string_io(
-        license_string() + imports_header + "TEST_DATA = " + obj_repr,
+        (
+            license_string()
+            + imports_header
+            + "def test_data():\n    return "
+            + obj_repr
+        ),
         tolp_black_mode,
     )
 
@@ -378,7 +383,7 @@ def split_string(string):
     split.
     """
     chunks = [""]
-    for i, ele in enumerate(re.split(r"([^\w\.]+)", string)):
+    for i, ele in enumerate(re.split(r"([^\w\.#]+)", string)):
         if i % 2:
             # Begin chunks with punctuation characters. Strings look better
             # beginning with "/" or " " rather being left on the end of the
