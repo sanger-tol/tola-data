@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from functools import cache
+from io import StringIO
 
 from tola import db_connection
 from tola import tolqc_client
@@ -14,40 +15,76 @@ from tola.ndjson import ndjson_row
 @tolqc_client.tolqc_url
 @tolqc_client.api_token
 @click.option(
-    '--stdout/--server',
-    'write_to_stdout',
+    "--stdout/--server",
+    "write_to_stdout",
     default=False,
     show_default=True,
-    help="Write output to STDOUT",
+    help="""
+    Writes the fetched MLWH data to STDOUT as NDJSON instead of saving to the
+    ToLQC database.
+    """,
 )
 @click.argument(
     "project_id_list",
     metavar="PROJECT_ID",
     type=click.INT,
     nargs=-1,
-    required=True,
+    required=False,
 )
 def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
     Fetches both Illumina and PacBio sequencing run data by querying the MLWH
-    MySQL database.
+    MySQL database, and prints out a report of new and changed data.
 
     Where each PROJECT_ID is a numeric project ID,
-    e.g. 5901 (Darwin Tree of Life)
+    e.g. 5901 (Darwin Tree of Life).
+
+    Iterates over each project in the ToLQC database if no PROJECT_IDs are
+    supplied.
     """
     client = tolqc_client.TolClient(tolqc_url, api_token)
+    if not project_id_list:
+        project_id_list = client.list_project_lims_ids()
     mlwh = db_connection.mlwh_db()
     for project_id in project_id_list:
-        for run_data_fetcher in pacbio_fetcher, illumina_fetcher:
+        print(f"Fetching data for project '{project_id}'")
+        for platform, run_data_fetcher in (
+            ("PacBio", pacbio_fetcher),
+            ("Illumina", illumina_fetcher),
+        ):
             row_itr = run_data_fetcher(mlwh, project_id)
             if write_to_stdout:
                 for row in row_itr:
                     sys.stdout.write(row)
             else:
-                rspns = client.json_post('loader/seq-data', row_itr)
-                print(rspns, file=sys.stderr)
+                rspns = client.json_post("loader/seq-data", row_itr)
+                print(formatted_response(rspns, project_id, platform))
+
+
+def formatted_response(response, project_id, platform):
+    out = StringIO("")
+
+    new = response.get("new")
+    if new:
+        out.write(f"\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n")
+        for row in new:
+            out.write(response_row_std_fields(row))
+
+    upd = response.get("updated")
+    if upd:
+        out.write(f"\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n")
+        for row in upd:
+            out.write(response_row_std_fields(row))
+            for col, old_new in row["changes"].items():
+                out.write(f"  {col} changed from {old_new[0]!r} to {old_new[1]!r}\n")
+
+    return out.getvalue()
+
+
+def response_row_std_fields(row):
+    return "\t".join(str(row[x]) for x in row if x not in ("project", "changes")) + "\n"
 
 
 def illumina_fetcher(mlwh, project_id):

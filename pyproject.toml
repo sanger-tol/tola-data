@@ -21,6 +21,7 @@ dependencies = [
 duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 compare-pacbio-json="tola.compare_pacbio_json:cli"
 load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
+fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
 

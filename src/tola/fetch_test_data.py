@@ -18,6 +18,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
+from sqlalchemy.types import Integer
 from tolqc.model import Base
 from tolqc.sample_data_models import (
     AccessionTypeDict,
@@ -261,6 +262,8 @@ def sqlalchemy_data_objects_repr(sql_alchemy_data):
         attribs = []
         for col in self.__mapper__.columns:
             name = col.name
+            if name in ('modified_at', 'modified_by'):
+                continue
             value = getattr(self, name)
             if value is not None:
                 if isinstance(value, datetime.datetime):
@@ -353,7 +356,7 @@ def wrap_lines(input_io, max_line_length):
 
 
 def wrap_strings(line, max_line_length):
-    m = re.fullmatch(r"(\s+)(\w+)='(.+)',", line)
+    m = re.fullmatch(r"(\s+)(\w+)='(.+)',?", line)
     if not m:
         return None
     prefix, name, string = m.groups()
@@ -402,7 +405,7 @@ def split_string(string):
 
 
 def wrap_numbers(line, _):
-    m = re.fullmatch(r"(\s+)(\w+)=([\d\.]+),", line)
+    m = re.fullmatch(r"(\s+)(\w+)=([\d\.]+),?", line)
     if not m:
         return None
     prefix, name, number = m.groups()

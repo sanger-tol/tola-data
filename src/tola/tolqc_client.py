@@ -49,6 +49,7 @@ class TolClient:
         return self._check_response(r)
 
     def json_post(self, path, data):
+        print(f"Sending request to '{self.tolqc_url}/{path}'")
         r = requests.post(
             f"{self.tolqc_url}/{path}",
             headers=self._headers(),
@@ -61,3 +62,12 @@ class TolClient:
             return response.json()
         else:
             response.raise_for_status()
+
+    def list_project_lims_ids(self):
+        json = self.json_get('api/v1/project', {})
+        project_lims_ids = []
+        for proj in json["data"]:
+            if lims_id := proj["attributes"].get("lims_id"):
+                project_lims_ids.append(lims_id)
+        return project_lims_ids
+
