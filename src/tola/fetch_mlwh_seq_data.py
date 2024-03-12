@@ -49,7 +49,6 @@ def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
         project_id_list = client.list_project_lims_ids()
     mlwh = db_connection.mlwh_db()
     for project_id in project_id_list:
-        print(f"Fetching data for project '{project_id}'")
         for platform, run_data_fetcher in (
             ("PacBio", pacbio_fetcher),
             ("Illumina", illumina_fetcher),
@@ -59,8 +58,35 @@ def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
                 for row in row_itr:
                     sys.stdout.write(row)
             else:
-                rspns = client.json_post("loader/seq-data", row_itr)
+                rspns = chunk_requests(client, row_itr)
                 print(formatted_response(rspns, project_id, platform))
+
+
+def chunk_requests(client, row_itr):
+    max_request_size = 2 * 1024**2
+    merged_rspns = {}
+    for chunk in chunk_rows(row_itr, max_request_size):
+        rspns = client.json_post("loader/seq-data", chunk)
+        merge_response(merged_rspns, rspns)
+    return merged_rspns
+
+
+def chunk_rows(row_itr, max_request_size):
+    chunk = StringIO()
+    for row in row_itr:
+        if chunk.tell() + len(row) > max_request_size:
+            yield chunk.getvalue()
+            chunk.seek(0)
+            chunk.truncate(0)
+        chunk.write(row)
+
+    yield chunk.getvalue()
+
+
+def merge_response(merged, rspns):
+    for x in rspns:
+        mrg = merged.setdefault(x, [])
+        mrg.extend(rspns[x])
 
 
 def formatted_response(response, project_id, platform):
@@ -74,7 +100,9 @@ def formatted_response(response, project_id, platform):
 
     upd = response.get("updated")
     if upd:
-        out.write(f"\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n")
+        out.write(
+            f"\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n"
+        )
         for row in upd:
             out.write(response_row_std_fields(row))
             for col, old_new in row["changes"].items():
