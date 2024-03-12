@@ -42,7 +42,7 @@ class TolClient:
         return {"Token": self.api_token}
 
     def _build_path(self, path):
-        return "/".join(self.tolqc_url, self.api_path, path)
+        return "/".join((self.tolqc_url, self.api_path, path))
 
     def json_get(self, path, payload):
         r = requests.get(
