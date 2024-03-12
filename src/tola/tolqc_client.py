@@ -22,7 +22,7 @@ api_token = click.option(
 
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None):
-        self.api_path = os.getenv('TOLQC_API_PATH', os.getenv('API_PATH', '/api/v1'))
+        self.api_path = os.getenv('TOLQC_API_PATH', os.getenv('API_PATH', '/api/v1')).lstrip('/')
         self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url)
         self.api_token = self._get_cfg_or_raise("API_TOKEN", api_token)
 
