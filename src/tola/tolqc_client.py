@@ -22,6 +22,7 @@ api_token = click.option(
 
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None):
+        self.api_path = os.getenv('TOLQC_API_PATH', os.getenv('API_PATH', '/api/v1'))
         self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url)
         self.api_token = self._get_cfg_or_raise("API_TOKEN", api_token)
 
@@ -40,18 +41,20 @@ class TolClient:
     def _headers(self):
         return {"Token": self.api_token}
 
+    def _build_path(self, path):
+        return "/".join(self.tolqc_url, self.api_path, path)
+
     def json_get(self, path, payload):
         r = requests.get(
-            f"{self.tolqc_url}/{path}",
+            self._build_path(path),
             headers=self._headers(),
             params=payload,
         )
         return self._check_response(r)
 
     def json_post(self, path, data):
-        print(f"Sending request to '{self.tolqc_url}/{path}'")
         r = requests.post(
-            f"{self.tolqc_url}/{path}",
+            self._build_path(path),
             headers=self._headers(),
             data=data,
         )
