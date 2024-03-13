@@ -59,7 +59,7 @@ def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
                     sys.stdout.write(row)
             else:
                 rspns = chunk_requests(client, row_itr)
-                print(formatted_response(rspns, project_id, platform))
+                print(formatted_response(rspns, project_id, platform), end="")
 
 
 def chunk_requests(client, row_itr):
