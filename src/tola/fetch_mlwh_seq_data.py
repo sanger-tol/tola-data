@@ -197,11 +197,11 @@ def pacbio_sql():
         """
         SELECT
           CASE
-            WHEN run.tag2_identifier THEN
+            WHEN run.tag2_identifier IS NOT NULL THEN
               CONCAT(well_metrics.movie_name
                 , '#', run.tag_identifier
                 , '#', run.tag2_identifier)
-            WHEN run.tag_identifier THEN
+            WHEN run.tag_identifier IS NOT NULL THEN
               CONCAT(well_metrics.movie_name
                 , '#', run.tag_identifier)
             ELSE well_metrics.movie_name
