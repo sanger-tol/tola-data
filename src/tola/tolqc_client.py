@@ -1,4 +1,3 @@
-import json
 import os
 import requests
 
@@ -69,9 +68,9 @@ class TolClient:
             response.raise_for_status()
 
     def list_project_lims_ids(self):
-        json = self.json_get("data/project", {})
+        rspns_json = self.json_get("data/project", {})
         project_lims_ids = []
-        for proj in json["data"]:
+        for proj in rspns_json["data"]:
             if lims_id := proj["attributes"].get("lims_id"):
                 project_lims_ids.append(lims_id)
         return sorted(project_lims_ids, reverse=True)
