@@ -74,4 +74,4 @@ class TolClient:
         for proj in json["data"]:
             if lims_id := proj["attributes"].get("lims_id"):
                 project_lims_ids.append(lims_id)
-        return project_lims_ids
+        return sorted(project_lims_ids, reverse=True)

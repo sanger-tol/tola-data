@@ -94,14 +94,14 @@ def formatted_response(response, project_id, platform):
 
     new = response.get("new")
     if new:
-        out.write(f"\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n")
+        out.write(f"\n\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n")
         for row in new:
             out.write(response_row_std_fields(row))
 
     upd = response.get("updated")
     if upd:
         out.write(
-            f"\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n"
+            f"\n\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n"
         )
         for row in upd:
             out.write(response_row_std_fields(row))
