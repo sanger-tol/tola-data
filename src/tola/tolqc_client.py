@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 import requests
 
@@ -22,9 +24,9 @@ api_token = click.option(
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None):
         self.api_path = os.getenv(
-            "TOLQC_API_PATH", os.getenv("API_PATH", "/api/v1")
-        ).lstrip("/")
-        self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url)
+            "TOLQC_API_PATH", os.getenv("API_PATH", "api/v1")
+        ).strip("/")
+        self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url).rstrip("/")
         self.api_token = self._get_cfg_or_raise("API_TOKEN", api_token)
 
     def _get_cfg_or_raise(self, env_var, val):
@@ -43,14 +45,19 @@ class TolClient:
         return {"Token": self.api_token}
 
     def _build_path(self, path):
+        if path.startswith("/"):
+            msg = "Error: unnecessary leading '/' in path: {path!r}"
+            raise ValueError(msg)
         return "/".join((self.tolqc_url, self.api_path, path))
 
     def json_get(self, path, payload):
+        enc = self._encode_payload(payload)
         r = requests.get(
             self._build_path(path),
             headers=self._headers(),
-            params=payload,
+            params=enc,
         )
+        logging.debug(f"URL = {r.url}")
         return self._check_response(r)
 
     def json_post(self, path, data):
@@ -60,6 +67,17 @@ class TolClient:
             data=data,
         )
         return self._check_response(r)
+
+    def _encode_payload(self, payload):
+        if not payload:
+            return payload
+        enc = {}
+        for k, v in payload.items():
+            if type(v) in (dict, list):
+                enc[k] = json.dumps(v, separators=(",", ":"))
+            else:
+                enc[k] = v
+        return enc
 
     def _check_response(self, response):
         if response.status_code == requests.codes.ok:
