@@ -73,4 +73,4 @@ class TolClient:
         for proj in rspns_json["data"]:
             if lims_id := proj["attributes"].get("lims_id"):
                 project_lims_ids.append(lims_id)
-        return sorted(project_lims_ids, reverse=True)
+        return sorted(project_lims_ids)
