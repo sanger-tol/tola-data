@@ -6,8 +6,7 @@ import sys
 from functools import cache
 from io import StringIO
 
-from tola import db_connection
-from tola import tolqc_client
+from tola import db_connection, tolqc_client
 from tola.ndjson import ndjson_row
 
 
