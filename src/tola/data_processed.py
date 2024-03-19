@@ -13,7 +13,7 @@ from tola import tolqc_ads_client, tolqc_client
 @click.option(
     "--set",
     "set_processed",
-    type=click.Choice(("0", "1")),
+    type=click.Choice(("0", "1", "null")),
     help="Set `data.processed` to this value for each of the NAME_ROOT_LIST",
 )
 @click.argument(
@@ -30,8 +30,11 @@ def cli(tolqc_url, api_token, name_root_list, set_processed):
     Called without arguments it lists data rows where processed = 0
 
     Columns in the output are:
+
       - data.processed, where "N" = null
+
       - data.date (the date of the LIMS QC decision)
+
       - data.name_root
     """
     ads = tolqc_ads_client.tolqc_ads(tolqc_url, api_token)
@@ -52,7 +55,7 @@ def cli(tolqc_url, api_token, name_root_list, set_processed):
 
 
 def set_data_processed(ads, fetched_data, set_processed):
-    set_val = int(set_processed)
+    set_val = None if set_processed == "null" else int(set_processed)
     Obj = ads.data_object_factory
     updates = [
         Obj("data", id_=x.id, attributes={"processed": set_val})
