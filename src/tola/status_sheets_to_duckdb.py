@@ -54,7 +54,8 @@ def cli(duckdb_file):
             msg = f"Error creating table '{sheet_table}' from sheet gid = '{gid}'"
             raise Exception(msg) from e
 
-    con.execute("ALTER TABLE status RENAME COLUMN sample TO specimen")
+    for old_col, new_col in (("sample", "specimen"),("statussummary", "status_summary")):
+        con.execute(f"ALTER TABLE status RENAME COLUMN {old_col} TO {new_col}")
 
     con.commit()
 
