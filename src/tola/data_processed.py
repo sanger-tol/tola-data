@@ -31,7 +31,7 @@ def cli(tolqc_url, api_token, name_root_list, set_processed):
 
     Columns in the output are:
 
-      - data.processed, where "N" = null
+      - data.processed (0, 1 or null)
 
       - data.date (the date of the LIMS QC decision)
 
@@ -44,7 +44,11 @@ def cli(tolqc_url, api_token, name_root_list, set_processed):
         fetched_data = {
             x.name_root: x for x in ads.get_list("data", object_filters=filt)
         }
-        exit_if_not_all_requested_fetched(name_root_list, fetched_data)
+
+        # Check if we found a data record for each name_root
+        if missed := set(name_root_list) - fetched_data.keys():
+            sys.exit(f"Error: Failed to fetch data records named: {sorted(missed)}")
+
         if set_processed is not None:
             set_data_processed(ads, fetched_data, set_processed)
         for name_root in name_root_list:
@@ -67,13 +71,8 @@ def set_data_processed(ads, fetched_data, set_processed):
 
 
 def print_data_row(data):
-    flag = "N" if (x := data.processed) is None else x
-    print(f"{flag}  {data.date.isoformat()}  {data.name_root}")
-
-
-def exit_if_not_all_requested_fetched(wanted, fetched):
-    if missed := set(wanted) - fetched.keys():
-        sys.exit(f"Error: Failed to fetch data records named: {sorted(missed)!s}")
+    flag = "null" if (x := data.processed) is None else x
+    print(f"{flag:<4}  {data.date.isoformat()}  {data.name_root}")
 
 
 def list_unproccessed_data(ads):
