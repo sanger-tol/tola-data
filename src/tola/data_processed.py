@@ -8,6 +8,7 @@ from tola import tolqc_ads_client, tolqc_client
 
 
 @click.command
+@tolqc_client.tolqc_alias
 @tolqc_client.tolqc_url
 @tolqc_client.api_token
 @click.option(
@@ -21,7 +22,7 @@ from tola import tolqc_ads_client, tolqc_client
     nargs=-1,
     required=False,
 )
-def cli(tolqc_url, api_token, name_root_list, set_processed):
+def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
     """
     Show or set the `processed` flag in the ToLQC `data` table.
 
@@ -37,6 +38,9 @@ def cli(tolqc_url, api_token, name_root_list, set_processed):
 
       - data.name_root
     """
+    tolqc_url, api_token = tolqc_client.get_url_and_alias_params(
+        tolqc_alias, tolqc_url, api_token
+    )
     ads = tolqc_ads_client.tolqc_ads(tolqc_url, api_token)
 
     if name_root_list:

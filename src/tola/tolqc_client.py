@@ -5,27 +5,45 @@ import requests
 
 import click
 
+from tola.db_connection import get_connection_params_entry
+
+tolqc_alias = click.option(
+    "--tolqc-alias",
+    help="Name of system to connect to in ~/.connection_params.json",
+    default="tolqc-production",
+)
 
 tolqc_url = click.option(
     "--tolqc-url",
     envvar="TOLQC_URL",
     help="URL of ToL QC database if TOLQC_URL environment variable is not set",
-    required=True,
 )
 
 api_token = click.option(
     "--api-token",
-    envvar="API_TOKEN",
-    help="API token for ToL QC if API_TOKEN environment variable is not set",
-    required=True,
+    envvar="TOLQC_API_TOKEN",
+    help="API token for ToL QC if TOLQC_API_TOKEN environment variable is not set",
 )
+
+
+def get_url_and_alias_params(tolqc_alias, tolqc_url, api_token):
+    if tolqc_url and api_token:
+        return tolqc_url, api_token
+
+    conf = get_connection_params_entry(tolqc_alias)
+    if not tolqc_url:
+        tolqc_url = conf.get("api_url")
+    if not api_token:
+        api_token = conf.get("api_token")
+
+    return tolqc_url, api_token
 
 
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None):
         self.api_path = os.getenv("API_PATH", "/api/v1").strip("/")
         self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url).rstrip("/")
-        self.api_token = self._get_cfg_or_raise("API_TOKEN", api_token)
+        self.api_token = self._get_cfg_or_raise("TOLQC_API_TOKEN", api_token)
 
     def _get_cfg_or_raise(self, env_var, val):
         if not val:
