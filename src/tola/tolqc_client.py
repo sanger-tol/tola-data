@@ -1,11 +1,17 @@
 import json
 import logging
 import os
+import pathlib
 import requests
 
 import click
 
 from tola.db_connection import get_connection_params_entry
+
+ca_file = pathlib.Path("/etc/ssl/certs/ca-certificates.crt")
+if ca_file.exists():
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", str(ca_file))
+
 
 tolqc_alias = click.option(
     "--tolqc-alias",

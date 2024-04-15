@@ -41,6 +41,7 @@ def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
     tolqc_url, api_token = tolqc_client.get_url_and_alias_params(
         tolqc_alias, tolqc_url, api_token
     )
+    print(f"Connecting to {tolqc_url!r} with token {api_token!r}", file=sys.stderr)
     ads = tolqc_ads_client.tolqc_ads(tolqc_url, api_token)
 
     if name_root_list:
