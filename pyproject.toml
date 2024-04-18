@@ -25,6 +25,7 @@ load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
+tqc="tola.tqc_command:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

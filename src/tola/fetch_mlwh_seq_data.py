@@ -13,6 +13,7 @@ from tola.ndjson import ndjson_row
 @click.command()
 @tolqc_client.tolqc_url
 @tolqc_client.api_token
+@tolqc_client.tolqc_alias
 @click.option(
     "--stdout/--server",
     "write_to_stdout",
@@ -30,7 +31,7 @@ from tola.ndjson import ndjson_row
     nargs=-1,
     required=False,
 )
-def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
+def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
@@ -43,7 +44,7 @@ def cli(tolqc_url, api_token, project_id_list, write_to_stdout):
     Iterates over each project in the ToLQC database if no PROJECT_IDs are
     supplied.
     """
-    client = tolqc_client.TolClient(tolqc_url, api_token)
+    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if not project_id_list:
         project_id_list = client.list_project_lims_ids()
     mlwh = db_connection.mlwh_db()

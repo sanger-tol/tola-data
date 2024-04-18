@@ -4,7 +4,12 @@ import os
 import pathlib
 import requests
 
+from functools import cached_property
+
 import click
+
+from tol.api_client2 import create_api_datasource
+from tol.core import core_data_object
 
 from tola.db_connection import get_connection_params_entry
 
@@ -17,6 +22,7 @@ tolqc_alias = click.option(
     "--tolqc-alias",
     help="Name of system to connect to in ~/.connection_params.json",
     default="tolqc-production",
+    show_default=True,
 )
 
 tolqc_url = click.option(
@@ -31,37 +37,35 @@ api_token = click.option(
     help="API token for ToL QC if TOLQC_API_TOKEN environment variable is not set",
 )
 
-
-def get_url_and_alias_params(tolqc_alias, tolqc_url, api_token):
-    if tolqc_url and api_token:
-        return tolqc_url, api_token
-
-    conf = get_connection_params_entry(tolqc_alias)
-    if not tolqc_url:
-        tolqc_url = conf.get("api_url")
-    if not api_token:
-        api_token = conf.get("api_token")
-
-    return tolqc_url, api_token
+log_level = click.option(
+    "--log-level",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        case_sensitive=False,
+    ),
+    default="WARNING",
+    hidden=True,
+    help="Diagnostic messages to show.",
+)
 
 
 class TolClient:
-    def __init__(self, tolqc_url=None, api_token=None):
+    def __init__(self, tolqc_url=None, api_token=None, tolqc_alias=None):
         self.api_path = os.getenv("API_PATH", "/api/v1").strip("/")
-        self.tolqc_url = self._get_cfg_or_raise("TOLQC_URL", tolqc_url).rstrip("/")
-        self.api_token = self._get_cfg_or_raise("TOLQC_API_TOKEN", api_token)
+        conf = get_connection_params_entry(tolqc_alias)
+        self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
+        self.api_token = api_token or conf["api_token"]
 
-    def _get_cfg_or_raise(self, env_var, val):
-        if not val:
-            val = os.getenv(env_var)
-        if not val:
-            lc_var = env_var.lower()
-            msg = (
-                f"Missing '{lc_var}' argument to constructor"
-                f" and environment variable '{env_var}' not set"
-            )
-            raise ValueError(msg)
-        return val
+    @cached_property
+    def ads_client(self):
+        tolqc = create_api_datasource(
+            api_url="/".join((self.tolqc_url, self.api_path)),
+            token=self.api_token,
+            data_prefix="/data",
+        )
+        tolqc.page_size = 200
+        core_data_object(tolqc)
+        return tolqc
 
     def _headers(self):
         return {"Token": self.api_token}

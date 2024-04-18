@@ -4,7 +4,7 @@ import click
 
 from tol.core import DataSourceFilter
 
-from tola import tolqc_ads_client, tolqc_client
+from tola import tolqc_client
 
 
 @click.command
@@ -38,10 +38,8 @@ def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
 
       - data.name_root
     """
-    tolqc_url, api_token = tolqc_client.get_url_and_alias_params(
-        tolqc_alias, tolqc_url, api_token
-    )
-    ads = tolqc_ads_client.tolqc_ads(tolqc_url, api_token)
+    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+    ads = client.ads_client
 
     if name_root_list:
         filt = DataSourceFilter(in_list={"name_root": name_root_list})
