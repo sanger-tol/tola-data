@@ -21,7 +21,7 @@ if ca_file.exists():
 tolqc_alias = click.option(
     "--tolqc-alias",
     help="Name of system to connect to in ~/.connection_params.json",
-    default="tolqc-production",
+    default="tolqc",
     show_default=True,
 )
 
@@ -55,6 +55,7 @@ class TolClient:
         conf = get_connection_params_entry(tolqc_alias)
         self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
         self.api_token = api_token or conf["api_token"]
+        self._set_proxy(conf)
 
     @cached_property
     def ads_client(self):
@@ -66,6 +67,11 @@ class TolClient:
         tolqc.page_size = 200
         core_data_object(tolqc)
         return tolqc
+
+    def _set_proxy(self, conf):
+        if proxy := conf.get("proxy"):
+            scheme = "HTTPS_PROXY" if self.tolqc_url.startswith("https") else "HTTP_PROXY"
+            os.environ[scheme] = proxy
 
     def _headers(self):
         return {"Token": self.api_token}
