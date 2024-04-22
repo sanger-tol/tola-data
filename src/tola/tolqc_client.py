@@ -20,7 +20,10 @@ if ca_file.exists():
 
 tolqc_alias = click.option(
     "--tolqc-alias",
-    help="Name of system to connect to in ~/.connection_params.json",
+    help=(
+        "Name of connection parameters alias in ~/.connection_params.json"
+        " to connect to."
+    ),
     default="tolqc",
     show_default=True,
 )
@@ -28,13 +31,21 @@ tolqc_alias = click.option(
 tolqc_url = click.option(
     "--tolqc-url",
     envvar="TOLQC_URL",
-    help="URL of ToL QC database if TOLQC_URL environment variable is not set",
+    help=(
+        "URL of ToL QC API. Overrides TOLQC_URL environment variable if set,"
+        " which in turn overrides the ~/.connection_params.json value of"
+        " `api_url` for the alias."
+    ),
 )
 
 api_token = click.option(
     "--api-token",
-    envvar="TOLQC_API_TOKEN",
-    help="API token for ToL QC if TOLQC_API_TOKEN environment variable is not set",
+    envvar="TOLQC_API_KEY",
+    help=(
+        "Token for the ToL QC API. Overrides TOLQC_API_KEY environment variable"
+        " if set, which in turn overrides the ~/.connection_params.json value"
+        " of `api_token` for the alias."
+    ),
 )
 
 log_level = click.option(
@@ -51,11 +62,12 @@ log_level = click.option(
 
 class TolClient:
     def __init__(self, tolqc_url=None, api_token=None, tolqc_alias=None):
-        self.api_path = os.getenv("API_PATH", "/api/v1").strip("/")
-        conf = get_connection_params_entry(tolqc_alias)
+        self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
+        if not (tolqc_url and api_token):
+            conf = get_connection_params_entry(tolqc_alias)
+            self._set_proxy(conf)
         self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
         self.api_token = api_token or conf["api_token"]
-        self._set_proxy(conf)
 
     @cached_property
     def ads_client(self):
@@ -70,7 +82,9 @@ class TolClient:
 
     def _set_proxy(self, conf):
         if proxy := conf.get("proxy"):
-            scheme = "HTTPS_PROXY" if self.tolqc_url.startswith("https") else "HTTP_PROXY"
+            scheme = (
+                "HTTPS_PROXY" if self.tolqc_url.startswith("https") else "HTTP_PROXY"
+            )
             os.environ[scheme] = proxy
 
     def _headers(self):
