@@ -70,7 +70,7 @@ class TolClient:
         self.api_token = api_token or conf["api_token"]
 
     @cached_property
-    def ads_client(self):
+    def ads(self):
         tolqc = create_api_datasource(
             api_url="/".join((self.tolqc_url, self.api_path)),
             token=self.api_token,

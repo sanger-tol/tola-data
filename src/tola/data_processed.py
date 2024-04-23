@@ -39,7 +39,7 @@ def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
       - data.name_root
     """
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
-    ads = client.ads_client
+    ads = client.ads
 
     if name_root_list:
         filt = DataSourceFilter(in_list={"name_root": name_root_list})
