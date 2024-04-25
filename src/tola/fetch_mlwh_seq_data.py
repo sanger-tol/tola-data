@@ -1,6 +1,5 @@
 import click
 import inspect
-import json
 import logging
 import sys
 from functools import cache
