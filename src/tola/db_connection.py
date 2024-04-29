@@ -10,6 +10,10 @@ from sqlalchemy.orm import sessionmaker
 from psycopg2.extras import DictCursor
 
 
+class ConnectionParamsException(Exception):
+    """Error in the ~/.connection_params.json config file"""
+
+
 class TolQCDBEngineParamType(click.ParamType):
     name = "tolqc-db-engine"
 
@@ -21,7 +25,7 @@ class TolQCDBEngineParamType(click.ParamType):
 
 
 tolqc_db = click.option(
-    '--tolqc-db',
+    "--tolqc-db",
     type=TolQCDBEngineParamType(),
     envvar="TOLQC_DB",
     default="tolqc-staging",
@@ -73,18 +77,23 @@ def get_connection_url(db_alias):
     )
 
 
-def get_connection_params_entry(db_alias):
+def get_connection_params_entry(alias):
     params_name = ".connection_params.json"
     params_file = Path().home() / params_name
 
+    try:
+        mode = params_file.stat().st_mode & 0o777
+    except FileNotFoundError:
+        msg = f"Missing ~/{params_name} file"
+        raise ConnectionParamsException(msg)
+
     # Check permissions are 0600
-    mode = params_file.stat().st_mode & 0o777
     if mode != 0o600:
         msg = f"~/{params_name} must be mode 0600 but is mode 0{mode:o}"
-        raise ValueError(msg)
+        raise ConnectionParamsException(msg)
 
-    if db_params := json.loads(params_file.read_text()).get(db_alias):
+    if db_params := json.loads(params_file.read_text()).get(alias):
         return db_params
     else:
-        msg = f"Database alias '{db_alias}' not found in ~/{params_name} file"
-        raise ValueError(msg)
+        msg = f"Alias '{alias}' not found in ~/{params_name} file"
+        raise ConnectionParamsException(msg)

@@ -48,6 +48,19 @@ api_token = click.option(
     ),
 )
 
+
+file_format = click.option(
+    "--format",
+    "file_format",
+    type=click.Choice(
+        ["NDJSON", "TXT"],
+        case_sensitive=False,
+    ),
+    default=None,
+    show_default=True,
+    help="Format of input file(s) or STDIN",
+)
+
 log_level = click.option(
     "--log-level",
     type=click.Choice(
