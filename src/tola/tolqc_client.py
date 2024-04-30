@@ -48,7 +48,6 @@ api_token = click.option(
     ),
 )
 
-
 file_format = click.option(
     "--format",
     "file_format",

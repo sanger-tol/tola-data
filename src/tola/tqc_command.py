@@ -9,7 +9,7 @@ from tol.core import DataSourceFilter
 
 from tola import tolqc_client
 from tola.db_connection import ConnectionParamsException
-from tola.ndjson import parse_ndjson_stream
+from tola.ndjson import ndjson_row, parse_ndjson_stream
 
 table = click.option(
     "--table",
@@ -106,8 +106,8 @@ def edit_col(
 ):
     """Show or set the value of a column for a list of IDs.
 
-    ID_LIST is a list of IDs to operate on, which can, alternatively, be
-    provided on STDIN or in --file arguments.
+    ID_LIST is a list of IDs to operate on, which can additionally be provided
+    in --file arugments, or alternatively piped to STDIN.
     """
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
@@ -136,9 +136,8 @@ def edit_col(
                 ads.upsert(table, updates)
             click.echo(f"previous_value\t{table}.{column_name}\t{key}")
             click.echo(msg.getvalue(), nl=False)
-
-        if not apply_flag:
-            click.echo("Dry run. Use '--apply' flag to store changes.", err=True)
+            if not apply_flag:
+                click.echo("Dry run. Use '--apply' flag to store changes.", err=True)
 
     elif fetched:
         click.echo(f"{table}.{column_name}\t{key}")
@@ -149,14 +148,73 @@ def edit_col(
 
 
 @cli.command
-@click.pass_obj
+@click.pass_context
 @table
 @key
-@file
 @apply_flag
-def edit_rows(client, table, key, file_list, apply_flag):
-    """Populate or update rows in a table from ND-JSON input"""
-    pass
+@click.argument(
+    "input_files",
+    nargs=-1,
+    required=False,
+    type=click.Path(
+        path_type=pathlib.Path,
+        exists=True,
+        readable=True,
+    ),
+)
+def edit_rows(ctx, table, key, apply_flag, input_files):
+    """Populate or update rows in a table from ND-JSON input
+
+    INPUT_FILES is a list of files in ND-JSON format. Each row is expected to
+    contain a value for the key used to identify each record. Any other
+    values given will be used to update columns for the record.
+    """
+
+    if not input_files and sys.stdin.isatty():
+        err = "Error: " + click.style(
+            "Missing INPUT_FILES arguments or STDIN input", bold=True
+        )
+        sys.exit(ctx.get_help() + "\n\n" + err)
+
+    input_obj = []
+    if input_files:
+        for file in input_files:
+            with file.open() as fh:
+                input_obj.extend(parse_ndjson_stream(fh))
+    else:
+        input_obj.extend(parse_ndjson_stream(sys.stdin))
+
+    client = ctx.obj
+    ads = client.ads
+    ObjFactory = ads.data_object_factory
+    id_list = list(x[key] for x in input_obj)
+    db_obj = fetch_all(client, table, key, id_list)
+    updates = []
+    changes = []
+    for inp, obj in zip(input_obj, db_obj, strict=True):
+        attr = {}
+        chng = {}
+        for k, inp_v in inp.items():
+            if k == 'id':
+                continue
+            obj_v = obj.get(k)
+            if inp_v != obj_v:
+                attr[k] = inp_v
+                chng[k] = obj_v, inp_v
+        if attr:
+            changes.append(chng)
+            updates.append(
+                ObjFactory(table, id_=obj.id, attributes=attr)
+            )
+    if updates:
+        if apply_flag:
+            ads.upsert(table, updates)
+        for chng in changes:
+            print(ndjson_row(chng))
+
+
+
+
 
 
 @cli.command
@@ -164,10 +222,21 @@ def edit_rows(client, table, key, file_list, apply_flag):
 @table
 @key
 @file
+@tolqc_client.file_format
 @id_list
-def show(client, table, key, file_list, id_list):
-    """Show rows from a table in the ToLQC database"""
-    pass
+def show(client, table, key, file_list, file_format, id_list):
+    """Show rows from a table in the ToLQC database
+
+    ID_LIST is a list of IDs to operate on, which can additionally be provided
+    in --file arugments, or alternatively piped to STDIN.
+    """
+
+    id_list = tuple(id_iterator(key, id_list, file_list, file_format))
+    fetched = fetch_all(client, table, key, id_list)
+    for obj in fetched:
+        print(obj)
+        # print(ndjson_row(obj.attributes), end="")
+
 
 
 def null_if_none(val):
@@ -183,35 +252,34 @@ def fetch_all(client, table, key, id_list):
     # Check if we found a data record for each name_root
     if missed := set(id_list) - fetched_data.keys():
         sys.exit(
-            "Error: Failed to fetch records where"
-            f" {table}.{key} in list: {sorted(missed)}"
+            f"Error: Failed to fetch records for {table}.{key} in: {sorted(missed)}"
         )
 
-    return [fetched_data[x] for x in id_list]
+    return list(fetched_data[x] for x in id_list)
 
 
-def id_iterator(key, id_list, file_list, file_format):
+def id_iterator(key, id_list=None, file_list=None, file_format=None):
     if id_list:
-        for id_ in id_list:
-            yield id_
-    elif file_list:
+        for oid in id_list:
+            yield oid
+
+    if file_list:
         for file in file_list:
             fmt = file_format or guess_file_type(file)
             with file.open() as fh:
                 if fmt == "NDJSON":
-                    for id_ in ids_from_ndjson_stream(key, fh):
-                        yield id_
+                    for oid in ids_from_ndjson_stream(key, fh):
+                        yield oid
                 else:
-                    for id_ in parse_id_list_stream(fh):
-                        yield id_
-    elif not sys.stdin.isatty():
-        # Read from UNIX pipe
+                    for oid in parse_id_list_stream(fh):
+                        yield oid
+    elif not (id_list or sys.stdin.isatty()):
+        # No IDs or files given on command line, and input is not attached to
+        # a terminal, so read from STDIN.
         if file_format and file_format == "NDJSON":
-            for id_ in ids_from_ndjson_stream(sys.stdin):
-                yield id_
+            return ids_from_ndjson_stream(key, sys.stdin)
         else:
-            for id_ in parse_id_list_stream(sys.stdin):
-                yield id_
+            return parse_id_list_stream(sys.stdin)
 
 
 def guess_file_type(file):
@@ -219,13 +287,13 @@ def guess_file_type(file):
     return "NDJSON" if extn == ".ndjson" else "TXT"
 
 
-def parse_id_list_stream(file):
-    for line in file.open():
+def parse_id_list_stream(fh):
+    for line in fh:
         yield line.strip()
 
 
-def ids_from_ndjson_stream(key, file):
-    for row in parse_ndjson_stream(file.open()):
-        id_ = row[key]
-        if id_ is not None:
-            yield id_
+def ids_from_ndjson_stream(key, fh):
+    for row in parse_ndjson_stream(fh):
+        oid = row[key]
+        if oid is not None:
+            yield oid
