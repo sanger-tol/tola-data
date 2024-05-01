@@ -2,7 +2,6 @@ import datetime
 import json
 import os
 import pytz
-import sys
 
 # Ideally the timezone could be collected from the source, such as the MLWH
 # MySQL server.
@@ -34,6 +33,10 @@ def ndjson_row(data):
     return json.dumps(data, cls=DateTimeZoneEncoder, separators=(",", ":")) + "\n"
 
 
+def pretty_row(data):
+    return json.dumps(data, cls=DateTimeZoneEncoder, indent=4)
+
+
 def parse_ndjson_stream(stream):
     for line in stream:
         yield parse_ndjson_row(line)
@@ -45,11 +48,11 @@ def parse_ndjson_row(line):
         msg = f"Unexpectedly long line ({len(line):_d} characters) in input"
         raise ValueError(msg)
     row = json.loads(line)
-    if type(row) is not dict:
+    if type(row) is not dict:  # noqa: E721
         msg = f"JSON must decode to a dict, not a {type(row)}"
         raise ValueError(msg)
     for k, v in row.items():
-        if type(v) is str:
+        if type(v) is str:  # noqa: E721
             # Avoid empty strings
             stripped = v.strip()
             row[k] = None if stripped == "" else stripped

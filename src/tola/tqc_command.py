@@ -111,12 +111,12 @@ def edit_col(
     """
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
-    fetched = fetch_all(client, table, key, id_list)
+    fetched = fetch_all_unique(client, table, key, id_list)
 
     ads = client.ads
     ObjFactory = ads.data_object_factory
     if set_value:
-        py_value = None if set_value == "null" else set_value
+        py_value = convert_type(set_value)
         updates = []
         msg = io.StringIO()
         for obj in fetched:
@@ -184,37 +184,37 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     else:
         input_obj.extend(parse_ndjson_stream(sys.stdin))
 
+    if not input_obj:
+        sys.exit("No input objects")
+
     client = ctx.obj
     ads = client.ads
     ObjFactory = ads.data_object_factory
     id_list = list(x[key] for x in input_obj)
-    db_obj = fetch_all(client, table, key, id_list)
+    db_obj = fetch_all_unique(client, table, key, id_list)
+    id_key = cdo_type_id(db_obj[0])
+    flat_obj = list(core_data_object_to_dict(x) for x in db_obj)
     updates = []
     changes = []
-    for inp, obj in zip(input_obj, db_obj, strict=True):
+    for inp, flat, obj in zip(input_obj, flat_obj, db_obj, strict=True):
         attr = {}
         chng = {}
         for k, inp_v in inp.items():
-            if k == 'id':
-                continue
-            obj_v = obj.get(k)
-            if inp_v != obj_v:
-                attr[k] = inp_v
-                chng[k] = obj_v, inp_v
+            if k == id_key:
+                chng[id_key] = inp_v
+            else:
+                flat_v = flat.get(k)
+                if inp_v != flat_v:
+                    attr[k] = inp_v
+                    chng[k] = flat_v, inp_v
         if attr:
             changes.append(chng)
-            updates.append(
-                ObjFactory(table, id_=obj.id, attributes=attr)
-            )
+            updates.append(ObjFactory(table, id_=obj.id, attributes=attr))
     if updates:
         if apply_flag:
             ads.upsert(table, updates)
         for chng in changes:
             print(ndjson_row(chng))
-
-
-
-
 
 
 @cli.command
@@ -233,35 +233,108 @@ def show(client, table, key, file_list, file_format, id_list):
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
-    for obj in fetched:
-        print(obj)
-        # print(ndjson_row(obj.attributes), end="")
-
+    if sys.stdout.isatty():
+        click.echo(f"Printing {len(fetched)} records", err=True)
+        click.echo_via_pager(pretty_itr(fetched, key))
+    else:
+        for cdo in fetched:
+            sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
 
 
 def null_if_none(val):
     return "null" if val is None else val
 
 
-def fetch_all(client, table, key, id_list):
+def fetch_all_unique(client, table, key, id_list):
     filt = DataSourceFilter(in_list={key: id_list})
-    fetched_data = {
-        getattr(x, key): x for x in client.ads.get_list(table, object_filters=filt)
-    }
+    fetched = list(client.ads.get_list(table, object_filters=filt))
+    key_fetched = {}
+    if fetched:
+        idx_key = "id" if key == cdo_type_id(fetched[0]) else key
+        key_fetched = {getattr(x, idx_key): x for x in fetched}
 
     # Check if we found a data record for each name_root
-    if missed := set(id_list) - fetched_data.keys():
+    if missed := set(id_list) - key_fetched.keys():
         sys.exit(
             f"Error: Failed to fetch records for {table}.{key} in: {sorted(missed)}"
         )
 
-    return list(fetched_data[x] for x in id_list)
+    # Return objects in the order they were requested
+    return list(key_fetched[x] for x in id_list)
+
+
+def fetch_all(client, table, key, id_list):
+    filt = DataSourceFilter(in_list={key: id_list})
+    return list(client.ads.get_list(table, object_filters=filt))
+
+
+def cdo_type_id(cdo):
+    return f"{cdo.type}_id"
+
+
+def core_data_object_to_dict(cdo):
+    """Flattens a CoreDataObject to a dict"""
+
+    # The object's ID
+    flat = {cdo_type_id(cdo): cdo.id}
+
+    # The IDs of the object's to-one related objects
+    for rel_name in cdo.to_one_relationships:
+        flat[f"{rel_name}_id"] = (
+            getattr(rltd, "id") if (rltd := getattr(cdo, rel_name)) else None
+        )
+
+    # The object's attributes
+    for k, v in cdo.attributes.items():
+        if k in ("modified_at", "modified_by"):
+            continue
+        flat[k] = v
+
+    return flat
+
+
+def pretty_itr(obj_list, key):
+    if not obj_list:
+        return
+
+    yield f"Found {bold(len(obj_list))} records:\n\n"
+
+    cdo_key = cdo_type_id(obj_list[0])
+    obj_list = list(core_data_object_to_dict(x) for x in obj_list)
+
+    first = obj_list[0]
+    max_hdr = max(len(k) for k in first)
+
+    if key not in first and key == "id":
+        if cdo_key in first:
+            key = cdo_key
+        else:
+            sys.exit(
+                f"Possible key values '{key}' or '{cdo_key}' not in: {first.keys()}"
+            )
+
+    fmt = io.StringIO("\n")
+    for flat in obj_list:
+        for k, v in flat.items():
+            style = bold
+            if v == "":
+                v = "<empty string>"
+                style = bold_red
+            elif v is None:
+                v = "null"
+                style = dim
+            elif k == key:
+                style = bold_green
+
+            fmt.write(f" {k:>{max_hdr}}  {style(v)}\n")
+        fmt.write("\n")
+        yield fmt.getvalue()
 
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
     if id_list:
         for oid in id_list:
-            yield oid
+            yield convert_type(oid)
 
     if file_list:
         for file in file_list:
@@ -282,6 +355,26 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
             return parse_id_list_stream(sys.stdin)
 
 
+def dim(txt):
+    return click.style(txt, dim=True)
+
+
+def bold_green(txt):
+    return click.style(txt, bold=True, fg="green")
+
+
+def bold_red(txt):
+    return click.style(txt, bold=True, fg="red")
+
+
+def bold(txt):
+    return click.style(txt, bold=True)
+
+
+def no_style(txt):
+    return txt
+
+
 def guess_file_type(file):
     extn = file.suffix.lower()
     return "NDJSON" if extn == ".ndjson" else "TXT"
@@ -297,3 +390,24 @@ def ids_from_ndjson_stream(key, fh):
         oid = row[key]
         if oid is not None:
             yield oid
+
+
+def convert_type(txt):
+    """
+    Values given on the command line are always strings.
+
+    'null' is converted to `None`.
+
+    If conversion to `int` or `float` works, return that, or else return the
+    original string.
+    """
+    if txt == "null":
+        return None
+    else:
+        try:
+            return int(txt)
+        except ValueError:
+            try:
+                return float(txt)
+            except ValueError:
+                return txt
