@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import pathlib
 import sys
@@ -68,7 +69,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     except ConnectionParamsException as cpe:
         if sys.stdout.isatty():
             # Show help if we're on a TTY
-            err = "Error: " + click.style("\n".join(cpe.args), bold=True)
+            err = "Error: " + bold("\n".join(cpe.args))
             sys.exit(ctx.get_help() + "\n\n" + err)
         else:
             raise cpe
@@ -137,7 +138,7 @@ def edit_col(
             click.echo(f"previous_value\t{table}.{column_name}\t{key}")
             click.echo(msg.getvalue(), nl=False)
             if not apply_flag:
-                click.echo("Dry run. Use '--apply' flag to store changes.", err=True)
+                click.echo(dry_warning(len(updates)), err=True)
 
     elif fetched:
         click.echo(f"{table}.{column_name}\t{key}")
@@ -171,9 +172,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     """
 
     if not input_files and sys.stdin.isatty():
-        err = "Error: " + click.style(
-            "Missing INPUT_FILES arguments or STDIN input", bold=True
-        )
+        err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
         sys.exit(ctx.get_help() + "\n\n" + err)
 
     input_obj = []
@@ -192,17 +191,15 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     ObjFactory = ads.data_object_factory
     id_list = list(x[key] for x in input_obj)
     db_obj = fetch_all_unique(client, table, key, id_list)
-    id_key = cdo_type_id(db_obj[0])
+    # id_key = cdo_type_id(db_obj[0])
     flat_obj = list(core_data_object_to_dict(x) for x in db_obj)
     updates = []
     changes = []
     for inp, flat, obj in zip(input_obj, flat_obj, db_obj, strict=True):
         attr = {}
-        chng = {}
+        chng = {key: inp[key]}
         for k, inp_v in inp.items():
-            if k == id_key:
-                chng[id_key] = inp_v
-            else:
+            if k != key:
                 flat_v = flat.get(k)
                 if inp_v != flat_v:
                     attr[k] = inp_v
@@ -213,8 +210,13 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     if updates:
         if apply_flag:
             ads.upsert(table, updates)
-        for chng in changes:
-            print(ndjson_row(chng))
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
+        else:
+            for chng in changes:
+                sys.stdout.write(ndjson_row(chng))
+            if not apply_flag:
+                dry_warning(len(updates))
 
 
 @cli.command
@@ -229,16 +231,24 @@ def show(client, table, key, file_list, file_format, id_list):
 
     ID_LIST is a list of IDs to operate on, which can additionally be provided
     in --file arugments, or alternatively piped to STDIN.
+
+    Output is in human readable format if STOUT is a terminal, or ND-JSON if
+    redirected to a file or UNIX pipe.
     """
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
         click.echo(f"Printing {len(fetched)} records", err=True)
-        click.echo_via_pager(pretty_itr(fetched, key))
+        click.echo_via_pager(pretty_row_itr(fetched, key))
     else:
         for cdo in fetched:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
+
+
+def dry_warning(count):
+    plural = "" if count == 1 else "s"
+    return f"Dry run. Use '--apply' flag to store {bold(count)} changed row{plural}.\n"
 
 
 def null_if_none(val):
@@ -264,8 +274,11 @@ def fetch_all_unique(client, table, key, id_list):
 
 
 def fetch_all(client, table, key, id_list):
-    filt = DataSourceFilter(in_list={key: id_list})
-    return list(client.ads.get_list(table, object_filters=filt))
+    if id_list:
+        filt = DataSourceFilter(in_list={key: id_list})
+        return list(client.ads.get_list(table, object_filters=filt))
+    else:
+        return list(client.ads.get_list(table))
 
 
 def cdo_type_id(cdo):
@@ -293,16 +306,16 @@ def core_data_object_to_dict(cdo):
     return flat
 
 
-def pretty_itr(obj_list, key):
-    if not obj_list:
+def pretty_row_itr(row_list, key):
+    if not row_list:
         return
 
-    yield f"Found {bold(len(obj_list))} records:\n\n"
+    yield f"Found {bold(len(row_list))} records:\n\n"
 
-    cdo_key = cdo_type_id(obj_list[0])
-    obj_list = list(core_data_object_to_dict(x) for x in obj_list)
+    cdo_key = cdo_type_id(row_list[0])
+    flat_list = list(core_data_object_to_dict(x) for x in row_list)
 
-    first = obj_list[0]
+    first = flat_list[0]
     max_hdr = max(len(k) for k in first)
 
     if key not in first and key == "id":
@@ -313,22 +326,56 @@ def pretty_itr(obj_list, key):
                 f"Possible key values '{key}' or '{cdo_key}' not in: {first.keys()}"
             )
 
-    fmt = io.StringIO("\n")
-    for flat in obj_list:
+    fmt = io.StringIO()
+    fmt.write("\n")
+    for flat in flat_list:
         for k, v in flat.items():
-            style = bold
-            if v == "":
-                v = "<empty string>"
-                style = bold_red
-            elif v is None:
-                v = "null"
-                style = dim
-            elif k == key:
+            v, style = field_style(v)
+            if k == key:
                 style = bold_green
 
             fmt.write(f" {k:>{max_hdr}}  {style(v)}\n")
-        fmt.write("\n")
         yield fmt.getvalue()
+
+
+def pretty_changes_itr(changes, apply_flag):
+    n_changes = len(changes)
+    plural = "" if changes == 1 else "s"
+    verb = "Made" if apply_flag else "Found"
+    yield f"{verb} {bold(n_changes)} change{plural}:\n"
+
+    for chng in changes:
+        key, *v_keys = chng.keys()
+        fmt = io.StringIO()
+        fmt.write(f"\n{key}  {bold(chng[key])}\n")
+
+        v_key_max = max(len(x) for x in v_keys)
+        old_values = []
+        new_values = []
+        for k in v_keys:
+            old, new = chng[k]
+            old_values.append(field_style(old))
+            new_values.append(field_style(new))
+        old_val_max = max(len(x[0]) for x in old_values)
+
+        for k, (old_val, old_style), (new_val, new_style) in zip(
+            v_keys, old_values, new_values, strict=True
+        ):
+            old_fmt = f"{old_style(old_val):>{old_val_max}}"
+            new_fmt = new_style(new_val)
+            fmt.write(f"  {k:>{v_key_max}}  {old_fmt} to {new_fmt}")
+        yield fmt.getvalue()
+
+    if not apply_flag:
+        yield "\n\n" + dry_warning(len(changes))
+
+
+def field_style(val):
+    if val == "":
+        return "<empty_string>", bold_red
+    if val is None:
+        return "null", dim
+    return val, bold
 
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
@@ -369,10 +416,6 @@ def bold_red(txt):
 
 def bold(txt):
     return click.style(txt, bold=True)
-
-
-def no_style(txt):
-    return txt
 
 
 def guess_file_type(file):
