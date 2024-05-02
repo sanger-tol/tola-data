@@ -1,3 +1,4 @@
+import datetime
 import io
 import json
 import logging
@@ -392,7 +393,9 @@ def field_style(val):
         return "<empty_string>", bold_red
     if val is None:
         return "null", dim
-    return val, bold
+    if isinstance(val, datetime.date):
+        return val.isoformat(), bold
+    return repr(val), bold
 
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
