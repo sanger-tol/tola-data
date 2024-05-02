@@ -119,7 +119,7 @@ def edit_col(
     if set_value:
         py_value = convert_type(set_value)
         updates = []
-        msg = io.StringIO()
+        changes = []
         for obj in fetched:
             val = getattr(obj, column_name)
             logging.debug(f"{obj.attributes}")
@@ -130,22 +130,31 @@ def edit_col(
                 updates.append(
                     ObjFactory(table, id_=obj.id, attributes={column_name: py_value})
                 )
-                msg.write(f"{null_if_none(val)}\t{set_value}\t{oid}\n")
+                changes.append({key: oid, column_name: (val, py_value)})
 
         if updates:
             if apply_flag:
                 ads.upsert(table, updates)
-            click.echo(f"previous_value\t{table}.{column_name}\t{key}")
-            click.echo(msg.getvalue(), nl=False)
-            if not apply_flag:
-                click.echo(dry_warning(len(updates)), err=True)
+
+            if sys.stdout.isatty():
+                click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
+            else:
+                for row in changes:
+                    sys.stdout.write(ndjson_row(row))
+                if not apply_flag:
+                    click.echo(dry_warning(len(updates)), err=True)
 
     elif fetched:
-        click.echo(f"{table}.{column_name}\t{key}")
+        show_data = []
         for obj in fetched:
             val = obj.attributes.get(column_name)
             oid = getattr(obj, key)
-            click.echo(f"{null_if_none(val)}\t{oid}")
+            show_data.append({key: oid, column_name: val})
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_dict_itr(show_data, key))
+        else:
+            for row in show_data:
+                sys.stdout.write(ndjson_row(row))
 
 
 @cli.command
@@ -240,7 +249,7 @@ def show(client, table, key, file_list, file_format, id_list):
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
         click.echo(f"Printing {len(fetched)} records", err=True)
-        click.echo_via_pager(pretty_row_itr(fetched, key))
+        click.echo_via_pager(pretty_cdo_itr(fetched, key))
     else:
         for cdo in fetched:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
@@ -306,29 +315,37 @@ def core_data_object_to_dict(cdo):
     return flat
 
 
-def pretty_row_itr(row_list, key):
+
+def pretty_cdo_itr(cdo_list, key):
+    if not cdo_list:
+        return
+
+    cdo_key = cdo_type_id(cdo_list[0])
+    flat_list = list(core_data_object_to_dict(x) for x in cdo_list)
+    return pretty_dict_itr(flat_list, key, cdo_key)
+
+
+def pretty_dict_itr(row_list, key, alt_key=None):
     if not row_list:
         return
 
-    yield f"Found {bold(len(row_list))} records:\n\n"
-
-    cdo_key = cdo_type_id(row_list[0])
-    flat_list = list(core_data_object_to_dict(x) for x in row_list)
-
-    first = flat_list[0]
+    first = row_list[0]
     max_hdr = max(len(k) for k in first)
 
     if key not in first and key == "id":
-        if cdo_key in first:
-            key = cdo_key
+        if alt_key in first:
+            key = alt_key
         else:
             sys.exit(
-                f"Possible key values '{key}' or '{cdo_key}' not in: {first.keys()}"
+                f"Possible key values '{key}' or '{alt_key}' not found in first row:\n"
+                + json.dumps(first, indent=4)
             )
 
-    fmt = io.StringIO()
-    fmt.write("\n")
-    for flat in flat_list:
+    yield f"Found {bold(len(row_list))} records:\n"
+
+    for flat in row_list:
+        fmt = io.StringIO()
+        fmt.write("\n")
         for k, v in flat.items():
             v, style = field_style(v)
             if k == key:
@@ -363,11 +380,11 @@ def pretty_changes_itr(changes, apply_flag):
         ):
             old_fmt = f"{old_style(old_val):>{old_val_max}}"
             new_fmt = new_style(new_val)
-            fmt.write(f"  {k:>{v_key_max}}  {old_fmt} to {new_fmt}")
+            fmt.write(f"  {k:>{v_key_max}}  {old_fmt} to {new_fmt}\n")
         yield fmt.getvalue()
 
     if not apply_flag:
-        yield "\n\n" + dry_warning(len(changes))
+        yield "\n" + dry_warning(len(changes))
 
 
 def field_style(val):
