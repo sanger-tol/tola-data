@@ -249,7 +249,6 @@ def show(client, table, key, file_list, file_format, id_list):
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
-        click.echo(f"Printing {len(fetched)} records", err=True)
         click.echo_via_pager(pretty_cdo_itr(fetched, key))
     else:
         for cdo in fetched:
@@ -314,7 +313,6 @@ def core_data_object_to_dict(cdo):
         flat[k] = v
 
     return flat
-
 
 
 def pretty_cdo_itr(cdo_list, key):
@@ -416,10 +414,12 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
     elif not (id_list or sys.stdin.isatty()):
         # No IDs or files given on command line, and input is not attached to
         # a terminal, so read from STDIN.
-        if file_format and file_format == "NDJSON":
-            return ids_from_ndjson_stream(key, sys.stdin)
+        if file_format == "NDJSON":
+            for oid in ids_from_ndjson_stream(key, sys.stdin):
+                yield oid
         else:
-            return parse_id_list_stream(sys.stdin)
+            for oid in parse_id_list_stream(sys.stdin):
+                yield oid
 
 
 def dim(txt):
