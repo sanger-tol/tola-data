@@ -77,9 +77,9 @@ class TolClient:
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
         if not (tolqc_url and api_token):
             conf = get_connection_params_entry(tolqc_alias)
-            self._set_proxy(conf)
         self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
         self.api_token = api_token or conf["api_token"]
+        self._set_proxy(conf)
 
     @cached_property
     def ads(self):

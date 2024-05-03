@@ -5,6 +5,8 @@ import logging
 import pathlib
 import sys
 
+from types import SimpleNamespace
+
 import click
 
 from tol.core import DataSourceFilter
@@ -13,46 +15,54 @@ from tola import tolqc_client
 from tola.db_connection import ConnectionParamsException
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 
-table = click.option(
-    "--table",
-    required=True,
-    help="Name of table in ToLQC database",
-)
-
-key = click.option(
-    "--key",
-    default="id",
-    show_default=True,
-    help=(
-        "Column name use to uniquely identify rows."
-        # " Defaults to the json:api `id` column"
+opt = SimpleNamespace(
+    table=click.option(
+        "--table",
+        required=True,
+        help="Name of table in ToLQC database",
     ),
-)
-
-file = click.option(
-    "--file",
-    "file_list",
-    type=click.Path(
-        path_type=pathlib.Path,
-        exists=True,
-        readable=True,
+    key=click.option(
+        "--key",
+        default="id",
+        show_default=True,
+        help=(
+            "Column name use to uniquely identify rows."
+            # " Defaults to the json:api `id` column"
+        ),
     ),
-    multiple=True,
-    help="Input file names.",
-)
-
-id_list = click.argument(
-    "id_list",
-    nargs=-1,
-    required=False,
-)
-
-apply_flag = click.option(
-    "--apply/--dry",
-    "apply_flag",
-    default=False,
-    show_default=True,
-    help="Apply changes or perform a dry run and show changes which would be made.",
+    file=click.option(
+        "--file",
+        "file_list",
+        type=click.Path(
+            path_type=pathlib.Path,
+            exists=True,
+            readable=True,
+        ),
+        multiple=True,
+        help="Input file names.",
+    ),
+    input_files=click.argument(
+        "input_files",
+        nargs=-1,
+        required=False,
+        type=click.Path(
+            path_type=pathlib.Path,
+            exists=True,
+            readable=True,
+        ),
+    ),
+    id_list=click.argument(
+        "id_list",
+        nargs=-1,
+        required=False,
+    ),
+    apply_flag=click.option(
+        "--apply/--dry",
+        "apply_flag",
+        default=False,
+        show_default=True,
+        help="Apply changes or perform a dry run and show changes which would be made.",
+    ),
 )
 
 
@@ -78,10 +88,10 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
 
 @cli.command
 @click.pass_obj
-@table
-@key
-@id_list
-@file
+@opt.table
+@opt.key
+@opt.id_list
+@opt.file
 @tolqc_client.file_format
 @click.option(
     "--column-name",
@@ -94,7 +104,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     "--set",
     help="Value to set column to",
 )
-@apply_flag
+@opt.apply_flag
 def edit_col(
     client,
     table,
@@ -160,19 +170,10 @@ def edit_col(
 
 @cli.command
 @click.pass_context
-@table
-@key
-@apply_flag
-@click.argument(
-    "input_files",
-    nargs=-1,
-    required=False,
-    type=click.Path(
-        path_type=pathlib.Path,
-        exists=True,
-        readable=True,
-    ),
-)
+@opt.table
+@opt.key
+@opt.apply_flag
+@opt.input_files
 def edit_rows(ctx, table, key, apply_flag, input_files):
     """Populate or update rows in a table from ND-JSON input
 
@@ -181,20 +182,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     values given will be used to update columns for the record.
     """
 
-    if not input_files and sys.stdin.isatty():
-        err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
-        sys.exit(ctx.get_help() + "\n\n" + err)
-
-    input_obj = []
-    if input_files:
-        for file in input_files:
-            with file.open() as fh:
-                input_obj.extend(parse_ndjson_stream(fh))
-    else:
-        input_obj.extend(parse_ndjson_stream(sys.stdin))
-
-    if not input_obj:
-        sys.exit("No input objects")
+    input_obj = input_objects_or_exit(ctx, input_files)
 
     client = ctx.obj
     ads = client.ads
@@ -230,12 +218,104 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
 
 
 @cli.command
+@click.pass_context
+@opt.table
+@opt.key
+@opt.apply_flag
+@opt.input_files
+def add(ctx, table, key, apply_flag, input_files):
+    """Add new rows to a table from ND-JSON input
+
+    INPUT_FILES is a list of files in ND-JSON format.
+
+    A primary key for each record can be provided (for primary keys which are
+    not auto-incremented intgers) under the key `<table>_id`.
+
+    If the `key` argument is provided, that field is used to first fetch any
+    existing records from the database so they are not returned as new
+    objects after adding objects to a to-many relation.
+    """
+
+    pk = f"{table}_id"
+    if not key:
+        key = pk
+
+    input_obj = input_objects_or_exit(ctx, input_files)
+    client = ctx.obj
+
+    # List of keys to search on from input objects
+    key_id_list = sorted(
+        list(set(v for x in input_obj if (v := x.get(key)) is not None))
+    )
+
+    # Existing objects in datbase
+    db_obj_before = key_list_search(client, table, key_id_list, key, pk)
+
+    # Do not attempt to create records with same primary key
+    if db_obj_before and key == pk:
+        sys.exit(
+            f"Error {len(db_obj_before)} records  present in database"
+            f" with matching {pk} values: {sorted(db_obj_before)}"
+        )
+
+    if not apply_flag:
+        count = len(input_obj)
+        plural = "" if count == 1 else "s"
+        click.echo(
+            f"Dry run. Use '--apply' flag to store {bold(count)} new row{plural}.\n"
+        )
+        return
+
+    ads = client.ads
+    ObjFactory = ads.data_object_factory
+    create = []
+    for inp in input_obj:
+        if oid := inp.get(pk):
+            attr = {x: inp[x] for x in inp if x != pk}
+            cdo = ObjFactory(table, id_=oid, attributes=attr)
+        else:
+            cdo = ObjFactory(table, attributes=inp)
+        create.append(cdo)
+
+    ads.upsert(table, create)
+
+    db_obj_after = key_list_search(client, table, key_id_list, key, pk)
+    new_ids = set(db_obj_after) - set(db_obj_before)
+    new_obj = list(db_obj_after[x] for x in db_obj_after if x in new_ids)
+
+    # Check we created the expected number of new objects
+    n_inp = len(input_obj)
+    n_new = len(new_obj)
+    if n_new != n_inp:
+        def s(n):
+            return "" if n == 1 else "s"
+        sys.exit(f"Error: Created {n_new} record{s(n_new)} from {n_inp} input object{s(n_inp)}")
+
+    if sys.stdout.isatty():
+        click.echo_via_pager(pretty_cdo_itr(new_obj, key))
+    else:
+        for cdo in new_obj:
+            sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
+
+
+def key_list_search(client, table, key_id_list, key, pk):
+    db_obj_found = {}
+    if key_id_list:
+        search_key = "id" if key == pk else key
+        filt = DataSourceFilter(in_list={search_key: key_id_list})
+        for cdo in client.ads.get_list(table, object_filters=filt):
+            db_obj_found[cdo.id] = cdo
+
+    return db_obj_found
+
+
+@cli.command
 @click.pass_obj
-@table
-@key
-@file
+@opt.table
+@opt.key
+@opt.file
 @tolqc_client.file_format
-@id_list
+@opt.id_list
 def show(client, table, key, file_list, file_format, id_list):
     """Show rows from a table in the ToLQC database
 
@@ -253,6 +333,25 @@ def show(client, table, key, file_list, file_format, id_list):
     else:
         for cdo in fetched:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
+
+
+def input_objects_or_exit(ctx, input_files):
+    if not input_files and sys.stdin.isatty():
+        err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
+        sys.exit(ctx.get_help() + "\n\n" + err)
+
+    input_obj = []
+    if input_files:
+        for file in input_files:
+            with file.open() as fh:
+                input_obj.extend(parse_ndjson_stream(fh))
+    else:
+        input_obj.extend(parse_ndjson_stream(sys.stdin))
+
+    if not input_obj:
+        sys.exit("No input objects")
+
+    return input_obj
 
 
 def dry_warning(count):
