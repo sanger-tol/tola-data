@@ -83,7 +83,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
             err = "Error: " + bold("\n".join(cpe.args))
             sys.exit(ctx.get_help() + "\n\n" + err)
         else:
-            raise cpe
+            sys.exit("\n".join(cpe.args))
 
 
 @cli.command
@@ -123,7 +123,7 @@ def edit_col(
     """
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
-    fetched = fetch_all_unique(client, table, key, id_list)
+    fetched = fetch_list_or_exit(client, table, key, id_list)
 
     ads = client.ads
     ObjFactory = ads.data_object_factory
@@ -188,8 +188,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     ads = client.ads
     ObjFactory = ads.data_object_factory
     id_list = list(x[key] for x in input_obj)
-    db_obj = fetch_all_unique(client, table, key, id_list)
-    # id_key = cdo_type_id(db_obj[0])
+    db_obj = fetch_list_or_exit(client, table, key, id_list)
     flat_obj = list(core_data_object_to_dict(x) for x in db_obj)
     updates = []
     changes = []
@@ -228,20 +227,23 @@ def add(ctx, table, key, apply_flag, input_files):
 
     INPUT_FILES is a list of files in ND-JSON format.
 
-    A primary key for each record can be provided (for primary keys which are
-    not auto-incremented intgers) under the key `<table>_id`.
+    A primary key for each record can be provided under the key `<table>_id`.
 
-    If the `key` argument is provided, that field is used to first fetch any
-    existing records from the database so they are not returned as new
-    objects after adding objects to a to-many relation.
+    If the database records being created have an auto-incremented integer
+    primary key, a `--key` argument giving the key of a parent to-one
+    relation is required so that they can be fetched after creation.
     """
 
+    client = ctx.obj
     pk = f"{table}_id"
-    if not key:
+    if key == "id":
         key = pk
 
     input_obj = input_objects_or_exit(ctx, input_files)
-    client = ctx.obj
+
+    # Check that all the input objects have a value for the key which will be
+    # used to fetch the created objects.
+    check_key_values_or_exit(input_obj, key, pk)
 
     # List of keys to search on from input objects
     key_id_list = sorted(
@@ -251,21 +253,22 @@ def add(ctx, table, key, apply_flag, input_files):
     # Existing objects in datbase
     db_obj_before = key_list_search(client, table, key_id_list, key, pk)
 
-    # Do not attempt to create records with same primary key
+    # Guard against updating records (via upsert) with same primary key
     if db_obj_before and key == pk:
+        plural = s(db_obj_before)
         sys.exit(
-            f"Error {len(db_obj_before)} records  present in database"
-            f" with matching {pk} values: {sorted(db_obj_before)}"
+            f"Error: {len(db_obj_before)} record{plural} present in"
+            f" database with matching '{pk}' value{plural}: {sorted(db_obj_before)}"
         )
 
     if not apply_flag:
         count = len(input_obj)
-        plural = "" if count == 1 else "s"
         click.echo(
-            f"Dry run. Use '--apply' flag to store {bold(count)} new row{plural}.\n"
+            f"Dry run. Use '--apply' flag to store {bold(count)} new row{s(count)}.\n"
         )
         return
 
+    # Build CoreDataObjects and upsert
     ads = client.ads
     ObjFactory = ads.data_object_factory
     create = []
@@ -279,34 +282,26 @@ def add(ctx, table, key, apply_flag, input_files):
 
     ads.upsert(table, create)
 
+    # Fetch objects from database and filter newly created
     db_obj_after = key_list_search(client, table, key_id_list, key, pk)
-    new_ids = set(db_obj_after) - set(db_obj_before)
+    new_ids = db_obj_after.keys() - db_obj_before.keys()
     new_obj = list(db_obj_after[x] for x in db_obj_after if x in new_ids)
 
     # Check we created the expected number of new objects
     n_inp = len(input_obj)
     n_new = len(new_obj)
     if n_new != n_inp:
-        def s(n):
-            return "" if n == 1 else "s"
-        sys.exit(f"Error: Created {n_new} record{s(n_new)} from {n_inp} input object{s(n_inp)}")
+        sys.exit(
+            f"Error: Created {n_new} record{s(n_new)}"
+            f" from {n_inp} input object{s(n_inp)}.\n"
+            "       Existing database records may have been edited."
+        )
 
     if sys.stdout.isatty():
         click.echo_via_pager(pretty_cdo_itr(new_obj, key))
     else:
         for cdo in new_obj:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
-
-
-def key_list_search(client, table, key_id_list, key, pk):
-    db_obj_found = {}
-    if key_id_list:
-        search_key = "id" if key == pk else key
-        filt = DataSourceFilter(in_list={search_key: key_id_list})
-        for cdo in client.ads.get_list(table, object_filters=filt):
-            db_obj_found[cdo.id] = cdo
-
-    return db_obj_found
 
 
 @cli.command
@@ -354,16 +349,52 @@ def input_objects_or_exit(ctx, input_files):
     return input_obj
 
 
+def key_list_search(client, table, key_id_list, key, pk):
+    db_obj_found = {}
+    if key_id_list:
+        search_key = "id" if key == pk else key
+        filt = DataSourceFilter(in_list={search_key: key_id_list})
+        for cdo in client.ads.get_list(table, object_filters=filt):
+            db_obj_found[cdo.id] = cdo
+
+    return db_obj_found
+
+
+def check_key_values_or_exit(input_obj, key, pk):
+    key_found = 0
+    for inp in input_obj:
+        if inp.get(key):
+            key_found += 1
+    if key_found != len(input_obj):
+        key_type = "Primary" if key == pk else "Parent"
+        if key == pk:
+            key_type = "Primary"
+            poss_err = "\nMissing `--key` argument for parent to-one relation?"
+        else:
+            key_type = "Parent"
+            poss_err = ""
+        i_count = len(input_obj)
+        sys.exit(
+            f"{key_type} key field '{key}' missing in {i_count - key_found}"
+            f" out of {i_count} object{s(i_count)} in input.{poss_err}"
+        )
+
+
 def dry_warning(count):
-    plural = "" if count == 1 else "s"
-    return f"Dry run. Use '--apply' flag to store {bold(count)} changed row{plural}.\n"
+    return (
+        f"Dry run. Use '--apply' flag to store {bold(count)} changed row{s(count)}.\n"
+    )
 
 
 def null_if_none(val):
     return "null" if val is None else val
 
 
-def fetch_all_unique(client, table, key, id_list):
+def fetch_list_or_exit(client, table, key, id_list):
+    """
+    Fetches all the records for `id_list` in the same order, or exits with an
+    error.
+    """
     filt = DataSourceFilter(in_list={key: id_list})
     fetched = list(client.ads.get_list(table, object_filters=filt))
     key_fetched = {}
@@ -416,7 +447,7 @@ def core_data_object_to_dict(cdo):
 
 def pretty_cdo_itr(cdo_list, key):
     if not cdo_list:
-        return
+        return []
 
     cdo_key = cdo_type_id(cdo_list[0])
     flat_list = list(core_data_object_to_dict(x) for x in cdo_list)
@@ -425,7 +456,7 @@ def pretty_cdo_itr(cdo_list, key):
 
 def pretty_dict_itr(row_list, key, alt_key=None):
     if not row_list:
-        return
+        return []
 
     first = row_list[0]
     max_hdr = max(len(k) for k in first)
@@ -455,9 +486,8 @@ def pretty_dict_itr(row_list, key, alt_key=None):
 
 def pretty_changes_itr(changes, apply_flag):
     n_changes = len(changes)
-    plural = "" if changes == 1 else "s"
     verb = "Made" if apply_flag else "Found"
-    yield f"{verb} {bold(n_changes)} change{plural}:\n"
+    yield f"{verb} {bold(n_changes)} change{s(n_changes)}:\n"
 
     for chng in changes:
         key, *v_keys = chng.keys()
@@ -573,3 +603,9 @@ def convert_type(txt):
                 return float(txt)
             except ValueError:
                 return txt
+
+
+def s(x):
+    """Formatting plurals. Argument can be an `int` or an iterable"""
+    n = x if isinstance(x, int) else len(x)
+    return "" if n == 1 else "s"

@@ -92,8 +92,13 @@ def get_connection_params_entry(alias):
         msg = f"~/{params_name} must be mode 0600 but is mode 0{mode:o}"
         raise ConnectionParamsException(msg)
 
-    if db_params := json.loads(params_file.read_text()).get(alias):
-        return db_params
-    else:
-        msg = f"Alias '{alias}' not found in ~/{params_name} file"
+    try:
+        if db_params := json.loads(params_file.read_text()).get(alias):
+            return db_params
+        else:
+            msg = f"Alias '{alias}' not found in ~/{params_name} file"
+            raise ConnectionParamsException(msg)
+    except json.decoder.JSONDecodeError as jde:
+        detail = "\n".join(jde.args)
+        msg = f"Syntax error in ~/{params_name} - {detail}"
         raise ConnectionParamsException(msg)
