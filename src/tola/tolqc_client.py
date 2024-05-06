@@ -79,7 +79,8 @@ class TolClient:
             conf = get_connection_params_entry(tolqc_alias)
         self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
         self.api_token = api_token or conf["api_token"]
-        self._set_proxy(conf)
+        if conf:
+            self._set_proxy(conf)
 
     @cached_property
     def ads(self):
@@ -108,7 +109,7 @@ class TolClient:
             raise ValueError(msg)
         return "/".join((self.tolqc_url, self.api_path, path))
 
-    def json_get(self, path, payload):
+    def json_get(self, path, payload=None):
         enc = self._encode_payload(payload)
         r = requests.get(
             self._build_path(path),
@@ -127,9 +128,9 @@ class TolClient:
         return self._check_response(r)
 
     def _encode_payload(self, payload):
-        if not payload:
-            return payload
         enc = {}
+        if not payload:
+            return enc
         for k, v in payload.items():
             if type(v) in (dict, list):
                 enc[k] = json.dumps(v, separators=(",", ":"))
@@ -144,7 +145,7 @@ class TolClient:
             response.raise_for_status()
 
     def list_project_lims_ids(self):
-        rspns_json = self.json_get("data/project", {})
+        rspns_json = self.json_get("data/project")
         project_lims_ids = []
         for proj in rspns_json["data"]:
             if lims_id := proj["attributes"].get("lims_id"):
