@@ -194,6 +194,14 @@ def illumina_sql():
 def pacbio_sql():
     return inspect.cleandoc(
         """
+        WITH plex_agg AS (
+          SELECT rwm.id_pac_bio_rw_metrics_tmp
+            , COUNT(*) plex_count
+          FROM pac_bio_run_well_metrics rwm
+          JOIN pac_bio_product_metrics pm
+            USING (id_pac_bio_rw_metrics_tmp)
+          GROUP BY rwm.id_pac_bio_rw_metrics_tmp
+        )
         SELECT
           CASE
             WHEN run.tag2_identifier IS NOT NULL THEN
@@ -223,6 +231,7 @@ def pacbio_sql():
           , well_metrics.well_label AS well_label
           , well_metrics.run_start AS run_start
           , well_metrics.run_complete AS run_complete
+          , plex_agg.plex_count AS plex_count
           , IF(well_metrics.qc_seq IS NULL, NULL
             , IF(well_metrics.qc_seq = 1, 'pass', 'fail')) AS lims_qc
           , well_metrics.qc_seq_date AS qc_date
@@ -266,6 +275,9 @@ def pacbio_sql():
         JOIN pac_bio_run_well_metrics AS well_metrics
           ON product_metrics.id_pac_bio_rw_metrics_tmp
               = well_metrics.id_pac_bio_rw_metrics_tmp
+        JOIN plex_agg
+          ON well_metrics.id_pac_bio_rw_metrics_tmp
+               = plex_agg.id_pac_bio_rw_metrics_tmp
         JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
         WHERE product_metrics.qc IS NOT NULL
