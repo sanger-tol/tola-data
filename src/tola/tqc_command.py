@@ -187,9 +187,9 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     client = ctx.obj
     ads = client.ads
     ObjFactory = ads.data_object_factory
-    id_list = list(x[key] for x in input_obj)
+    id_list = [x[key] for x in input_obj]
     db_obj = fetch_list_or_exit(client, table, key, id_list)
-    flat_obj = list(core_data_object_to_dict(x) for x in db_obj)
+    flat_obj = [core_data_object_to_dict(x) for x in db_obj]
     updates = []
     changes = []
     for inp, flat, obj in zip(input_obj, flat_obj, db_obj, strict=True):
@@ -246,9 +246,7 @@ def add(ctx, table, key, apply_flag, input_files):
     check_key_values_or_exit(input_obj, key, pk)
 
     # List of keys to search on from input objects
-    key_id_list = sorted(
-        list(set(v for x in input_obj if (v := x.get(key)) is not None))
-    )
+    key_id_list = sorted({v for x in input_obj if (v := x.get(key)) is not None})
 
     # Existing objects in datbase
     db_obj_before = key_list_search(client, table, key_id_list, key, pk)
@@ -285,7 +283,7 @@ def add(ctx, table, key, apply_flag, input_files):
     # Fetch objects from database and filter newly created
     db_obj_after = key_list_search(client, table, key_id_list, key, pk)
     new_ids = db_obj_after.keys() - db_obj_before.keys()
-    new_obj = list(db_obj_after[x] for x in db_obj_after if x in new_ids)
+    new_obj = [db_obj_after[x] for x in db_obj_after if x in new_ids]
 
     # Check we created the expected number of new objects
     n_inp = len(input_obj)
@@ -409,7 +407,7 @@ def fetch_list_or_exit(client, table, key, id_list):
         )
 
     # Return objects in the order they were requested
-    return list(key_fetched[x] for x in id_list)
+    return [key_fetched[x] for x in id_list]
 
 
 def fetch_all(client, table, key, id_list):
@@ -433,7 +431,7 @@ def core_data_object_to_dict(cdo):
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
         flat[f"{rel_name}_id"] = (
-            getattr(rltd, "id") if (rltd := getattr(cdo, rel_name)) else None
+            rltd.id if (rltd := getattr(cdo, rel_name)) else None
         )
 
     # The object's attributes
@@ -450,7 +448,7 @@ def pretty_cdo_itr(cdo_list, key):
         return []
 
     cdo_key = cdo_type_id(cdo_list[0])
-    flat_list = list(core_data_object_to_dict(x) for x in cdo_list)
+    flat_list = [core_data_object_to_dict(x) for x in cdo_list]
     return pretty_dict_itr(flat_list, key, cdo_key)
 
 
