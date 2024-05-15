@@ -85,7 +85,7 @@ def get_connection_params_entry(alias):
         mode = params_file.stat().st_mode & 0o777
     except FileNotFoundError:
         msg = f"Missing ~/{params_name} file"
-        raise ConnectionParamsException(msg)
+        raise ConnectionParamsException(msg) from None
 
     # Check permissions are 0600
     if mode != 0o600:
@@ -101,4 +101,4 @@ def get_connection_params_entry(alias):
     except json.decoder.JSONDecodeError as jde:
         detail = "\n".join(jde.args)
         msg = f"Syntax error in ~/{params_name} - {detail}"
-        raise ConnectionParamsException(msg)
+        raise ConnectionParamsException(msg) from None
