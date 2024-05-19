@@ -95,9 +95,8 @@ def species_from_taxon_id(mrshl, goat_client, taxon_id):
         species = mrshl.fetch_one_or_none(
             Species, {"taxon_id": taxon_id}, ("taxon_id",)
         )
-        if not species:
-            if species_info := goat_client.get_species_info(taxon_id):
-                species = mrshl.update_or_create(Species, species_info, ("taxon_id",))
+        if not species and (species_info := goat_client.get_species_info(taxon_id)):
+            species = mrshl.update_or_create(Species, species_info, ("taxon_id",))
     return species
 
 
@@ -269,8 +268,7 @@ def illumina_fetcher(mlwh, project):
     logging.info(f"Fetching Illumina data for project '{project.lims_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project.lims_id,))
-    for row in crsr:
-        yield row
+    yield from crsr
 
 
 def pacbio_fetcher(mlwh, project):
