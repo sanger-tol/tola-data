@@ -1,6 +1,7 @@
 import click
 import inspect
 import logging
+import re
 import sys
 from functools import cache
 from io import StringIO
@@ -93,7 +94,9 @@ def formatted_response(response, project_id, platform):
 
     new = response.get("new")
     if new:
-        out.write(f"\n\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n")
+        out.write(
+            f"\n\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n"
+        )
         for row in new:
             out.write(response_row_std_fields(row))
 
@@ -127,8 +130,34 @@ def pacbio_fetcher(mlwh, project_id):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
     for row in crsr:
+        name = row["name_root"]
+        tag1 = trimmed_tag(row["tag1_id"])
+        tag2 = trimmed_tag(row["tag2_id"])
+        if tag2:
+            row["name_root"] = f"{name}#{tag1}#{tag2}"
+        elif tag1:
+            row["name_root"] = f"{name}#{tag1}"
         yield ndjson_row(row)
 
+
+def trimmed_tag(tag):
+    """The same tag in PacBio data can appear as:
+
+         "bc1008"
+
+         "bc1008_BAK8A_OA"
+
+         "1008"
+
+    This functions trims them to the four (or more) digit form.
+    """
+    if tag is None:
+        return tag
+
+    if m := re.match(r"bc(\d{4,})", tag):
+        return m.group(1)
+    else:
+        return tag
 
 @cache
 def illumina_sql():
@@ -202,17 +231,7 @@ def pacbio_sql():
             USING (id_pac_bio_rw_metrics_tmp)
           GROUP BY rwm.id_pac_bio_rw_metrics_tmp
         )
-        SELECT
-          CASE
-            WHEN run.tag2_identifier IS NOT NULL THEN
-              CONCAT(well_metrics.movie_name
-                , '#', run.tag_identifier
-                , '#', run.tag2_identifier)
-            WHEN run.tag_identifier IS NOT NULL THEN
-              CONCAT(well_metrics.movie_name
-                , '#', run.tag_identifier)
-            ELSE well_metrics.movie_name
-          END AS name_root
+        SELECT well_metrics.movie_name AS name_root
           , study.id_study_lims AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
