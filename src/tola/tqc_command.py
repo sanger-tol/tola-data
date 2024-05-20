@@ -126,7 +126,7 @@ def edit_col(
     fetched = fetch_list_or_exit(client, table, key, id_list)
 
     ads = client.ads
-    ObjFactory = ads.data_object_factory
+    obj_factory = ads.data_object_factory
     if set_value:
         py_value = convert_type(set_value)
         updates = []
@@ -139,7 +139,7 @@ def edit_col(
             # Would value be changed?
             if val != py_value:
                 updates.append(
-                    ObjFactory(table, id_=obj.id, attributes={column_name: py_value})
+                    obj_factory(table, id_=obj.id, attributes={column_name: py_value})
                 )
                 changes.append({key: oid, column_name: (val, py_value)})
 
@@ -182,11 +182,14 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     values given will be used to update columns for the record.
     """
 
+    if key == "id":
+        key = f"{table}_id"
+
     input_obj = input_objects_or_exit(ctx, input_files)
 
     client = ctx.obj
     ads = client.ads
-    ObjFactory = ads.data_object_factory
+    obj_factory = ads.data_object_factory
     id_list = [x[key] for x in input_obj]
     db_obj = fetch_list_or_exit(client, table, key, id_list)
     flat_obj = [core_data_object_to_dict(x) for x in db_obj]
@@ -203,10 +206,11 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
                     chng[k] = flat_v, inp_v
         if attr:
             changes.append(chng)
-            updates.append(ObjFactory(table, id_=obj.id, attributes=attr))
+            updates.append(obj_factory(table, id_=obj.id, attributes=attr))
     if updates:
         if apply_flag:
-            ads.upsert(table, updates)
+            for chunk in client.pages(updates):
+                ads.upsert(table, chunk)
         if sys.stdout.isatty():
             click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
         else:
@@ -249,7 +253,7 @@ def add(ctx, table, key, apply_flag, input_files):
     key_id_list = sorted({v for x in input_obj if (v := x.get(key)) is not None})
 
     # Existing objects in datbase
-    db_obj_before = key_list_search(client, table, key_id_list, key, pk)
+    db_obj_before = key_list_search(client, table, key_id_list, key)
 
     # Guard against updating records (via upsert) with same primary key
     if db_obj_before and key == pk:
@@ -268,20 +272,20 @@ def add(ctx, table, key, apply_flag, input_files):
 
     # Build CoreDataObjects and upsert
     ads = client.ads
-    ObjFactory = ads.data_object_factory
+    obj_factory = ads.data_object_factory
     create = []
     for inp in input_obj:
         if oid := inp.get(pk):
             attr = {x: inp[x] for x in inp if x != pk}
-            cdo = ObjFactory(table, id_=oid, attributes=attr)
+            cdo = obj_factory(table, id_=oid, attributes=attr)
         else:
-            cdo = ObjFactory(table, attributes=inp)
+            cdo = obj_factory(table, attributes=inp)
         create.append(cdo)
 
     ads.upsert(table, create)
 
     # Fetch objects from database and filter newly created
-    db_obj_after = key_list_search(client, table, key_id_list, key, pk)
+    db_obj_after = key_list_search(client, table, key_id_list, key)
     new_ids = db_obj_after.keys() - db_obj_before.keys()
     new_obj = [db_obj_after[x] for x in db_obj_after if x in new_ids]
 
@@ -347,13 +351,14 @@ def input_objects_or_exit(ctx, input_files):
     return input_obj
 
 
-def key_list_search(client, table, key_id_list, key, pk):
+def key_list_search(client, table, key_id_list, key):
     db_obj_found = {}
     if key_id_list:
-        search_key = "id" if key == pk else key
-        filt = DataSourceFilter(in_list={search_key: key_id_list})
-        for cdo in client.ads.get_list(table, object_filters=filt):
-            db_obj_found[cdo.id] = cdo
+        search_key = "id" if key == f"{table}_id" else key
+        for req_list in client.pages(key_id_list):
+            filt = DataSourceFilter(in_list={search_key: req_list})
+            for cdo in client.ads.get_list(table, object_filters=filt):
+                db_obj_found[cdo.id] = cdo
 
     return db_obj_found
 
@@ -393,12 +398,8 @@ def fetch_list_or_exit(client, table, key, id_list):
     Fetches all the records for `id_list` in the same order, or exits with an
     error.
     """
-    filt = DataSourceFilter(in_list={key: id_list})
-    fetched = list(client.ads.get_list(table, object_filters=filt))
-    key_fetched = {}
-    if fetched:
-        idx_key = "id" if key == cdo_type_id(fetched[0]) else key
-        key_fetched = {getattr(x, idx_key): x for x in fetched}
+
+    key_fetched = key_list_search(client, table, id_list, key)
 
     # Check if we found a data record for each name_root
     if missed := set(id_list) - key_fetched.keys():
@@ -412,8 +413,11 @@ def fetch_list_or_exit(client, table, key, id_list):
 
 def fetch_all(client, table, key, id_list):
     if id_list:
-        filt = DataSourceFilter(in_list={key: id_list})
-        return list(client.ads.get_list(table, object_filters=filt))
+        fetched = []
+        for req_list in client.pages(id_list):
+            filt = DataSourceFilter(in_list={key: req_list})
+            fetched.extend(list(client.ads.get_list(table, object_filters=filt)))
+        return fetched
     else:
         return list(client.ads.get_list(table))
 
@@ -430,9 +434,7 @@ def core_data_object_to_dict(cdo):
 
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
-        flat[f"{rel_name}_id"] = (
-            rltd.id if (rltd := getattr(cdo, rel_name)) else None
-        )
+        flat[f"{rel_name}_id"] = rltd.id if (rltd := getattr(cdo, rel_name)) else None
 
     # The object's attributes
     for k, v in cdo.attributes.items():

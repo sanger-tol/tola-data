@@ -73,12 +73,13 @@ log_level = click.option(
 
 
 class TolClient:
-    def __init__(self, tolqc_url=None, api_token=None, tolqc_alias=None):
+    def __init__(self, tolqc_url=None, api_token=None, tolqc_alias=None, page_size=200):
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
         if not (tolqc_url and api_token):
             conf = get_connection_params_entry(tolqc_alias)
         self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
         self.api_token = api_token or conf["api_token"]
+        self.page_size = page_size
         if conf:
             self._set_proxy(conf)
 
@@ -89,7 +90,7 @@ class TolClient:
             token=self.api_token,
             data_prefix="/data",
         )
-        tolqc.page_size = 200
+        tolqc.page_size = self.page_size
         core_data_object(tolqc)
         return tolqc
 
@@ -145,6 +146,11 @@ class TolClient:
             return response.json()
         else:
             response.raise_for_status()
+
+    def pages(self, book):
+        page = self.page_size
+        for i in range(0, len(book), page):
+            yield book[i : i + page]
 
     def list_project_lims_ids(self):
         rspns_json = self.json_get("data/project")
