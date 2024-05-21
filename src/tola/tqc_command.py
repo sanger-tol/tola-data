@@ -183,7 +183,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     """
 
     if key == "id":
-        key = f"{table}_id"
+        key = f"{table}.id"
 
     input_obj = input_objects_or_exit(ctx, input_files)
 
@@ -231,7 +231,7 @@ def add(ctx, table, key, apply_flag, input_files):
 
     INPUT_FILES is a list of files in ND-JSON format.
 
-    A primary key for each record can be provided under the key `<table>_id`.
+    A primary key for each record can be provided under the key `<table>.id`.
 
     If the database records being created have an auto-incremented integer
     primary key, a `--key` argument giving the key of a parent to-one
@@ -239,7 +239,7 @@ def add(ctx, table, key, apply_flag, input_files):
     """
 
     client = ctx.obj
-    pk = f"{table}_id"
+    pk = f"{table}.id"
     if key == "id":
         key = pk
 
@@ -354,7 +354,7 @@ def input_objects_or_exit(ctx, input_files):
 def key_list_search(client, table, key_id_list, key):
     db_obj_found = {}
     if key_id_list:
-        search_key = "id" if key == f"{table}_id" else key
+        search_key = "id" if key == f"{table}.id" else key
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
             for cdo in client.ads.get_list(table, object_filters=filt):
@@ -412,6 +412,7 @@ def fetch_list_or_exit(client, table, key, id_list):
 
 
 def fetch_all(client, table, key, id_list):
+    key = "id" if key == f"{table}.id" else key
     if id_list:
         fetched = []
         for req_list in client.pages(id_list):
@@ -423,7 +424,7 @@ def fetch_all(client, table, key, id_list):
 
 
 def cdo_type_id(cdo):
-    return f"{cdo.type}_id"
+    return f"{cdo.type}.id"
 
 
 def core_data_object_to_dict(cdo):
@@ -434,7 +435,7 @@ def core_data_object_to_dict(cdo):
 
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
-        flat[f"{rel_name}_id"] = rltd.id if (rltd := getattr(cdo, rel_name)) else None
+        flat[f"{rel_name}.id"] = rltd.id if (rltd := getattr(cdo, rel_name)) else None
 
     # The object's attributes
     for k, v in cdo.attributes.items():
@@ -527,8 +528,7 @@ def field_style(val):
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
     if id_list:
-        for oid in id_list:
-            yield convert_type(oid)
+        yield from id_list
 
     if file_list:
         for file in file_list:
