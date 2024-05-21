@@ -6,7 +6,9 @@ import sys
 from functools import cache
 from io import StringIO
 
+from tol.core import DataSourceFilter
 from tola import db_connection, tolqc_client
+from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 
 
@@ -60,6 +62,8 @@ def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
             else:
                 rspns = chunk_requests(client, row_itr)
                 print(formatted_response(rspns, project_id, platform), end="")
+    if not write_to_stdout:
+        patch_species(client)
 
 
 def chunk_requests(client, row_itr):
@@ -158,6 +162,7 @@ def trimmed_tag(tag):
         return m.group(1)
     else:
         return tag
+
 
 @cache
 def illumina_sql():
@@ -305,6 +310,40 @@ def pacbio_sql():
           AND study.id_study_lims = %s
         """,
     )
+
+
+def patch_species(client):
+    ads = client.ads
+    obj_factory = ads.data_object_factory
+    filt = DataSourceFilter(
+        exact={
+            "taxon_family": None,
+            "taxon_order": None,
+            "taxon_phylum": None,
+            "taxon_group": None,
+        }
+    )
+    gc = GoaTClient()
+    updates = []
+    for sp in client.ads.get_list("species", object_filters=filt):
+        if spec_info := gc.get_species_info(sp.taxon_id):
+            if sp.id != spec_info["species_id"]:
+                logging.info(
+                    f"Species with taxon_id = '{sp.taxon_id}' should be"
+                    f" named '{spec_info['species_id']}' not '{sp.id}'"
+                )
+            changes = {}
+            for prop, val in spec_info.items():
+                if prop == "species_id":
+                    continue
+                if getattr(sp, prop) is None:
+                    changes[prop] = val
+            if changes:
+                updates.append(
+                    obj_factory("species", id_=sp.id, attributes=changes)
+                )
+    for page in client.pages(updates):
+        ads.upsert("species", page)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ class GoaTClient:
         self.goat_url = "https://goat.genomehubs.org/api/v2"
 
     def json_get(self, payload):
-        r = requests.get(f"{self.goat_url}/search", params=payload)
+        r = requests.get(f"{self.goat_url}/search", params=payload, timeout=10)
         if r.status_code == requests.codes.ok:
             return r.json()
         else:
@@ -149,7 +149,7 @@ class GoaTResult:
     }
 
     def get_taxon_group(self):
-        tol_id = self.get_name("tol_id")
+        tol_id = self.get_name("tolid_prefix")
         return self.LETTER_GROUP.get(tol_id[0]) if tol_id else None
 
 
