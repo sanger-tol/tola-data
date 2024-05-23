@@ -134,13 +134,13 @@ def pacbio_fetcher(mlwh, project_id):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
     for row in crsr:
-        name = row["name_root"]
+        name = row["name"]
         tag1 = trimmed_tag(row["tag1_id"])
         tag2 = trimmed_tag(row["tag2_id"])
         if tag2:
-            row["name_root"] = f"{name}#{tag1}#{tag2}"
+            row["name"] = f"{name}#{tag1}#{tag2}"
         elif tag1:
-            row["name_root"] = f"{name}#{tag1}"
+            row["name"] = f"{name}#{tag1}"
         yield ndjson_row(row)
 
 
@@ -173,7 +173,7 @@ def illumina_sql():
             irods.irods_data_relative_path
               , '\\.[[:alnum:]]+$'
               , ''
-            ) AS name_root
+            ) AS name
           , study.id_study_lims AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
@@ -236,7 +236,7 @@ def pacbio_sql():
             USING (id_pac_bio_rw_metrics_tmp)
           GROUP BY rwm.id_pac_bio_rw_metrics_tmp
         )
-        SELECT well_metrics.movie_name AS name_root
+        SELECT well_metrics.movie_name AS name
           , study.id_study_lims AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name

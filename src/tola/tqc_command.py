@@ -401,7 +401,7 @@ def fetch_list_or_exit(client, table, key, id_list):
 
     key_fetched = key_list_search(client, table, id_list, key)
 
-    # Check if we found a data record for each name_root
+    # Check if we found a data record for each name
     if missed := set(id_list) - key_fetched.keys():
         sys.exit(
             f"Error: Failed to fetch records for {table}.{key} in: {sorted(missed)}"

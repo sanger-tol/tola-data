@@ -15,18 +15,18 @@ from tola import tolqc_client
     "--set",
     "set_processed",
     type=click.Choice(("0", "1", "null")),
-    help="Set `data.processed` to this value for each of the NAME_ROOT_LIST",
+    help="Set `data.processed` to this value for each of the NAME_LIST",
 )
 @click.argument(
-    "name_root_list",
+    "name_list",
     nargs=-1,
     required=False,
 )
-def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
+def cli(tolqc_alias, tolqc_url, api_token, name_list, set_processed):
     """
     Show or set the `processed` flag in the ToLQC `data` table.
 
-    Each name in the NAME_ROOT_LIST should match a `data.name_root` column.
+    Each name in the NAME_LIST should match a `data.name` column.
 
     Called without arguments it lists data rows where processed = 0
 
@@ -36,25 +36,25 @@ def cli(tolqc_alias, tolqc_url, api_token, name_root_list, set_processed):
 
       - data.date (the date of the LIMS QC decision)
 
-      - data.name_root
+      - data.name
     """
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     ads = client.ads
 
-    if name_root_list:
-        filt = DataSourceFilter(in_list={"name_root": name_root_list})
+    if name_list:
+        filt = DataSourceFilter(in_list={"name": name_list})
         fetched_data = {
-            x.name_root: x for x in ads.get_list("data", object_filters=filt)
+            x.name: x for x in ads.get_list("data", object_filters=filt)
         }
 
-        # Check if we found a data record for each name_root
-        if missed := set(name_root_list) - fetched_data.keys():
+        # Check if we found a data record for each name
+        if missed := set(name_list) - fetched_data.keys():
             sys.exit(f"Error: Failed to fetch data records named: {sorted(missed)}")
 
         if set_processed is not None:
             set_data_processed(ads, fetched_data, set_processed)
-        for name_root in name_root_list:
-            data = fetched_data[name_root]
+        for name in name_list:
+            data = fetched_data[name]
             print_data_row(data)
     else:
         list_unproccessed_data(ads)
@@ -74,7 +74,7 @@ def set_data_processed(ads, fetched_data, set_processed):
 
 def print_data_row(data):
     flag = "null" if (x := data.processed) is None else x
-    print(f"{flag:<4}  {data.date.isoformat()}  {data.name_root}")
+    print(f"{flag:<4}  {data.date.isoformat()}  {data.name}")
 
 
 def list_unproccessed_data(ads):
