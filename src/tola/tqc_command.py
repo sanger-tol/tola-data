@@ -358,7 +358,7 @@ def key_list_search(client, table, key_id_list, key):
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
             for cdo in client.ads.get_list(table, object_filters=filt):
-                db_obj_found[cdo.id] = cdo
+                db_obj_found[getattr(cdo, key)] = cdo
 
     return db_obj_found
 
@@ -535,20 +535,20 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
         for file in file_list:
             fmt = file_format or guess_file_type(file)
             with file.open() as fh:
-                if fmt == "NDJSON":
-                    for oid in ids_from_ndjson_stream(key, fh):
-                        yield oid
-                else:
+                if fmt == "TXT":
                     for oid in parse_id_list_stream(fh):
                         yield oid
-    elif sys.stdin.isatty():
+                else:
+                    for oid in ids_from_ndjson_stream(key, fh):
+                        yield oid
+    elif not sys.stdin.isatty():
         # No IDs or files given on command line, and input is not attached to
         # a terminal, so read from STDIN.
-        if file_format == "NDJSON":
-            for oid in ids_from_ndjson_stream(key, sys.stdin):
+        if file_format == "TXT":
+            for oid in parse_id_list_stream(sys.stdin):
                 yield oid
         else:
-            for oid in parse_id_list_stream(sys.stdin):
+            for oid in ids_from_ndjson_stream(key, sys.stdin):
                 yield oid
 
 
