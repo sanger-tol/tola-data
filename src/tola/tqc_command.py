@@ -529,6 +529,7 @@ def field_style(val):
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
     if id_list:
         yield from id_list
+        return
 
     if file_list:
         for file in file_list:
@@ -540,7 +541,7 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
                 else:
                     for oid in parse_id_list_stream(fh):
                         yield oid
-    elif not (id_list or sys.stdin.isatty()):
+    elif sys.stdin.isatty():
         # No IDs or files given on command line, and input is not attached to
         # a terminal, so read from STDIN.
         if file_format == "NDJSON":
