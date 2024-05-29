@@ -304,7 +304,7 @@ def pacbio_sql():
                = plex_agg.id_pac_bio_rw_metrics_tmp
         JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_pac_bio_product = irods.id_product
-        WHERE product_metrics.qc IS NOT NULL
+        WHERE irods.irods_data_relative_path IS NOT NULL
           AND well_metrics.movie_name IS NOT NULL
           AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
