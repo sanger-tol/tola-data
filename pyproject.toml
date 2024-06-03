@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "click",
-    "duckdb ~= 0.10.0",
+    "duckdb ~= 1.0.0",
     "SQLAlchemy ~= 2.0",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
@@ -18,11 +18,11 @@ dependencies = [
 ]
 
 [project.scripts]
-duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 compare-pacbio-json="tola.compare_pacbio_json:cli"
 data-processed="tola.data_processed:cli"
-load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
+duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
+load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
 tqc="tola.tqc_command:cli"
