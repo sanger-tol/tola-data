@@ -270,7 +270,7 @@ def sqlalchemy_data_objects_repr(sql_alchemy_data):
                     attribs.append(f"{name}='{value.isoformat()}'")
                 else:
                     attribs.append(f"{name}={value!r}")
-        for name, rel in self.__mapper__.relationships.items():
+        for name in self.__mapper__.relationships:
             try:
                 related_objs = getattr(self, name)
             except DetachedInstanceError:
@@ -419,7 +419,7 @@ def wrap_numbers(line, _):
 
 
 def string_with_newlines(lines):
-    return "".join(list(f"{x}\n" for x in lines))
+    return "".join([f"{x}\n" for x in lines])
 
 
 def license_string():

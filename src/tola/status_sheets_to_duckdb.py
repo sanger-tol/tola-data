@@ -54,7 +54,10 @@ def cli(duckdb_file):
             msg = f"Error creating table '{sheet_table}' from sheet gid = '{gid}'"
             raise Exception(msg) from e
 
-    for old_col, new_col in (("sample", "specimen"),("statussummary", "status_summary")):
+    for old_col, new_col in (
+        ("sample", "specimen"),
+        ("statussummary", "status_summary"),
+    ):
         con.execute(f"ALTER TABLE status RENAME COLUMN {old_col} TO {new_col}")
 
     con.commit()
@@ -107,7 +110,7 @@ def create_table(con, table_name, row_itr):
 
 def fetch_sheet_lines(document_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{document_id}/export"
-    r = requests.get(url, params={"gid": gid, "format": "tsv"})
+    r = requests.get(url, params={"gid": gid, "format": "tsv"}, timeout=10)
     if r.status_code == requests.codes.ok:
         # Encoding was 'ISO-8859-1'.  Setting to apparent sets 'utf-8',
         # correctly encoding bullet characters in spreadsheet.
