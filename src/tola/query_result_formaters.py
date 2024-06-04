@@ -11,15 +11,13 @@ def output_tsv(session, query, file=sys.stdout):
 
 
 def output_json(session, query, file=sys.stdout):
-    print("[", end="", file=file)
+    file.write("[")
     row_itr = session.execute(query)
     if first_row := row_itr.fetchone():
-        print(json.dumps(first_row._asdict(), separators=(",", ":")), end="", file=file)
+        file.write(json.dumps(first_row._asdict(), separators=(",", ":")))
         while row := row_itr.fetchone():
-            print(
-                ",\n" + json.dumps(row._asdict(), separators=(",", ":")), end="", file=file
-            )
-    print("]", file=file)
+            file.write(",\n" + json.dumps(row._asdict(), separators=(",", ":")))
+    file.write("]\n")
 
 
 def output_markdown(session, query, file=sys.stdout):
@@ -71,7 +69,7 @@ def munge_string(string):
     Turns strings such as "col_name" into "Col Name"
     """
     words = []
-    for w in re.split(r"_+", string.strip('_')):
+    for w in re.split(r"_+", string.strip("_")):
         if w.islower():
             # Turn lowercase words into title case unless they should
             # have a know capitalisation in the exceptions dictionary.
