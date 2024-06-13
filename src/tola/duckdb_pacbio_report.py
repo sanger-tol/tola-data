@@ -79,7 +79,7 @@ def cli(ctx, csv_files, report_dir, duckdb_file):
             err=True,
         )
         try:
-            create_and_populate_database(con, duckdb_file, csv_files)
+            create_and_populate_database(con, csv_files)
         except Exception as e:
             duckdb_file.unlink(missing_ok=True)
             msg = "Error creating DuckDB database"
@@ -139,7 +139,7 @@ def valid_speciemns_in_chunk(chunk):
     return tol_set
 
 
-def create_and_populate_database(con, ducbdk_file, csv_files):
+def create_and_populate_database(con, csv_files):
     json_csv, rprt_csv = csv_files
 
     con.begin()
