@@ -43,17 +43,19 @@ def main():
     # Rename data types for more compact text in ERD
     data_type_rename = {
         "character varying": "varchar",
-        "timestamp without time zone": "timestamp",
         "double precision": "float",
+        "timestamp with time zone": "timestamp",
+        "timestamp without time zone": "timestamp",
     }
 
     # Not interested in audit log columns in diagram
     skip_column = {
         "created_by",
         "created_at",
-        "last_modified_by",
-        "last_modified_at",
+        "modified_by",
+        "modified_at",
         "history",
+        "folder_ulid",
     }
 
     # LucidChart has the suggested "SET enable_nestloop=off" command for psql.
@@ -67,6 +69,10 @@ def main():
     #   other methods available. The default is on.
     psql_cmd = [
         "psql",
+        "--host=127.0.0.1",
+        "--port=5435",
+        "--user=tolqc-dev",
+        "tolqc",
         "-c",
         f"SET enable_nestloop=off; COPY ({lucidchart_sql}) TO STDOUT WITH NULL AS ''",
     ]
