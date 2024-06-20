@@ -177,9 +177,9 @@ def edit_col(
 def edit_rows(ctx, table, key, apply_flag, input_files):
     """Populate or update rows in a table from ND-JSON input
 
-    INPUT_FILES is a list of files in ND-JSON format. Each row is expected to
-    contain a value for the key used to identify each record. Any other
-    values given will be used to update columns for the record.
+    INPUT_FILES is a list of files in ND-JSON format. Each line is expected to
+    contain a value for the key used to identify a row. Any other values
+    given will be used to update columns for the row.
     """
 
     if key == "id":
@@ -231,9 +231,9 @@ def add(ctx, table, key, apply_flag, input_files):
 
     INPUT_FILES is a list of files in ND-JSON format.
 
-    A primary key for each record can be provided under the key `<table>.id`.
+    A primary key for each row can be provided under the key `<table>.id`.
 
-    If the database records being created have an auto-incremented integer
+    If the database rows being created have an auto-incremented integer
     primary key, a `--key` argument giving the key of a parent to-one
     relation is required so that they can be fetched after creation.
     """
@@ -253,13 +253,13 @@ def add(ctx, table, key, apply_flag, input_files):
     key_id_list = sorted({v for x in input_obj if (v := x.get(key)) is not None})
 
     # Existing objects in datbase
-    db_obj_before = key_list_search(client, table, key_id_list, key)
+    db_obj_before = key_list_search(client, table, key, key_id_list)
 
-    # Guard against updating records (via upsert) with same primary key
+    # Guard against updating rows (via upsert) with same primary key
     if db_obj_before and key == pk:
         plural = s(db_obj_before)
         sys.exit(
-            f"Error: {len(db_obj_before)} record{plural} present in"
+            f"Error: {len(db_obj_before)} row{plural} present in"
             f" database with matching '{pk}' value{plural}: {sorted(db_obj_before)}"
         )
 
@@ -285,7 +285,7 @@ def add(ctx, table, key, apply_flag, input_files):
     ads.upsert(table, create)
 
     # Fetch objects from database and filter newly created
-    db_obj_after = key_list_search(client, table, key_id_list, key)
+    db_obj_after = key_list_search(client, table, key, key_id_list)
     new_ids = db_obj_after.keys() - db_obj_before.keys()
     new_obj = [db_obj_after[x] for x in db_obj_after if x in new_ids]
 
@@ -294,13 +294,15 @@ def add(ctx, table, key, apply_flag, input_files):
     n_new = len(new_obj)
     if n_new != n_inp:
         sys.exit(
-            f"Error: Created {n_new} record{s(n_new)}"
+            f"Error: Created {n_new} row{s(n_new)}"
             f" from {n_inp} input object{s(n_inp)}.\n"
-            "       Existing database records may have been edited."
+            "       Existing database rows may have been edited."
         )
 
     if sys.stdout.isatty():
-        click.echo_via_pager(pretty_cdo_itr(new_obj, key))
+        click.echo_via_pager(
+            pretty_cdo_itr(new_obj, key, head="Created {} new row{}:\n")
+        )
     else:
         for cdo in new_obj:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
@@ -332,6 +334,48 @@ def show(client, table, key, file_list, file_format, id_list):
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
 
 
+@cli.command
+@click.pass_context
+@opt.table
+@opt.key
+@opt.apply_flag
+@opt.input_files
+def delete_rows(ctx, table, key, apply_flag, input_files):
+    """Delete rows from a table which match ND-JSON input lines
+
+    INPUT_FILES is a list of files in ND-JSON format. Each line is expected to
+    contain a value for the key used to identify each row.
+    """
+
+    if key == "id":
+        key = f"{table}.id"
+
+    input_obj = input_objects_or_exit(ctx, input_files)
+
+    client = ctx.obj
+    ads = client.ads
+    id_list = [x[key] for x in input_obj]
+    db_obj = fetch_list_or_exit(client, table, key, id_list)
+    if db_obj:
+        head = None
+        tail = None
+        if apply_flag:
+            head = "Deleted {} row{}:\n"
+            for chunk in client.pages(id_list):
+                ads.delete(table, chunk)
+        else:
+            tail = "Dry run. Use '--apply' flag to delete {} row{}.\n"
+
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_cdo_itr(db_obj, key, head=head, tail=tail))
+        else:
+            for dlt in db_obj:
+                sys.stdout.write(ndjson_row(dlt))
+            if not apply_flag:
+                count = len(db_obj)
+                dry_warning(tail.format(bold(count), s(count)))
+
+
 def input_objects_or_exit(ctx, input_files):
     if not input_files and sys.stdin.isatty():
         err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
@@ -351,14 +395,14 @@ def input_objects_or_exit(ctx, input_files):
     return input_obj
 
 
-def key_list_search(client, table, key_id_list, key):
+def key_list_search(client, table, key, key_id_list):
     db_obj_found = {}
     if key_id_list:
         search_key = "id" if key == f"{table}.id" else key
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
             for cdo in client.ads.get_list(table, object_filters=filt):
-                db_obj_found[getattr(cdo, key)] = cdo
+                db_obj_found[getattr(cdo, search_key)] = cdo
 
     return db_obj_found
 
@@ -399,7 +443,7 @@ def fetch_list_or_exit(client, table, key, id_list):
     error.
     """
 
-    key_fetched = key_list_search(client, table, id_list, key)
+    key_fetched = key_list_search(client, table, key, id_list)
 
     # Check if we found a data record for each name
     if missed := set(id_list) - key_fetched.keys():
@@ -446,18 +490,21 @@ def core_data_object_to_dict(cdo):
     return flat
 
 
-def pretty_cdo_itr(cdo_list, key):
+def pretty_cdo_itr(cdo_list, key, head=None, tail=None):
     if not cdo_list:
         return []
 
     cdo_key = cdo_type_id(cdo_list[0])
     flat_list = [core_data_object_to_dict(x) for x in cdo_list]
-    return pretty_dict_itr(flat_list, key, cdo_key)
+    return pretty_dict_itr(flat_list, key, cdo_key, head, tail)
 
 
-def pretty_dict_itr(row_list, key, alt_key=None):
+def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
     if not row_list:
         return []
+
+    if not head:
+        head = "Found {} row{}:"
 
     first = row_list[0]
     max_hdr = max(len(k) for k in first)
@@ -471,7 +518,8 @@ def pretty_dict_itr(row_list, key, alt_key=None):
                 + json.dumps(first, indent=4)
             )
 
-    yield f"Found {bold(len(row_list))} records:\n"
+    count = len(row_list)
+    yield head.format(bold(count), s(count)) + "\n"
 
     for flat in row_list:
         fmt = io.StringIO()
@@ -483,6 +531,10 @@ def pretty_dict_itr(row_list, key, alt_key=None):
 
             fmt.write(f" {k:>{max_hdr}}  {style(v)}\n")
         yield fmt.getvalue()
+
+    if tail:
+        count = len(row_list)
+        yield "\n" + tail.format(bold(count), s(count))
 
 
 def pretty_changes_itr(changes, apply_flag):
