@@ -525,7 +525,7 @@ def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
         fmt = io.StringIO()
         fmt.write("\n")
         for k, v in flat.items():
-            v, style = field_style(v)
+            v, style = field_style(k, v)
             if k == key:
                 style = bold_green
 
@@ -552,8 +552,8 @@ def pretty_changes_itr(changes, apply_flag):
         new_values = []
         for k in v_keys:
             old, new = chng[k]
-            old_values.append(field_style(old))
-            new_values.append(field_style(new))
+            old_values.append(field_style(k, old))
+            new_values.append(field_style(k, new))
         old_val_max = max(len(x[0]) for x in old_values)
 
         for k, (old_val, old_style), (new_val, new_style) in zip(
@@ -568,13 +568,15 @@ def pretty_changes_itr(changes, apply_flag):
         yield "\n" + dry_warning(len(changes))
 
 
-def field_style(val):
+def field_style(key, val):
     if val == "":
         return "<empty_string>", bold_red
     if val is None:
         return "null", dim
     if isinstance(val, datetime.date):
         return val.isoformat(), bold
+    if isinstance(val, int) and val >= 10_000 and not key.endswith("_id"):
+        return f"{val:_}", bold
     return repr(val), bold
 
 
