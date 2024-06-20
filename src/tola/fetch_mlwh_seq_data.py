@@ -264,28 +264,44 @@ def pacbio_sql():
           , run.pac_bio_library_tube_name AS library_id
 
           -- Fields for PacbioRunMetrics:
-          , well_metrics.movie_minutes AS movie_minutes
-          , well_metrics.binding_kit AS binding_kit
-          , well_metrics.sequencing_kit AS sequencing_kit
+          , well_metrics.movie_minutes
+          , well_metrics.binding_kit
+          , well_metrics.sequencing_kit
+          , well_metrics.sequencing_kit_lot_number
+          , well_metrics.cell_lot_number
           , IF(well_metrics.include_kinetics IS NULL, NULL,
               IF(well_metrics.include_kinetics = 1, 'true', 'false')
             ) AS include_kinetics
-          , well_metrics.loading_conc AS loading_conc
-          , well_metrics.control_num_reads AS control_num_reads
-          , well_metrics.control_read_length_mean AS control_read_length_mean
-          , well_metrics.polymerase_read_bases AS polymerase_read_bases
-          , well_metrics.polymerase_num_reads AS polymerase_num_reads
-          , well_metrics.polymerase_read_length_mean AS polymerase_read_length_mean
-          , well_metrics.polymerase_read_length_n50 AS polymerase_read_length_n50
-          , well_metrics.insert_length_mean AS insert_length_mean
-          , well_metrics.insert_length_n50 AS insert_length_n50
-          , well_metrics.unique_molecular_bases AS unique_molecular_bases
-          , well_metrics.p0_num AS p0_num
-          , well_metrics.p1_num AS p1_num
-          , well_metrics.p2_num AS p2_num
-          , well_metrics.hifi_read_bases AS hifi_read_bases
-          , well_metrics.hifi_num_reads AS hifi_num_reads
-          , well_metrics.hifi_low_quality_num_reads AS hifi_low_quality_num_reads
+          , well_metrics.loading_conc
+          , well_metrics.control_num_reads
+          , well_metrics.control_read_length_mean
+          , well_metrics.control_concordance_mean
+          , well_metrics.control_concordance_mode
+          , well_metrics.local_base_rate
+          , well_metrics.polymerase_read_bases
+          , well_metrics.polymerase_num_reads
+          , well_metrics.polymerase_read_length_mean
+          , well_metrics.polymerase_read_length_n50
+          , well_metrics.insert_length_mean
+          , well_metrics.insert_length_n50
+          , well_metrics.unique_molecular_bases
+          , well_metrics.productive_zmws_num
+          , well_metrics.p0_num
+          , well_metrics.p1_num
+          , well_metrics.p2_num
+          , well_metrics.adapter_dimer_percent
+          , well_metrics.short_insert_percent
+          , well_metrics.hifi_read_bases
+          , well_metrics.hifi_num_reads
+          , well_metrics.hifi_read_length_mean
+          , well_metrics.hifi_read_quality_median
+          , well_metrics.hifi_number_passes_mean
+          , well_metrics.hifi_low_quality_read_bases
+          , well_metrics.hifi_low_quality_num_reads
+          , well_metrics.hifi_low_quality_read_length_mean
+          , well_metrics.hifi_low_quality_read_quality_median
+          , well_metrics.hifi_barcoded_reads
+          , well_metrics.hifi_bases_in_barcoded_reads
 
           , irods.irods_root_collection AS irods_path
           , irods.irods_data_relative_path AS irods_file

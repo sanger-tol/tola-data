@@ -76,7 +76,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
     logging.basicConfig(level=getattr(logging, log_level))
     try:
-        ctx.obj = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+        ctx.obj = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=100)
     except ConnectionParamsException as cpe:
         if sys.stdout.isatty():
             # Show help if we're on a TTY
