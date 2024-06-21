@@ -10,7 +10,7 @@ else
     exit 2
 fi
 
-export DB_URI="postgresql://sts-dev:build-that-sts@127.0.0.1:5435/tolqc"
+export DB_URI="postgresql://tolqc-dev@127.0.0.1:5435/tolqc"
 cd ~/git/tolqc/tolqc-api/migrations
 conf_file="alembic.ini"
 conf_file_bak="$conf_file.bak"
