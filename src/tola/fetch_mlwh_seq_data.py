@@ -126,7 +126,19 @@ def illumina_fetcher(mlwh, project_id):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project_id,))
     for row in crsr:
+        build_remote_path(row)
         yield ndjson_row(row)
+
+
+PIPELINE_TO_LIBRARY_TYPE = {
+    "PacBio_Ultra_Low_Input": "PacBio - HiFi (ULI)",
+    "PacBio_Ultra_Low_Input_mplx": "PacBio - HiFi (ULI)",
+    "Pacbio_HiFi": "PacBio - HiFi",
+    "Pacbio_HiFi_mplx": "PacBio - HiFi",
+    "Pacbio_IsoSeq": "PacBio - IsoSeq",
+    "PacBio_IsoSeq_mplx": "PacBio - IsoSeq",
+    "Pacbio_Microbial_mplx": "PacBio - HiFi (Microbial)",
+}
 
 
 def pacbio_fetcher(mlwh, project_id):
@@ -134,6 +146,9 @@ def pacbio_fetcher(mlwh, project_id):
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
     for row in crsr:
+        build_remote_path(row)
+
+        # Build name field, appending any tags
         name = row["name"]
         tag1 = trimmed_tag(row["tag1_id"])
         tag2 = trimmed_tag(row["tag2_id"])
@@ -141,6 +156,11 @@ def pacbio_fetcher(mlwh, project_id):
             row["name"] = f"{name}#{tag1}#{tag2}"
         elif tag1:
             row["name"] = f"{name}#{tag1}"
+
+        # Map MLWH library type to canonical library type
+        if pidl := row.get("pipeline_id_lims"):
+            row["pipeline_id_lims"] = PIPELINE_TO_LIBRARY_TYPE.get(pidl, pidl)
+
         yield ndjson_row(row)
 
 
@@ -164,6 +184,15 @@ def trimmed_tag(tag):
         return tag
 
 
+def build_remote_path(row):
+    irods_path = row.pop('irods_path')
+    irods_file = row.pop('irods_file')
+    if irods_path and irods_file:
+        row['remote_path'] = 'irods:' + irods_path.rstrip('/') + '/' + irods_file
+    else:
+        row['remote_path'] = None
+
+
 @cache
 def illumina_sql():
     return inspect.cleandoc(
@@ -174,7 +203,7 @@ def illumina_sql():
               , '\\.[[:alnum:]]+$'
               , ''
             ) AS name
-          , study.id_study_lims AS study_id
+          , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
           , sample.public_name AS tol_specimen_id
@@ -187,7 +216,6 @@ def illumina_sql():
           , run_lane_metrics.instrument_name AS instrument_name
           , flowcell.pipeline_id_lims AS pipeline_id_lims
           , CONVERT(product_metrics.id_run, CHAR) AS run_id
-          , CONVERT(product_metrics.position, CHAR) AS position
           , CONVERT(product_metrics.tag_index, CHAR) AS tag_index
           , run_lane_metrics.run_complete AS run_complete
           , IF(product_metrics.qc IS NULL, NULL
@@ -217,7 +245,6 @@ def illumina_sql():
         JOIN seq_product_irods_locations AS irods
           ON product_metrics.id_iseq_product = irods.id_product
         WHERE run_lane_metrics.qc_complete IS NOT NULL
-          AND product_metrics.num_reads IS NOT NULL
           AND study.id_lims = 'SQSCP'
           AND study.id_study_lims = %s
         """,
@@ -237,7 +264,7 @@ def pacbio_sql():
           GROUP BY rwm.id_pac_bio_rw_metrics_tmp
         )
         SELECT well_metrics.movie_name AS name
-          , study.id_study_lims AS study_id
+          , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
           , sample.public_name AS tol_specimen_id
@@ -252,7 +279,12 @@ def pacbio_sql():
           , run.pipeline_id_lims AS pipeline_id_lims
           , well_metrics.movie_name AS run_id
           , well_metrics.pac_bio_run_name AS lims_run_id
-          , well_metrics.well_label AS well_label
+          , IF(well_metrics.plate_number IS NULL
+              , well_metrics.well_label
+              , CONCAT(well_metrics.well_label
+                  , '.'
+                  , well_metrics.plate_number)
+                ) AS element
           , well_metrics.run_start AS run_start
           , well_metrics.run_complete AS run_complete
           , plex_agg.plex_count AS plex_count
@@ -355,9 +387,7 @@ def patch_species(client):
                 if getattr(sp, prop) is None:
                     changes[prop] = val
             if changes:
-                updates.append(
-                    obj_factory("species", id_=sp.id, attributes=changes)
-                )
+                updates.append(obj_factory("species", id_=sp.id, attributes=changes))
     for page in client.pages(updates):
         ads.upsert("species", page)
 

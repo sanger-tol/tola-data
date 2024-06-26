@@ -104,7 +104,7 @@ class TolClient:
     def _headers(self):
         return {"Token": self.api_token}
 
-    def _build_path(self, path):
+    def build_path(self, path):
         if path.startswith("/"):
             msg = "Error: unnecessary leading '/' in path: {path!r}"
             raise ValueError(msg)
@@ -113,7 +113,7 @@ class TolClient:
     def json_get(self, path, payload=None):
         enc = self._encode_payload(payload)
         r = requests.get(
-            self._build_path(path),
+            self.build_path(path),
             headers=self._headers(),
             params=enc,
             timeout=10,
@@ -123,7 +123,7 @@ class TolClient:
 
     def json_post(self, path, data):
         r = requests.post(
-            self._build_path(path),
+            self.build_path(path),
             headers=self._headers(),
             data=data,
             timeout=10,
