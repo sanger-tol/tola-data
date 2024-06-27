@@ -4,6 +4,8 @@ import duckdb
 import inspect
 import pathlib
 
+from duckdb.duckdb import ConstraintException
+
 from tola import tolqc_client
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
@@ -44,23 +46,93 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
 
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     con = duckdb.connect(str(duckdb_file))
-    con.execute(diff_db_table_definition("mlwh"))
-    con.execute(diff_db_table_definition("tolqc"))
 
     # NDJSON from MLWH has different number of columns for Illumina and PacBio
-    # data, and the created table `temp` may have the columns in a different
-    # order to our schema, so we need to load then copy the data into the
-    # `mlwh` table.
-    con.execute("CREATE TABLE temp AS FROM read_json(?)", (str(mlwh_ndjson),))
-    copy_data_to_dest(con, "temp", "mlwh")
-    con.execute("DROP TABLE temp")
+    # data.  To create scnd_he same table structure for scnd_he `mlwh` and `{scnd}`
+    # tables we provide scnd_he column mapping.
+    con.execute(
+        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def()})",
+        (str(mlwh_ndjson),),
+    )
 
-    # Fetch the current MLWH data from ToLQC
+    # Fetch scnd_he current MLWH data from ToLQC
     con.execute("SET force_download=true")
     con.execute(
-        "INSERT INTO tolqc FROM read_json(?)",
+        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def()})",
         (tqc.build_path("report/mlwh-data?format=NDJSON"),),
     )
+    for tbl_name in ("mlwh", "tolqc"):
+        check_for_duplicate_names(con, tbl_name)
+        # try:
+        #     con.execute(f"CREATE UNIQUE INDEX {tbl_name}_name_ux ON {tbl_name} (name)")
+        # except ConstraintException:
+        #     click.echo(f"Error: {tbl_name}.name contains duplicates", err=True)
+
+    for mismatches in compare_tables(con, "mlwh", "tolqc"):
+        if len(mismatches) == 1:
+            (tbl_name, name, struct), = mismatches
+            click.echo(f"\nOnly in {tbl_name}: {name}")
+        else:
+            (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
+            click.echo(f"\n{frst_name} {frst_tbl} vs {scnd_tbl}")
+            show_diff(frst, scnd)
+
+
+def show_diff(frst, scnd):
+    for key, frst_v in frst.items():
+        scnd_v = scnd[key]
+        if frst_v != scnd_v:
+            click.echo(f"  {key}: {frst_v!r} {scnd[key]!r}")
+
+
+def check_for_duplicate_names(con, tbl_name):
+    con.execute(f"""
+        SELECT name FROM {tbl_name} GROUP BY name HAVING COUNT(*) > 1
+    """)  # noqa: S608
+    while row := con.fetchone():
+        click.echo(f"Duplicate {tbl_name}.name: {row[0]}")
+
+
+def compare_tables(con, frst, scnd):
+    con.execute(f"""
+        WITH frst_h AS (
+          SELECT '{frst}' AS tbl_name
+            , name
+            , md5({frst}::text) AS hash
+            , {frst} AS struct
+          FROM {frst}
+        ),
+        scnd_h AS (
+          SELECT '{scnd}' AS tbl_name
+            , name
+            , md5({scnd}::text) AS hash
+            , {scnd} AS struct
+            FROM {scnd}
+        )
+        SELECT COALESCE(frst_h.tbl_name, scnd_h.tbl_name) AS tbl_name
+          , COALESCE(frst_h.name, scnd_h.name) AS name
+          , COALESCE(frst_h.struct, scnd_h.struct) AS struct
+        FROM frst_h FULL JOIN scnd_h USING(hash)
+        WHERE (frst_h.tbl_name IS NULL
+          OR scnd_h.tbl_name IS NULL)
+        ORDER BY name, tbl_name
+    """)  # noqa: S608
+
+    prev = con.fetchone()
+    while row := con.fetchone():
+        if prev:
+            if row[1] == prev[1]:
+                # Same name
+                yield prev, row
+                prev = None
+            else:
+                yield (prev,)
+                prev = row
+        else:
+            prev = row
+
+    if prev:
+        yield (prev,)
 
 
 def copy_data_to_dest(con, source, dest):
@@ -76,75 +148,75 @@ def copy_data_to_dest(con, source, dest):
     con.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
 
 
-def diff_db_table_definition(table_name):
+def columns_def():
     return inspect.cleandoc(
         """
-        CREATE TABLE {}(
-            "name" VARCHAR
-          , study_id BIGINT
-          , sample_name VARCHAR
-          , supplier_name VARCHAR
-          , tol_specimen_id VARCHAR
-          , biosample_accession VARCHAR
-          , biospecimen_accession VARCHAR
-          , scientific_name VARCHAR
-          , taxon_id INTEGER
-          , platform_type VARCHAR
-          , instrument_model VARCHAR
-          , instrument_name VARCHAR
-          , pipeline_id_lims VARCHAR
-          , run_id VARCHAR
-          , tag_index VARCHAR
-          , lims_run_id VARCHAR
-          , element VARCHAR
-          , run_start VARCHAR
-          , run_complete VARCHAR
-          , plex_count BIGINT
-          , lims_qc VARCHAR
-          , qc_date VARCHAR
-          , tag1_id VARCHAR
-          , tag2_id VARCHAR
-          , library_id VARCHAR
+        {
+            name: 'VARCHAR',
+            study_id: 'BIGINT',
+            sample_name: 'VARCHAR',
+            supplier_name: 'VARCHAR',
+            tol_specimen_id: 'VARCHAR',
+            biosample_accession: 'VARCHAR',
+            biospecimen_accession: 'VARCHAR',
+            scientific_name: 'VARCHAR',
+            taxon_id: 'INTEGER',
+            platform_type: 'VARCHAR',
+            instrument_model: 'VARCHAR',
+            instrument_name: 'VARCHAR',
+            pipeline_id_lims: 'VARCHAR',
+            run_id: 'VARCHAR',
+            tag_index: 'VARCHAR',
+            lims_run_id: 'VARCHAR',
+            element: 'VARCHAR',
+            run_start: 'VARCHAR',
+            run_complete: 'VARCHAR',
+            plex_count: 'BIGINT',
+            lims_qc: 'VARCHAR',
+            qc_date: 'VARCHAR',
+            tag1_id: 'VARCHAR',
+            tag2_id: 'VARCHAR',
+            library_id: 'VARCHAR',
 
-          -- pacbio_run_metrics columns
-          , movie_minutes INTEGER
-          , binding_kit VARCHAR
-          , sequencing_kit VARCHAR
-          , sequencing_kit_lot_number VARCHAR
-          , cell_lot_number VARCHAR
-          , include_kinetics VARCHAR
-          , loading_conc DOUBLE
-          , control_num_reads INTEGER
-          , control_read_length_mean BIGINT
-          , control_concordance_mean DOUBLE
-          , control_concordance_mode DOUBLE
-          , local_base_rate DOUBLE
-          , polymerase_read_bases BIGINT
-          , polymerase_num_reads INTEGER
-          , polymerase_read_length_mean DOUBLE
-          , polymerase_read_length_n50 INTEGER
-          , insert_length_mean BIGINT
-          , insert_length_n50 INTEGER
-          , unique_molecular_bases BIGINT
-          , productive_zmws_num INTEGER
-          , p0_num INTEGER
-          , p1_num INTEGER
-          , p2_num INTEGER
-          , adapter_dimer_percent DOUBLE
-          , short_insert_percent DOUBLE
-          , hifi_read_bases BIGINT
-          , hifi_num_reads INTEGER
-          , hifi_read_length_mean INTEGER
-          , hifi_read_quality_median INTEGER
-          , hifi_number_passes_mean DOUBLE
-          , hifi_low_quality_read_bases BIGINT
-          , hifi_low_quality_num_reads INTEGER
-          , hifi_low_quality_read_length_mean INTEGER
-          , hifi_low_quality_read_quality_median INTEGER
-          , hifi_barcoded_reads INTEGER
-          , hifi_bases_in_barcoded_reads BIGINT
+            -- pacbio_run_metrics fields
+            movie_minutes: 'INTEGER',
+            binding_kit: 'VARCHAR',
+            sequencing_kit: 'VARCHAR',
+            sequencing_kit_lot_number: 'VARCHAR',
+            cell_lot_number: 'VARCHAR',
+            include_kinetics: 'VARCHAR',
+            loading_conc: 'DOUBLE',
+            control_num_reads: 'INTEGER',
+            control_read_length_mean: 'BIGINT',
+            control_concordance_mean: 'DOUBLE',
+            control_concordance_mode: 'DOUBLE',
+            local_base_rate: 'DOUBLE',
+            polymerase_read_bases: 'BIGINT',
+            polymerase_num_reads: 'INTEGER',
+            polymerase_read_length_mean: 'DOUBLE',
+            polymerase_read_length_n50: 'INTEGER',
+            insert_length_mean: 'BIGINT',
+            insert_length_n50: 'INTEGER',
+            unique_molecular_bases: 'BIGINT',
+            productive_zmws_num: 'INTEGER',
+            p0_num: 'INTEGER',
+            p1_num: 'INTEGER',
+            p2_num: 'INTEGER',
+            adapter_dimer_percent: 'DOUBLE',
+            short_insert_percent: 'DOUBLE',
+            hifi_read_bases: 'BIGINT',
+            hifi_num_reads: 'INTEGER',
+            hifi_read_length_mean: 'INTEGER',
+            hifi_read_quality_median: 'INTEGER',
+            hifi_number_passes_mean: 'DOUBLE',
+            hifi_low_quality_read_bases: 'BIGINT',
+            hifi_low_quality_num_reads: 'INTEGER',
+            hifi_low_quality_read_length_mean: 'INTEGER',
+            hifi_low_quality_read_quality_median: 'INTEGER',
+            hifi_barcoded_reads: 'INTEGER',
+            hifi_bases_in_barcoded_reads: 'BIGINT',
 
-          , remote_path VARCHAR
-        )
+            remote_path: 'VARCHAR',
+        }
     """
-    ).format(table_name)
+    )
