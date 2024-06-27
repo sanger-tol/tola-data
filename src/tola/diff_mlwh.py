@@ -44,23 +44,13 @@ def default_mlwh_ndjson_file():
 def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
     """Compare the contents of the MLWH to the ToLQC database"""
 
-    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+    have_db = duckdb_file.exists()
     con = duckdb.connect(str(duckdb_file))
 
-    # NDJSON from MLWH has different number of columns for Illumina and PacBio
-    # data.  To create scnd_he same table structure for scnd_he `mlwh` and `{scnd}`
-    # tables we provide scnd_he column mapping.
-    con.execute(
-        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def()})",
-        (str(mlwh_ndjson),),
-    )
+    if not have_db:
+        tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+        create_diff_db(con, tqc, mlwh_ndjson)
 
-    # Fetch scnd_he current MLWH data from ToLQC
-    con.execute("SET force_download=true")
-    con.execute(
-        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def()})",
-        (tqc.build_path("report/mlwh-data?format=NDJSON"),),
-    )
     for tbl_name in ("mlwh", "tolqc"):
         check_for_duplicate_names(con, tbl_name)
         # try:
@@ -70,24 +60,45 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
 
     for mismatches in compare_tables(con, "mlwh", "tolqc"):
         if len(mismatches) == 1:
-            (tbl_name, name, struct), = mismatches
+            ((tbl_name, name, struct),) = mismatches
             click.echo(f"\nOnly in {tbl_name}: {name}")
         else:
             (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
-            click.echo(f"\n{frst_name} {frst_tbl} vs {scnd_tbl}")
+            click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
             show_diff(frst, scnd)
+
+
+def create_diff_db(con, tqc, mlwh_ndjson):
+    # NDJSON from MLWH has different number of columns for Illumina and PacBio
+    # data.  To create scnd_he same table structure for the `mlwh` and `{scnd}`
+    # tables we provide scnd_he column mapping.
+    con.execute(
+        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def()})",
+        (str(mlwh_ndjson),),
+    )
+
+    # Fetch the current MLWH data from ToLQC
+    con.execute("SET force_download=true")
+    con.execute(
+        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def()})",
+        (tqc.build_path("report/mlwh-data?format=NDJSON"),),
+    )
 
 
 def show_diff(frst, scnd):
     for key, frst_v in frst.items():
         scnd_v = scnd[key]
         if frst_v != scnd_v:
-            click.echo(f"  {key}: {frst_v!r} {scnd[key]!r}")
+            click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
 def check_for_duplicate_names(con, tbl_name):
     con.execute(f"""
-        SELECT name FROM {tbl_name} GROUP BY name HAVING COUNT(*) > 1
+        SELECT name
+        FROM {tbl_name}
+        GROUP BY name
+        HAVING COUNT(*) > 1
+        ORDER BY name
     """)  # noqa: S608
     while row := con.fetchone():
         click.echo(f"Duplicate {tbl_name}.name: {row[0]}")
@@ -112,9 +123,9 @@ def compare_tables(con, frst, scnd):
         SELECT COALESCE(frst_h.tbl_name, scnd_h.tbl_name) AS tbl_name
           , COALESCE(frst_h.name, scnd_h.name) AS name
           , COALESCE(frst_h.struct, scnd_h.struct) AS struct
-        FROM frst_h FULL JOIN scnd_h USING(hash)
-        WHERE (frst_h.tbl_name IS NULL
-          OR scnd_h.tbl_name IS NULL)
+        FROM frst_h FULL JOIN scnd_h USING (hash)
+        WHERE frst_h.tbl_name IS NULL
+          OR scnd_h.tbl_name IS NULL
         ORDER BY name, tbl_name
     """)  # noqa: S608
 
