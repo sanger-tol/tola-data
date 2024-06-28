@@ -48,7 +48,7 @@ def main():
         "timestamp without time zone": "timestamp",
     }
 
-    # Not interested in audit log columns in diagram
+    # Not interested in audit log or folder columns in diagram
     skip_column = {
         "created_by",
         "created_at",
@@ -77,7 +77,7 @@ def main():
         f"SET enable_nestloop=off; COPY ({lucidchart_sql}) TO STDOUT WITH NULL AS ''",
     ]
 
-    with Popen(psql_cmd, stdout=PIPE, text=True) as psql_pipe:
+    with Popen(psql_cmd, stdout=PIPE, text=True) as psql_pipe:  # noqa: S603
         for row_str in psql_pipe.stdout:
             row = row_str.rstrip("\r\n").split("\t")
 
