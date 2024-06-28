@@ -43,13 +43,13 @@ def read_tsv(path):
         for line in fh:
             cols = split_tsv_line(line)
             spec = {}
-            for attr, val in zip(header_line, cols):
+            for attr, val in zip(header_line, cols, strict=True):
                 spec[attr] = val
             yield spec
 
 
 def split_tsv_line(line):
-    return list(None if x == r"\N" else x for x in line.rstrip("\r\n").split("\t"))
+    return [None if x == r"\N" else x for x in line.rstrip("\r\n").split("\t")]
 
 
 if __name__ == "__main__":
