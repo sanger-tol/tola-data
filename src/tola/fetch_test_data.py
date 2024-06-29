@@ -270,7 +270,7 @@ def sqlalchemy_data_objects_repr(sql_alchemy_data):
                     attribs.append(f"{name}='{value.isoformat()}'")
                 else:
                     attribs.append(f"{name}={value!r}")
-        for name in self.__mapper__.relationships:
+        for name in self.__mapper__.relationships.keys():  # noqa: SIM118
             try:
                 related_objs = getattr(self, name)
             except DetachedInstanceError:
