@@ -76,7 +76,9 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
     logging.basicConfig(level=getattr(logging, log_level))
     try:
-        ctx.obj = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=100)
+        ctx.obj = tolqc_client.TolClient(
+            tolqc_url, api_token, tolqc_alias, page_size=100
+        )
     except ConnectionParamsException as cpe:
         if sys.stdout.isatty():
             # Show help if we're on a TTY
@@ -325,6 +327,9 @@ def show(client, table, key, file_list, file_format, id_list):
     redirected to a file or UNIX pipe.
     """
 
+    if key == "id":
+        key = f"{table}.id"
+
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
@@ -337,25 +342,24 @@ def show(client, table, key, file_list, file_format, id_list):
 @cli.command
 @click.pass_context
 @opt.table
-@opt.key
 @opt.apply_flag
-@opt.input_files
-def delete_rows(ctx, table, key, apply_flag, input_files):
+@opt.file
+@tolqc_client.file_format
+@opt.id_list
+def delete(ctx, table, apply_flag, file_list, file_format, id_list):
     """Delete rows from a table which match ND-JSON input lines
 
-    INPUT_FILES is a list of files in ND-JSON format. Each line is expected to
-    contain a value for the key used to identify each row.
+    The list of IDs provided must be the primary key of the table. If
+    specified in files each row must contain a value for `TABLE_NAME.id`
     """
 
-    if key == "id":
-        key = f"{table}.id"
-
-    input_obj = input_objects_or_exit(ctx, input_files)
-
+    key = f"{table}.id"
     client = ctx.obj
     ads = client.ads
-    id_list = [x[key] for x in input_obj]
+
+    id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     db_obj = fetch_list_or_exit(client, table, key, id_list)
+
     if db_obj:
         head = None
         tail = None
@@ -399,10 +403,21 @@ def key_list_search(client, table, key, key_id_list):
     db_obj_found = {}
     if key_id_list:
         search_key = "id" if key == f"{table}.id" else key
+        obj_key = search_key[:-3] if search_key.endswith(".id") else None
+
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
             for cdo in client.ads.get_list(table, object_filters=filt):
-                db_obj_found[getattr(cdo, search_key)] = cdo
+                val = getattr(cdo, obj_key).id if obj_key else getattr(cdo, search_key)
+                if not val:
+                    sys.exit(f"No such key '{search_key}' in {cdo!r}")
+                if db_obj_found.get(val):
+                    sys.exit(
+                        f"More than one row in '{table}' table"
+                        f" with '{search_key}' = '{val}'"
+                    )
+                else:
+                    db_obj_found[val] = cdo
 
     return db_obj_found
 
@@ -457,6 +472,10 @@ def fetch_list_or_exit(client, table, key, id_list):
 
 def fetch_all(client, table, key, id_list):
     key = "id" if key == f"{table}.id" else key
+
+    ### Could use get_by_ids():
+    ###     speciess = ads.get_by_ids('species', [1234])
+
     if id_list:
         fetched = []
         for req_list in client.pages(id_list):

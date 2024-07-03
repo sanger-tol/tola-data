@@ -54,7 +54,9 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
     for tbl_name in ("mlwh", "tolqc"):
         check_for_duplicate_names(con, tbl_name)
         # try:
-        #     con.execute(f"CREATE UNIQUE INDEX {tbl_name}_name_ux ON {tbl_name} (name)")
+        #     con.execute(
+        #         f"CREATE UNIQUE INDEX {tbl_name}_name_udx ON {tbl_name} (name)"
+        #     )
         # except ConstraintException:
         #     click.echo(f"Error: {tbl_name}.name contains duplicates", err=True)
 
