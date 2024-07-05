@@ -48,7 +48,7 @@ def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
     """
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if not project_id_list:
-        project_id_list = client.list_project_lims_ids()
+        project_id_list = client.list_project_study_ids()
     mlwh = db_connection.mlwh_db()
     for project_id in project_id_list:
         for platform, run_data_fetcher in (
@@ -148,14 +148,14 @@ def pacbio_fetcher(mlwh, project_id):
     for row in crsr:
         build_remote_path(row)
 
-        # Build name field, appending any tags
-        name = row["name"]
+        # Build data_id field, appending any tags
+        data_id = row["data_id"]
         tag1 = trimmed_tag(row["tag1_id"])
         tag2 = trimmed_tag(row["tag2_id"])
         if tag2:
-            row["name"] = f"{name}#{tag1}#{tag2}"
+            row["data_id"] = f"{data_id}#{tag1}#{tag2}"
         elif tag1:
-            row["name"] = f"{name}#{tag1}"
+            row["data_id"] = f"{data_id}#{tag1}"
 
         # Map MLWH library type to canonical library type
         if pidl := row.get("pipeline_id_lims"):
@@ -202,7 +202,7 @@ def illumina_sql():
             irods.irods_data_relative_path
               , '\\.[[:alnum:]]+$'
               , ''
-            ) AS name
+            ) AS data_id
           , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name
@@ -263,7 +263,7 @@ def pacbio_sql():
             USING (id_pac_bio_rw_metrics_tmp)
           GROUP BY rwm.id_pac_bio_rw_metrics_tmp
         )
-        SELECT well_metrics.movie_name AS name
+        SELECT well_metrics.movie_name AS data_id
           , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.supplier_name AS supplier_name

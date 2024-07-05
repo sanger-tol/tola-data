@@ -152,10 +152,10 @@ class TolClient:
         for i in range(0, len(book), page):
             yield book[i : i + page]
 
-    def list_project_lims_ids(self):
+    def list_project_study_ids(self):
         rspns_json = self.json_get("data/project")
-        project_lims_ids = []
+        project_study_ids = []
         for proj in rspns_json["data"]:
-            if lims_id := proj["attributes"].get("lims_id"):
-                project_lims_ids.append(lims_id)
-        return sorted(project_lims_ids)
+            if study_id := proj["attributes"].get("study_id"):
+                project_study_ids.append(study_id)
+        return sorted(project_study_ids)

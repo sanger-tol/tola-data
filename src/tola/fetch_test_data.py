@@ -138,8 +138,8 @@ def build_sample_data(ssn_maker):
             fetched.extend(entries)
 
         # Projects required
-        lims_ids = 5822, 5901, 6327
-        fetched.extend(fetch_projects(session, lims_ids))
+        study_ids = 5822, 5901, 6327
+        fetched.extend(fetch_projects(session, study_ids))
 
         # Fetch data for a list of test species
         species_list = "Juncus effusus", "Brachiomonas submarina"
@@ -187,8 +187,8 @@ def pg_engine(url):
     return create_engine(pg_url, isolation_level="AUTOCOMMIT")
 
 
-def fetch_projects(session, lims_ids):
-    statement = select(Project).where(Project.lims_id.in_(lims_ids))
+def fetch_projects(session, study_ids):
+    statement = select(Project).where(Project.study_id.in_(study_ids))
     return session.scalars(statement).all()
 
 
