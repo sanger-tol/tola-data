@@ -4,7 +4,7 @@ import duckdb
 import inspect
 import pathlib
 
-from duckdb.duckdb import ConstraintException
+# from duckdb.duckdb import ConstraintException
 
 from tola import tolqc_client
 
@@ -52,13 +52,14 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
         create_diff_db(con, tqc, mlwh_ndjson)
 
     for tbl_name in ("mlwh", "tolqc"):
-        check_for_duplicate_names(con, tbl_name)
+        check_for_duplicate_data_ids(con, tbl_name)
         # try:
         #     con.execute(
-        #         f"CREATE UNIQUE INDEX {tbl_name}_name_udx ON {tbl_name} (name)"
+        #         f"CREATE UNIQUE INDEX {tbl_data_id}_data_id_udx"
+        #         f"" ON {tbl_data_id} (data_id)"
         #     )
         # except ConstraintException:
-        #     click.echo(f"Error: {tbl_name}.name contains duplicates", err=True)
+        #     click.echo(f"Error: {tbl_data_id}.data_id contains duplicates", err=True)
 
     for mismatches in compare_tables(con, "mlwh", "tolqc"):
         if len(mismatches) == 1:
@@ -94,41 +95,41 @@ def show_diff(frst, scnd):
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
-def check_for_duplicate_names(con, tbl_name):
+def check_for_duplicate_data_ids(con, tbl_name):
     con.execute(f"""
-        SELECT name
+        SELECT data_id
         FROM {tbl_name}
-        GROUP BY name
+        GROUP BY data_id
         HAVING COUNT(*) > 1
-        ORDER BY name
+        ORDER BY data_id
     """)  # noqa: S608
     while row := con.fetchone():
-        click.echo(f"Duplicate {tbl_name}.name: {row[0]}")
+        click.echo(f"Duplicate {tbl_name}.data_id: {row[0]}")
 
 
 def compare_tables(con, frst, scnd):
     con.execute(f"""
         WITH frst_h AS (
           SELECT '{frst}' AS tbl_name
-            , name
+            , data_id
             , md5({frst}::text) AS hash
             , {frst} AS struct
           FROM {frst}
         ),
         scnd_h AS (
           SELECT '{scnd}' AS tbl_name
-            , name
+            , data_id
             , md5({scnd}::text) AS hash
             , {scnd} AS struct
             FROM {scnd}
         )
         SELECT COALESCE(frst_h.tbl_name, scnd_h.tbl_name) AS tbl_name
-          , COALESCE(frst_h.name, scnd_h.name) AS name
+          , COALESCE(frst_h.data_id, scnd_h.data_id) AS data_id
           , COALESCE(frst_h.struct, scnd_h.struct) AS struct
         FROM frst_h FULL JOIN scnd_h USING (hash)
         WHERE frst_h.tbl_name IS NULL
           OR scnd_h.tbl_name IS NULL
-        ORDER BY name, tbl_name
+        ORDER BY data_id, tbl_name
     """)  # noqa: S608
 
     prev = con.fetchone()
@@ -165,7 +166,7 @@ def columns_def():
     return inspect.cleandoc(
         """
         {
-            name: 'VARCHAR',
+            data_id: 'VARCHAR',
             study_id: 'BIGINT',
             sample_name: 'VARCHAR',
             supplier_name: 'VARCHAR',
