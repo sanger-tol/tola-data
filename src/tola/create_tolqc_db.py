@@ -41,10 +41,16 @@ def main(tolqc_db, drop_tables):
         old_db = MetaData()
         old_db.reflect(engine)
 
-        keep_tables = {"user", "auth", "role", "alembic_version"}
+        keep_tables = {
+            "alembic_version",
+            "centre",
+            "project",
+            "token",
+            "user",
+        }
         drop_tables = []
         for name in old_db.tables:
-            if name in keep_tables:
+            if (name in keep_tables) or (name.endswith("_dict")):
                 continue
             drop_tables.append(old_db.tables[name])
         old_db.drop_all(engine, tables=drop_tables)
