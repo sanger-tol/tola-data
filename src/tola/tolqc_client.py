@@ -116,7 +116,7 @@ class TolClient:
             self.build_path(path),
             headers=self._headers(),
             params=enc,
-            timeout=10,
+            timeout=120,
         )
         logging.debug(f"URL = {r.url}")
         return self._check_response(r)
@@ -126,7 +126,7 @@ class TolClient:
             self.build_path(path),
             headers=self._headers(),
             data=data,
-            timeout=10,
+            timeout=120,
         )
         return self._check_response(r)
 
