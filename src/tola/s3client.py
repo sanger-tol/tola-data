@@ -4,17 +4,11 @@ import sys
 import boto3
 
 from configparser import ConfigParser
+from functools import cached_property
 from pathlib import Path
 
 
 class S3Client:
-    __slots__ = (
-        "host_base",
-        "secret_key",
-        "access_key",
-        "_s3",
-    )
-
     def __init__(self):
         """
         Fetches configuration from the `s3cmd` format conifig file given
@@ -32,10 +26,11 @@ class S3Client:
         cfg.read(cfg_path)
 
         # Pull config parameters from [default] section of INI file
-        for param in self.__slots__:
-            if param.startswith("_"):
-                setattr(self, param, None)
-                continue
+        for param in (
+            "host_base",
+            "secret_key",
+            "access_key",
+        ):
             if val := cfg.get("default", param):
                 setattr(self, param, val)
             else:
@@ -44,19 +39,16 @@ class S3Client:
                     f" in [default] section of {cfg_path}"
                 )
 
-    @property
+    @cached_property
     def s3(self):
-        s3 = self._s3
-        if not s3:
-            self._s3 = s3 = boto3.client(
-                "s3",
-                endpoint_url="https://" + self.host_base,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-            )
-        return s3
+        return boto3.client(
+            "s3",
+            endpoint_url="https://" + self.host_base,
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key,
+        )
 
     def list_buckets(self):
         response = self.s3.list_buckets()
-        for item in response['Buckets']:
-            print(item['CreationDate'], item['Name'])
+        for item in response["Buckets"]:
+            print(item["CreationDate"], item["Name"])
