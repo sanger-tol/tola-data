@@ -77,9 +77,12 @@ def get_connection_url(db_alias):
     )
 
 
-def get_connection_params_entry(alias):
+def get_connection_params_entry(alias, no_params_file_ok=False):
     params_name = ".connection_params.json"
     params_file = Path().home() / params_name
+
+    if no_params_file_ok and not params_file.exists():
+        return None
 
     try:
         mode = params_file.stat().st_mode & 0o777

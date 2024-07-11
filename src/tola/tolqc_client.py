@@ -20,10 +20,7 @@ if ca_file.exists():
 
 tolqc_alias = click.option(
     "--tolqc-alias",
-    help=(
-        "Name of connection parameters alias in ~/.connection_params.json"
-        " to connect to."
-    ),
+    help="Name of connection parameters alias in ~/.connection_params.json file.",
     default="tolqc",
     show_default=True,
 )
@@ -73,15 +70,26 @@ log_level = click.option(
 
 
 class TolClient:
-    def __init__(self, tolqc_url=None, api_token=None, tolqc_alias=None, page_size=200):
+    def __init__(
+        self, tolqc_url=None, api_token=None, tolqc_alias="tolqc", page_size=200
+    ):
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
-        if not (tolqc_url and api_token):
-            conf = get_connection_params_entry(tolqc_alias)
-        self.tolqc_url = (tolqc_url or conf["api_url"]).rstrip("/")
-        self.api_token = api_token or conf["api_token"]
         self.page_size = page_size
-        if conf:
+
+        if conf := get_connection_params_entry(
+            tolqc_alias, no_params_file_ok=(tolqc_alias == "tolqc")
+        ):
+            self._tolqc_url = tolqc_url or conf.get("api_url")
+            self.api_token = api_token or conf.get("api_token")
             self._set_proxy(conf)
+        else:
+            # Set default URL if there is no config file
+            self._tolqc_url = tolqc_url or "https://qc.tol.sanger.ac.uk"
+            self.api_token = api_token
+
+    @cached_property
+    def tolqc_url(self):
+        return self._tolqc_url.rstrip("/")
 
     @cached_property
     def ads(self):
@@ -101,8 +109,11 @@ class TolClient:
             )
             os.environ[scheme] = proxy
 
-    def _headers(self):
-        return {"Token": self.api_token}
+    @cached_property
+    def token_header(self):
+        if tkn := self.api_token:
+            return {"Token": tkn}
+        return {}
 
     def build_path(self, path):
         if path.startswith("/"):
@@ -114,7 +125,6 @@ class TolClient:
         enc = self._encode_payload(payload)
         r = requests.get(
             self.build_path(path),
-            headers=self._headers(),
             params=enc,
             timeout=120,
         )
@@ -124,7 +134,7 @@ class TolClient:
     def json_post(self, path, data):
         r = requests.post(
             self.build_path(path),
-            headers=self._headers(),
+            headers=self.token_header,
             data=data,
             timeout=120,
         )
