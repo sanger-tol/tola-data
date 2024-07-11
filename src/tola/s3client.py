@@ -8,6 +8,10 @@ from functools import cached_property
 from pathlib import Path
 
 
+class S3ConfigError(Exception):
+    """Error in the ~/.s3cfg_tola S3 config file"""
+
+
 class S3Client:
     def __init__(self):
         """
@@ -21,7 +25,8 @@ class S3Client:
             else Path().home() / ".s3cfg_tola"
         )
         if not cfg_path.exists():
-            sys.exit(f"Config file {cfg_path} does not exist")
+            msg = f"Config file {cfg_path} does not exist"
+            raise S3ConfigError(msg)
         cfg = ConfigParser(interpolation=None)
         cfg.read(cfg_path)
 

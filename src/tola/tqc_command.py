@@ -27,7 +27,7 @@ opt = SimpleNamespace(
         show_default=True,
         help=(
             "Column name use to uniquely identify rows."
-            # " Defaults to the json:api `id` column"
+            " Defaults to the table's `.id` column"
         ),
     ),
     file=click.option(
@@ -378,6 +378,40 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
             if not apply_flag:
                 count = len(db_obj)
                 dry_warning(tail.format(bold(count), s(count)))
+
+
+@cli.command(hidden=True)
+@click.pass_context
+@opt.table
+@click.option(
+    "--location",
+    help="Name of folder_location.id",
+    required=True,
+)
+@opt.file
+@click.argument(
+    "pk_result_dirs",
+    nargs=-1,
+    required=False,
+    type=click.Path(
+        path_type=pathlib.Path,
+        exists=True,
+        readable=True,
+        file_okay=False,
+    ),
+)
+def store_folder(ctx, table, location, input_files, pk_result_dirs):
+    """Store the result files found in the listed PK_RESULT_DIRS in S3
+
+    Each element of PK_RESULT_DIRS has the format:
+
+      PK=RESULT_DIR
+
+    where PK is the primary key value of row in the `table`, and RESULT_DIR is
+    the directory on the filesystem containing the files to store. The same
+    data can alternatively be provided in ND-JSON format in the `--files`
+    arguments with the RESULT_DIR under the key `result_dir`.
+    """
 
 
 def input_objects_or_exit(ctx, input_files):
