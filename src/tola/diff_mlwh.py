@@ -3,6 +3,7 @@ import datetime
 import duckdb
 import inspect
 import pathlib
+import requests
 
 # from duckdb.duckdb import ConstraintException
 
@@ -73,18 +74,20 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
 
 def create_diff_db(con, tqc, mlwh_ndjson):
     # NDJSON from MLWH has different number of columns for Illumina and PacBio
-    # data.  To create scnd_he same table structure for the `mlwh` and `{scnd}`
-    # tables we provide scnd_he column mapping.
-    con.execute(
-        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def()})",
-        (str(mlwh_ndjson),),
-    )
+    # data.  To create the same table structure for the `mlwh` and `tolqc`
+    # tables we provide the column mapping.
+    columns_def = column_definitions()
 
     # Fetch the current MLWH data from ToLQC
-    con.execute("SET force_download=true")
+    tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
     con.execute(
-        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def()})",
-        (tqc.build_path("report/mlwh-data?format=NDJSON"),),
+        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def})",
+        (tolqc_ndjson,),
+    )
+
+    con.execute(
+        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def})",
+        (str(mlwh_ndjson),),
     )
 
 
@@ -162,7 +165,7 @@ def copy_data_to_dest(con, source, dest):
     con.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
 
 
-def columns_def():
+def column_definitions():
     return inspect.cleandoc(
         """
         {
