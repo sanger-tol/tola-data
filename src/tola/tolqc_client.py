@@ -2,11 +2,12 @@ import json
 import logging
 import os
 import pathlib
-import requests
+import re
 
 from functools import cached_property
 
 import click
+import requests
 
 from tol.api_client2 import create_api_datasource
 from tol.core import core_data_object
@@ -139,6 +140,37 @@ class TolClient:
             timeout=120,
         )
         return self._check_response(r)
+
+    def download_file(self, path, filename=None):
+        r = requests.get(
+            self.build_path(path),
+            stream=True,
+            timeout=120,
+        )
+        r.raise_for_status()
+
+        if not filename:
+            filename = self._content_disposition_filename(r)
+
+        # Write the response to the file
+        with open(filename, "wb") as fh:
+            for chunk in r.iter_content(chunk_size=8192):
+                fh.write(chunk)
+
+        return filename
+
+    def _content_disposition_filename(self, r):
+        """Extracts the filename from the Content-Disposition header"""
+
+        disposition_hdr = r.headers.get("content-disposition", "<MISSING>")
+        if m := re.match(r'attachment; filename="([^"/]+)"$', disposition_hdr):
+            return m.group(1)
+        else:
+            msg = (
+                "Failed to extract filename from Content-Disposition"
+                f" header: '{disposition_hdr}'"
+            )
+            raise ValueError(msg)
 
     def _encode_payload(self, payload):
         enc = {}
