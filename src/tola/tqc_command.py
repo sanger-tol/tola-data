@@ -130,7 +130,8 @@ def edit_col(
     ads = client.ads
     obj_factory = ads.data_object_factory
     if set_value:
-        py_value = convert_type(set_value)
+        # Leave value as a string if it is a .id field
+        py_value = set_value if key.endswith(".id") else convert_type(set_value)
         updates = []
         changes = []
         for obj in fetched:
@@ -274,16 +275,7 @@ def add(ctx, table, key, apply_flag, input_files):
 
     # Build CoreDataObjects and upsert
     ads = client.ads
-    obj_factory = ads.data_object_factory
-    create = []
-    for inp in input_obj:
-        if oid := inp.get(pk):
-            attr = {x: inp[x] for x in inp if x != pk}
-            cdo = obj_factory(table, id_=oid, attributes=attr)
-        else:
-            cdo = obj_factory(table, attributes=inp)
-        create.append(cdo)
-
+    create = dicts_to_core_data_objects(ads, table, input_obj)
     ads.upsert(table, create)
 
     # Fetch objects from database and filter newly created
@@ -437,12 +429,12 @@ def key_list_search(client, table, key, key_id_list):
     db_obj_found = {}
     if key_id_list:
         search_key = "id" if key == f"{table}.id" else key
-        obj_key = search_key[:-3] if search_key.endswith(".id") else None
+        obj_rel = obj_rel_name(search_key)
 
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
             for cdo in client.ads.get_list(table, object_filters=filt):
-                val = getattr(cdo, obj_key).id if obj_key else getattr(cdo, search_key)
+                val = getattr(cdo, obj_rel).id if obj_rel else getattr(cdo, search_key)
                 if not val:
                     sys.exit(f"No such key '{search_key}' in {cdo!r}")
                 if db_obj_found.get(val):
@@ -524,6 +516,10 @@ def cdo_type_id(cdo):
     return f"{cdo.type}.id"
 
 
+def obj_rel_name(key):
+    return key[:-3] if key.endswith(".id") else None
+
+
 def core_data_object_to_dict(cdo):
     """Flattens a CoreDataObject to a dict"""
 
@@ -541,6 +537,47 @@ def core_data_object_to_dict(cdo):
         flat[k] = v
 
     return flat
+
+
+def dicts_to_core_data_objects(ads, table, input_obj):
+    """Turns flattened dicts back into CoreDataObjects"""
+
+    rel_conf = ads.relationship_config.get(table)
+    obj_factory = ads.data_object_factory
+
+    cdo_out = []
+    for flat in input_obj:
+        id_ = None
+        attr = {}
+        to_one = {}
+        for key, val in flat.items():
+            if rn := obj_rel_name(key):
+                if rn == table:
+                    id_ = val
+                elif to_one_tbl := rel_conf.to_one.get(rn):
+                    to_one[rn] = obj_factory(to_one_tbl, id_=val)
+                elif to_many_tbl := rel_conf.to_many.get(rn):
+                    msg = (
+                        f"to-many relationships not implemented"
+                        f" ('{rn}' to '{to_many_tbl}')"
+                    )
+                    raise ValueError(msg)
+                else:
+                    msg = f"No such relationship '{rn}'"
+                    raise ValueError(msg)
+            else:
+                attr[key] = val
+
+        cdo_out.append(
+            obj_factory(
+                table,
+                id_=id_,
+                attributes=attr if attr else None,
+                to_one=to_one if to_one else None,
+            )
+        )
+
+    return cdo_out
 
 
 def pretty_cdo_itr(cdo_list, key, head=None, tail=None):
