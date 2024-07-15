@@ -3,12 +3,13 @@ import datetime
 import duckdb
 import inspect
 import pathlib
-import requests
+import sys
 
 # from duckdb.duckdb import ConstraintException
 
 from tola import db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
+from tola.ndjson import ndjson_row
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
@@ -64,11 +65,23 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
     for mismatches in compare_tables(con, "mlwh", "tolqc"):
         if len(mismatches) == 1:
             ((tbl_name, name, struct),) = mismatches
-            click.echo(f"\nOnly in {tbl_name}: {name}")
+            click.echo(f"\nOnly in {tbl_name}: {name}", err=True)
         else:
             (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
-            click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
-            show_diff(frst, scnd)
+            if (
+                frst_tbl == "mlwh"
+                and scnd_tbl == "tolqc"
+                and frst["remote_path"] is not None
+                and scnd["remote_path"] is None
+            ):
+                sys.stdout.write(ndjson_row(
+                    {
+                        "data.id": frst["data_id"],
+                        "remote_path": frst["remote_path"],
+                    }
+                ))
+            # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}", err=True)
+            # show_diff(frst, scnd)
 
 
 def create_diff_db(con, tqc, mlwh_ndjson):
@@ -102,7 +115,7 @@ def show_diff(frst, scnd):
     for key, frst_v in frst.items():
         scnd_v = scnd[key]
         if frst_v != scnd_v:
-            click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
+            click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}", err=True)
 
 
 def check_for_duplicate_data_ids(con, tbl_name):
@@ -118,6 +131,15 @@ def check_for_duplicate_data_ids(con, tbl_name):
 
 
 def compare_tables(con, frst, scnd):
+    """
+    Creates two tables using Common Table Expressions (CTEs, the WITH ...
+    statements) from the two table name arguments `frst` and `scnd` with an
+    MD5 hash of each row, joins the two tables on this `hash` column with a
+    full outer join, then filters by any rows where the result from one of
+    the tables is NULL. These will be the non-matching rows. Ordering by
+    `data_id` enables non-matching pairs of rows to be yielded from the
+    function.
+    """
     con.execute(f"""
         WITH frst_h AS (
           SELECT '{frst}' AS tbl_name
@@ -179,7 +201,7 @@ def column_definitions():
             data_id: 'VARCHAR',
             study_id: 'BIGINT',
             sample_name: 'VARCHAR',
-            supplier_name: 'VARCHAR',
+            -- supplier_name: 'VARCHAR',
             tol_specimen_id: 'VARCHAR',
             biosample_accession: 'VARCHAR',
             biospecimen_accession: 'VARCHAR',
