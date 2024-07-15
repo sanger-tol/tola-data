@@ -16,6 +16,7 @@ dependencies = [
     "psycopg2", # PostgreSQL connector
     "python-ulid",
     "requests",
+    "ruff",
     'importlib-metadata; python_version>="3.8"',
 ]
 

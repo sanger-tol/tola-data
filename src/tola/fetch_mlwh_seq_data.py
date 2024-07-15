@@ -50,20 +50,26 @@ def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
     if not project_id_list:
         project_id_list = client.list_project_study_ids()
     mlwh = db_connection.mlwh_db()
-    for project_id in project_id_list:
-        for platform, run_data_fetcher in (
-            ("PacBio", pacbio_fetcher),
-            ("Illumina", illumina_fetcher),
-        ):
-            row_itr = run_data_fetcher(mlwh, project_id)
-            if write_to_stdout:
-                for row in row_itr:
-                    sys.stdout.write(row)
-            else:
+
+    if write_to_stdout:
+        write_mlwh_data_to_filehandle(mlwh, project_id_list, sys.stdout)
+    else:
+        for project_id in project_id_list:
+            for platform, run_data_fetcher in (
+                ("PacBio", pacbio_fetcher),
+                ("Illumina", illumina_fetcher),
+            ):
+                row_itr = run_data_fetcher(mlwh, project_id)
                 rspns = chunk_requests(client, row_itr)
                 print(formatted_response(rspns, project_id, platform), end="")
-    if not write_to_stdout:
         patch_species(client)
+
+
+def write_mlwh_data_to_filehandle(mlwh, project_id_list, fh):
+    for project_id in project_id_list:
+        for run_data_fetcher in (pacbio_fetcher, illumina_fetcher):
+            for row in run_data_fetcher(mlwh, project_id):
+                fh.write(row)
 
 
 def chunk_requests(client, row_itr):
@@ -185,12 +191,12 @@ def trimmed_tag(tag):
 
 
 def build_remote_path(row):
-    irods_path = row.pop('irods_path')
-    irods_file = row.pop('irods_file')
+    irods_path = row.pop("irods_path")
+    irods_file = row.pop("irods_file")
     if irods_path and irods_file:
-        row['remote_path'] = 'irods:' + irods_path.rstrip('/') + '/' + irods_file
+        row["remote_path"] = "irods:" + irods_path.rstrip("/") + "/" + irods_file
     else:
-        row['remote_path'] = None
+        row["remote_path"] = None
 
 
 @cache
