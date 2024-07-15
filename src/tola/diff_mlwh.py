@@ -7,7 +7,8 @@ import requests
 
 # from duckdb.duckdb import ConstraintException
 
-from tola import tolqc_client
+from tola import db_connection, tolqc_client
+from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
@@ -35,8 +36,6 @@ def default_mlwh_ndjson_file():
     "--mlwh-ndjson",
     type=click.Path(
         path_type=pathlib.Path,
-        exists=True,
-        readable=True,
     ),
     help="Name of NDJSON file from fetch-mlwh-seq-data",
     default=default_mlwh_ndjson_file(),
@@ -85,10 +84,18 @@ def create_diff_db(con, tqc, mlwh_ndjson):
         (tolqc_ndjson,),
     )
 
+    if not mlwh_ndjson.exists():
+        fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
     con.execute(
         f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def})",
         (str(mlwh_ndjson),),
     )
+
+
+def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
+    mlwh = db_connection.mlwh_db()
+    with mlwh_ndjson.open("w") as fh:
+        write_mlwh_data_to_filehandle(mlwh, tqc.list_project_study_ids(), fh)
 
 
 def show_diff(frst, scnd):
@@ -186,11 +193,11 @@ def column_definitions():
             tag_index: 'VARCHAR',
             lims_run_id: 'VARCHAR',
             element: 'VARCHAR',
-            run_start: 'VARCHAR',
-            run_complete: 'VARCHAR',
+            run_start: 'TIMESTAMPTZ',
+            run_complete: 'TIMESTAMPTZ',
             plex_count: 'BIGINT',
             lims_qc: 'VARCHAR',
-            qc_date: 'VARCHAR',
+            qc_date: 'TIMESTAMPTZ',
             tag1_id: 'VARCHAR',
             tag2_id: 'VARCHAR',
             library_id: 'VARCHAR',
