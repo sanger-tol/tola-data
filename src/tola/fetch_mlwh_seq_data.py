@@ -220,6 +220,7 @@ def illumina_sql():
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
           , run_lane_metrics.instrument_name AS instrument_name
+          , run_lane_metrics.position AS element
           , flowcell.pipeline_id_lims AS pipeline_id_lims
           , CONVERT(product_metrics.id_run, CHAR) AS run_id
           , CONVERT(product_metrics.tag_index, CHAR) AS tag_index
