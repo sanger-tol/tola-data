@@ -6,6 +6,7 @@ import pathlib
 import sys
 
 from types import SimpleNamespace
+from urllib.parse import quote_plus
 
 import click
 
@@ -357,7 +358,10 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
         tail = None
         if apply_flag:
             head = "Deleted {} row{}:\n"
-            for chunk in client.pages(id_list):
+
+            # Can remove call to `quote_plus()` when ApiDataSource is fixed to
+            # correctly escape IDs
+            for chunk in client.pages([quote_plus(x) for x in id_list]):
                 ads.delete(table, chunk)
         else:
             tail = "Dry run. Use '--apply' flag to delete {} row{}.\n"
@@ -366,7 +370,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
             click.echo_via_pager(pretty_cdo_itr(db_obj, key, head=head, tail=tail))
         else:
             for dlt in db_obj:
-                sys.stdout.write(ndjson_row(dlt))
+                sys.stdout.write(ndjson_row(core_data_object_to_dict(dlt)))
             if not apply_flag:
                 count = len(db_obj)
                 dry_warning(tail.format(bold(count), s(count)))

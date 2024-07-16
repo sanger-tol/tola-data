@@ -11,6 +11,8 @@ from tola import db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
 from tola.ndjson import ndjson_row
 
+from tolqc.reports import mlwh_data_report_query_select
+
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
 
@@ -42,7 +44,11 @@ def default_mlwh_ndjson_file():
     default=default_mlwh_ndjson_file(),
     show_default=True,
 )
-def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
+@click.option(
+    "--table",
+    help="Name of table for which to print patching NDJSON",
+)
+def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson, table):
     """Compare the contents of the MLWH to the ToLQC database"""
 
     have_db = duckdb_file.exists()
@@ -62,26 +68,42 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson):
         # except ConstraintException:
         #     click.echo(f"Error: {tbl_data_id}.data_id contains duplicates", err=True)
 
-    for mismatches in compare_tables(con, "mlwh", "tolqc"):
-        if len(mismatches) == 1:
-            ((tbl_name, name, struct),) = mismatches
-            click.echo(f"\nOnly in {tbl_name}: {name}", err=True)
-        else:
+    if table:
+        col_map = table_map().get(table)
+        if not col_map:
+            click.exit(f"No column map for table '{table}'")
+        for mismatches in compare_tables(con, "mlwh", "tolqc"):
+            if len(mismatches) != 2:
+                continue
             (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
-            if (
-                frst_tbl == "mlwh"
-                and scnd_tbl == "tolqc"
-                and frst["remote_path"] is not None
-                and scnd["remote_path"] is None
-            ):
-                sys.stdout.write(ndjson_row(
-                    {
-                        "data.id": frst["data_id"],
-                        "remote_path": frst["remote_path"],
-                    }
-                ))
-            # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}", err=True)
-            # show_diff(frst, scnd)
+            if not (frst_tbl == "mlwh" and scnd_tbl == "tolqc"):
+                continue
+            if patch := get_patch_for_table(col_map, frst, scnd):
+                sys.stdout.write(ndjson_row(patch))
+    else:
+        for mismatches in compare_tables(con, "mlwh", "tolqc"):
+            if len(mismatches) == 1:
+                ((tbl_name, name, struct),) = mismatches
+                click.echo(f"\nOnly in {tbl_name}: {name}", err=True)
+            else:
+                (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
+
+                if (
+                    frst_tbl == "mlwh"
+                    and scnd_tbl == "tolqc"
+                    and frst["remote_path"] is not None
+                    and scnd["remote_path"] is None
+                ):
+                    sys.stdout.write(
+                        ndjson_row(
+                            {
+                                "data.id": frst["data_id"],
+                                "remote_path": frst["remote_path"],
+                            }
+                        )
+                    )
+                # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}", err=True)
+                # show_diff(frst, scnd)
 
 
 def create_diff_db(con, tqc, mlwh_ndjson):
@@ -109,6 +131,26 @@ def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh = db_connection.mlwh_db()
     with mlwh_ndjson.open("w") as fh:
         write_mlwh_data_to_filehandle(mlwh, tqc.list_project_study_ids(), fh)
+
+
+def get_patch_for_table(col_map, frst, scnd):
+    diff = {}
+    primary_key = None
+    for key, out_key in col_map.items():
+        if out_key.endswith(".id"):
+            primary_key = key
+            continue
+        frst_v = frst[key]
+        scnd_v = scnd[key]
+        if frst_v != scnd_v:
+            diff[out_key] = frst_v
+    if not primary_key:
+        click.exit(f"Failed to find primary key in: {col_map}")
+    if diff:
+        pk_out = col_map[primary_key]
+        diff[pk_out] = frst[primary_key]
+        return diff
+    return None
 
 
 def show_diff(frst, scnd):
@@ -192,6 +234,40 @@ def copy_data_to_dest(con, source, dest):
     con.execute(get_cols, (dest,))
     col_list = "\n  , ".join(x[0] for x in con.fetchall())
     con.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
+
+
+def table_map():
+    query = mlwh_data_report_query_select()
+
+    # {
+    #     "name": "sample_name",
+    #     "type": String(),
+    #     "aliased": False,
+    #     "expr": "<sqlalchemy.sql.elements.Label at 0x10bf3fe80; sample_name>",
+    #     "entity": "<class 'tolqc.sample_data_models.Sample'>",
+    # }
+
+    table_map = {
+        "file": {"data_id": "data.id"},
+        "library": {"data_id": "data.id"},
+        "pacbio_run_metrics": {"run_id": "pacbio_run_metrics.id"},
+        "platform": {"run_id": "run.id"},
+    }
+    for desc in query.column_descriptions:
+        name = desc["name"]
+        tbl = desc["entity"].__tablename__
+        expr = desc["expr"]
+        if not hasattr(expr, "base_columns"):
+            continue
+        (col,) = expr.base_columns
+        out_name = f"{tbl}.id" if col.primary_key else col.name
+        table_map.setdefault(tbl, {})[name] = out_name
+
+    # for tbl, mapv in table_map.items():
+    #     idl = [x for x in mapv.values() if x.endswith(".id")]
+    #     click.echo(f"{tbl} = {idl}", err=True)
+
+    return table_map
 
 
 def column_definitions():
