@@ -2,6 +2,7 @@ import click
 import datetime
 import duckdb
 import inspect
+import logging
 import pathlib
 import sys
 
@@ -28,6 +29,7 @@ def default_mlwh_ndjson_file():
 @tolqc_client.tolqc_alias
 @tolqc_client.tolqc_url
 @tolqc_client.api_token
+@tolqc_client.log_level
 @click.option(
     "--duckdb-file",
     type=click.Path(path_type=pathlib.Path),
@@ -48,8 +50,10 @@ def default_mlwh_ndjson_file():
     "--table",
     help="Name of table for which to print patching NDJSON",
 )
-def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson, table):
+def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, table):
     """Compare the contents of the MLWH to the ToLQC database"""
+
+    logging.basicConfig(level=getattr(logging, log_level))
 
     have_db = duckdb_file.exists()
     con = duckdb.connect(str(duckdb_file))
@@ -190,7 +194,7 @@ def compare_tables(con, frst, scnd):
           OR scnd_h.tbl_name IS NULL
         ORDER BY data_id, tbl_name
     """)  # noqa: S608
-    click.echo(sql, err=True)
+    logging.debug(sql)
     con.execute(sql)
 
     prev = con.fetchone()
