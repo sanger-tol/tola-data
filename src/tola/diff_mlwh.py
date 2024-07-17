@@ -84,26 +84,11 @@ def cli(tolqc_alias, tolqc_url, api_token, duckdb_file, mlwh_ndjson, table):
         for mismatches in compare_tables(con, "mlwh", "tolqc"):
             if len(mismatches) == 1:
                 ((tbl_name, name, struct),) = mismatches
-                click.echo(f"\nOnly in {tbl_name}: {name}", err=True)
+                click.echo(f"\nOnly in {tbl_name}: {name}")
             else:
                 (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
-
-                if (
-                    frst_tbl == "mlwh"
-                    and scnd_tbl == "tolqc"
-                    and frst["remote_path"] is not None
-                    and scnd["remote_path"] is None
-                ):
-                    sys.stdout.write(
-                        ndjson_row(
-                            {
-                                "data.id": frst["data_id"],
-                                "remote_path": frst["remote_path"],
-                            }
-                        )
-                    )
-                # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}", err=True)
-                # show_diff(frst, scnd)
+                click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
+                show_diff(frst, scnd)
 
 
 def create_diff_db(con, tqc, mlwh_ndjson):
@@ -157,7 +142,7 @@ def show_diff(frst, scnd):
     for key, frst_v in frst.items():
         scnd_v = scnd[key]
         if frst_v != scnd_v:
-            click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}", err=True)
+            click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
 def check_for_duplicate_data_ids(con, tbl_name):
@@ -182,7 +167,7 @@ def compare_tables(con, frst, scnd):
     `data_id` enables non-matching pairs of rows to be yielded from the
     function.
     """
-    con.execute(f"""
+    sql = inspect.cleandoc(f"""
         WITH frst_h AS (
           SELECT '{frst}' AS tbl_name
             , data_id
@@ -205,6 +190,8 @@ def compare_tables(con, frst, scnd):
           OR scnd_h.tbl_name IS NULL
         ORDER BY data_id, tbl_name
     """)  # noqa: S608
+    click.echo(sql, err=True)
+    con.execute(sql)
 
     prev = con.fetchone()
     while row := con.fetchone():
@@ -293,7 +280,7 @@ def column_definitions():
             element: 'VARCHAR',
             run_start: 'TIMESTAMPTZ',
             run_complete: 'TIMESTAMPTZ',
-            plex_count: 'BIGINT',
+            plex_count: 'INTEGER',
             lims_qc: 'VARCHAR',
             qc_date: 'TIMESTAMPTZ',
             tag1_id: 'VARCHAR',

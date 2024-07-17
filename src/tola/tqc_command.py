@@ -193,7 +193,6 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
 
     client = ctx.obj
     ads = client.ads
-    obj_factory = ads.data_object_factory
     id_list = [x[key] for x in input_obj]
     db_obj = fetch_list_or_exit(client, table, key, id_list)
     flat_obj = [core_data_object_to_dict(x) for x in db_obj]
@@ -210,10 +209,10 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
                     chng[k] = flat_v, inp_v
         if attr:
             changes.append(chng)
-            updates.append(obj_factory(table, id_=obj.id, attributes=attr))
+            updates.append({f"{table}.id": obj.id, **attr})
     if updates:
         if apply_flag:
-            for chunk in client.pages(updates):
+            for chunk in client.pages(dicts_to_core_data_objects(ads, table, updates)):
                 ads.upsert(table, chunk)
         if sys.stdout.isatty():
             click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
@@ -357,7 +356,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
         head = None
         tail = None
         if apply_flag:
-            head = "Deleted {} row{}:\n"
+            head = "Deleted {} row{}:"
 
             # Can remove call to `quote_plus()` when ApiDataSource is fixed to
             # correctly escape IDs
@@ -543,14 +542,14 @@ def core_data_object_to_dict(cdo):
     return flat
 
 
-def dicts_to_core_data_objects(ads, table, input_obj):
+def dicts_to_core_data_objects(ads, table, flat_list):
     """Turns flattened dicts back into CoreDataObjects"""
 
     rel_conf = ads.relationship_config.get(table)
     obj_factory = ads.data_object_factory
 
     cdo_out = []
-    for flat in input_obj:
+    for flat in flat_list:
         id_ = None
         attr = {}
         to_one = {}
