@@ -220,7 +220,15 @@ def illumina_sql():
           , 'Illumina' AS platform_type
           , run_lane_metrics.instrument_model AS instrument_model
           , run_lane_metrics.instrument_name AS instrument_name
-          , run_lane_metrics.position AS element
+          , COALESCE(
+              REGEXP_SUBSTR(
+                -- From e.g. "48906_5-6#1.cram" extract "5-6"
+                irods.irods_data_relative_path
+                , '(?<=_)[^_]+(?=#)'
+              )
+              -- Fallback if pattern match fails
+              , run_lane_metrics.position
+            ) AS element
           , flowcell.pipeline_id_lims AS pipeline_id_lims
           , CONVERT(product_metrics.id_run, CHAR) AS run_id
           , CONVERT(product_metrics.tag_index, CHAR) AS tag_index
