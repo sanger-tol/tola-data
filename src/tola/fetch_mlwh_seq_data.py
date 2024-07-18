@@ -234,7 +234,7 @@ def illumina_sql():
               REGEXP_SUBSTR(
                 -- From e.g. "48906_5-6#1.cram" extract "48906_5-6"
                 irods.irods_data_relative_path
-                , '[^#\\.]+'
+                , '^[^#\\.]+'
               )
               -- Fallback if pattern match fails
               , CONVERT(product_metrics.id_run, CHAR)

@@ -55,12 +55,10 @@ def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, 
 
     logging.basicConfig(level=getattr(logging, log_level))
 
-    have_db = duckdb_file.exists()
     con = duckdb.connect(str(duckdb_file))
 
-    if not have_db:
-        tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
-        create_diff_db(con, tqc, mlwh_ndjson)
+    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+    create_diff_db(con, tqc, mlwh_ndjson)
 
     for tbl_name in ("mlwh", "tolqc"):
         check_for_duplicate_data_ids(con, tbl_name)
@@ -75,11 +73,14 @@ def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, 
     if table:
         col_map = table_map().get(table)
         if not col_map:
-            click.exit(f"No column map for table '{table}'")
+            exit(f"No column map for table '{table}'")
         for mismatches in compare_tables(con, "mlwh", "tolqc"):
             if len(mismatches) != 2:
                 continue
-            (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
+            (
+                (frst_tbl, frst_name, frst_hash, frst),
+                (scnd_tbl, scnd_name, scnd_hash, scnd),
+            ) = mismatches
             if not (frst_tbl == "mlwh" and scnd_tbl == "tolqc"):
                 continue
             if patch := get_patch_for_table(col_map, frst, scnd):
@@ -90,7 +91,10 @@ def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, 
                 ((tbl_name, name, struct),) = mismatches
                 click.echo(f"\nOnly in {tbl_name}: {name}")
             else:
-                (frst_tbl, frst_name, frst), (scnd_tbl, scnd_name, scnd) = mismatches
+                (
+                    (frst_tbl, frst_name, frst_hash, frst),
+                    (scnd_tbl, scnd_name, scnd_hash, scnd),
+                ) = mismatches
                 click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
                 show_diff(frst, scnd)
 
@@ -101,19 +105,27 @@ def create_diff_db(con, tqc, mlwh_ndjson):
     # tables we provide the column mapping.
     columns_def = column_definitions()
 
-    # Fetch the current MLWH data from ToLQC
-    tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
-    con.execute(
-        f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def})",
-        (tolqc_ndjson,),
-    )
+    tables = {x[0] for x in con.execute("SHOW TABLES").fetchall()}
 
-    if not mlwh_ndjson.exists():
-        fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
-    con.execute(
-        f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def})",
-        (str(mlwh_ndjson),),
-    )
+    # Fetch the current MLWH data from ToLQC
+    if "tolqc" not in tables:
+        logging.info(f"Downloading current data from {tqc.tolqc_alias}")
+        tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
+        logging.info("Loading {tolqc_ndjson} into tolqc table")
+        con.execute(
+            f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def})",
+            (tolqc_ndjson,),
+        )
+
+    if "mlwh" not in tables:
+        if not mlwh_ndjson.exists():
+            logging.info(f"Downloading data from MLWH into {mlwh_ndjson}")
+            fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
+        logging.info(f"Loading {mlwh_ndjson} into mlwh table")
+        con.execute(
+            f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def})",
+            (str(mlwh_ndjson),),
+        )
 
 
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
@@ -134,7 +146,7 @@ def get_patch_for_table(col_map, frst, scnd):
         if frst_v != scnd_v:
             diff[out_key] = frst_v
     if not primary_key:
-        click.exit(f"Failed to find primary key in: {col_map}")
+        exit(f"Failed to find primary key in: {col_map}")
     if diff:
         pk_out = col_map[primary_key]
         diff[pk_out] = frst[primary_key]
@@ -188,6 +200,7 @@ def compare_tables(con, frst, scnd):
         )
         SELECT COALESCE(frst_h.tbl_name, scnd_h.tbl_name) AS tbl_name
           , COALESCE(frst_h.data_id, scnd_h.data_id) AS data_id
+          , COALESCE(frst_h.hash, scnd_h.hash) AS hash
           , COALESCE(frst_h.struct, scnd_h.struct) AS struct
         FROM frst_h FULL JOIN scnd_h USING (hash)
         WHERE frst_h.tbl_name IS NULL
@@ -240,7 +253,6 @@ def table_map():
 
     table_map = {
         "file": {"data_id": "data.id"},
-        "library": {"data_id": "data.id"},
         "pacbio_run_metrics": {"run_id": "pacbio_run_metrics.id"},
         "platform": {"run_id": "run.id"},
     }
@@ -248,9 +260,10 @@ def table_map():
         name = desc["name"]
         tbl = desc["entity"].__tablename__
         expr = desc["expr"]
-        if not hasattr(expr, "base_columns"):
-            continue
-        (col,) = expr.base_columns
+        if hasattr(expr, "base_columns"):
+            (col,) = expr.base_columns
+        else:
+            (col,) = expr.columns.values()
         out_name = f"{tbl}.id" if col.primary_key else col.name
         table_map.setdefault(tbl, {})[name] = out_name
 
