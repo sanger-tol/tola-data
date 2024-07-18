@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from types import SimpleNamespace
-from urllib.parse import quote_plus
+from urllib.parse import quote
 
 import click
 
@@ -358,9 +358,9 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
         if apply_flag:
             head = "Deleted {} row{}:"
 
-            # Can remove call to `quote_plus()` when ApiDataSource is fixed to
+            # Can remove call to `quote()` when ApiDataSource is fixed to
             # correctly escape IDs
-            for chunk in client.pages([quote_plus(x) for x in id_list]):
+            for chunk in client.pages([quote(x) for x in id_list]):
                 ads.delete(table, chunk)
         else:
             tail = "Dry run. Use '--apply' flag to delete {} row{}.\n"
@@ -575,8 +575,10 @@ def dicts_to_core_data_objects(ads, table, flat_list):
             obj_factory(
                 table,
                 id_=id_,
-                attributes=attr if attr else None,
-                to_one=to_one if to_one else None,
+                # attributes=attr if attr else None,
+                # to_one=to_one if to_one else None,
+                attributes=attr,
+                to_one=to_one,
             )
         )
 

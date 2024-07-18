@@ -76,6 +76,7 @@ class TolClient:
     ):
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
         self.page_size = page_size
+        self.tolqc_alias = tolqc_alias
 
         if conf := get_connection_params_entry(
             tolqc_alias, no_params_file_ok=(tolqc_alias == "tolqc")
