@@ -6,6 +6,8 @@ import logging
 import pathlib
 import sys
 
+from functools import cache
+
 # from duckdb.duckdb import ConstraintException
 
 from tola import db_connection, tolqc_client
@@ -47,23 +49,38 @@ def default_mlwh_ndjson_file():
     show_default=True,
 )
 @click.option(
+    "--update/--no-update",
+    help="Update ToLQC and MLWH data from their source databases",
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--table",
     help="Name of table for which to print patching NDJSON",
 )
-def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, table):
+def cli(
+    tolqc_alias,
+    tolqc_url,
+    api_token,
+    log_level,
+    duckdb_file,
+    mlwh_ndjson,
+    table,
+    update,
+):
     """Compare the contents of the MLWH to the ToLQC database"""
 
     logging.basicConfig(level=getattr(logging, log_level))
 
-    con = duckdb.connect(str(duckdb_file))
+    conn = duckdb.connect(str(duckdb_file))
 
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
-    create_diff_db(con, tqc, mlwh_ndjson)
+    create_diff_db(conn, tqc, mlwh_ndjson, update)
 
     for tbl_name in ("mlwh", "tolqc"):
-        check_for_duplicate_data_ids(con, tbl_name)
+        check_for_duplicate_data_ids(conn, tbl_name)
         # try:
-        #     con.execute(
+        #     conn.execute(
         #         f"CREATE UNIQUE INDEX {tbl_data_id}_data_id_udx"
         #         f"" ON {tbl_data_id} (data_id)"
         #     )
@@ -74,7 +91,7 @@ def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, 
         col_map = table_map().get(table)
         if not col_map:
             exit(f"No column map for table '{table}'")
-        for mismatches in compare_tables(con, "mlwh", "tolqc"):
+        for mismatches in compare_tables(conn):
             if len(mismatches) != 2:
                 continue
             (
@@ -86,44 +103,85 @@ def cli(tolqc_alias, tolqc_url, api_token, log_level, duckdb_file, mlwh_ndjson, 
             if patch := get_patch_for_table(col_map, frst, scnd):
                 sys.stdout.write(ndjson_row(patch))
     else:
-        for mismatches in compare_tables(con, "mlwh", "tolqc"):
+        for mismatches in compare_tables(conn):
             if len(mismatches) == 1:
-                ((tbl_name, name, struct),) = mismatches
-                click.echo(f"\nOnly in {tbl_name}: {name}")
+                ((tbl_name, name, hash_, struct),) = mismatches
+                # click.echo(f"\nOnly in {tbl_name}: {name}")
             else:
-                (
-                    (frst_tbl, frst_name, frst_hash, frst),
-                    (scnd_tbl, scnd_name, scnd_hash, scnd),
-                ) = mismatches
-                click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
-                show_diff(frst, scnd)
+                store_diff(conn, mismatches)
+                # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
+                # show_diff(frst, scnd)
 
 
-def create_diff_db(con, tqc, mlwh_ndjson):
+@cache
+def diff_insert_sql():
+    return inspect.cleandoc(
+        """
+        INSERT INTO diff_store(
+            data_id
+          , mlwh_hash
+          , tolqc_hash
+          , differing_columns
+        )
+        VALUES(?, ?, ?, ?)
+        """
+    )
+
+
+def store_diff(conn, mismatches):
+    (
+        (frst_tbl, frst_name, frst_hash, frst),
+        (scnd_tbl, scnd_name, scnd_hash, scnd),
+    ) = mismatches
+
+    diff_fields = []
+    for fld in frst:
+        if frst[fld] != scnd[fld]:
+            diff_fields.append(fld)
+
+    if not diff_fields:
+        click.echo(
+            "Failed to find any differing values in:\nmlwh = {frst}\ntolqc = {scnd}"
+        )
+        return
+
+    conn.execute(
+        diff_insert_sql(), (frst["data_id"], frst_hash, scnd_hash, diff_fields)
+    )
+
+
+def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
     # NDJSON from MLWH has different number of columns for Illumina and PacBio
     # data.  To create the same table structure for the `mlwh` and `tolqc`
     # tables we provide the column mapping.
     columns_def = column_definitions()
+    create_diff_store(conn)
 
-    tables = {x[0] for x in con.execute("SHOW TABLES").fetchall()}
+    tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
 
     # Fetch the current MLWH data from ToLQC
-    if "tolqc" not in tables:
+    if update or "tolqc" not in tables:
         logging.info(f"Downloading current data from {tqc.tolqc_alias}")
         tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
         logging.info("Loading {tolqc_ndjson} into tolqc table")
-        con.execute(
-            f"CREATE TABLE tolqc AS FROM read_json(?, columns = {columns_def})",
+        conn.execute(
+            (
+                "CREATE OR REPLACE TABLE tolqc"
+                f" AS FROM read_json(?, columns = {columns_def})"
+            ),
             (tolqc_ndjson,),
         )
 
-    if "mlwh" not in tables:
+    if update or "mlwh" not in tables:
         if not mlwh_ndjson.exists():
             logging.info(f"Downloading data from MLWH into {mlwh_ndjson}")
             fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
         logging.info(f"Loading {mlwh_ndjson} into mlwh table")
-        con.execute(
-            f"CREATE TABLE mlwh AS FROM read_json(?, columns = {columns_def})",
+        conn.execute(
+            (
+                "CREATE OR REPLACE TABLE mlwh"
+                f" AS FROM read_json(?, columns = {columns_def})"
+            ),
             (str(mlwh_ndjson),),
         )
 
@@ -161,19 +219,19 @@ def show_diff(frst, scnd):
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
-def check_for_duplicate_data_ids(con, tbl_name):
-    con.execute(f"""
+def check_for_duplicate_data_ids(conn, tbl_name):
+    conn.execute(f"""
         SELECT data_id
         FROM {tbl_name}
         GROUP BY data_id
         HAVING COUNT(*) > 1
         ORDER BY data_id
     """)  # noqa: S608
-    while row := con.fetchone():
+    while row := conn.fetchone():
         click.echo(f"Duplicate {tbl_name}.data_id: {row[0]}")
 
 
-def compare_tables(con, frst, scnd):
+def compare_tables(conn):
     """
     Creates two tables using Common Table Expressions (CTEs, the WITH ...
     statements) from the two table name arguments `frst` and `scnd` with an
@@ -183,35 +241,41 @@ def compare_tables(con, frst, scnd):
     `data_id` enables non-matching pairs of rows to be yielded from the
     function.
     """
-    sql = inspect.cleandoc(f"""
-        WITH frst_h AS (
-          SELECT '{frst}' AS tbl_name
+    sql = inspect.cleandoc("""
+        WITH mlwh_h AS (
+          SELECT 'mlwh' AS tbl_name
             , data_id
-            , md5({frst}::text) AS hash
-            , {frst} AS struct
-          FROM {frst}
+            , md5(mlwh::text) AS hash
+            , mlwh AS struct
+          FROM mlwh
         ),
-        scnd_h AS (
-          SELECT '{scnd}' AS tbl_name
+        tolqc_h AS (
+          SELECT 'tolqc' AS tbl_name
             , data_id
-            , md5({scnd}::text) AS hash
-            , {scnd} AS struct
-            FROM {scnd}
+            , md5(tolqc::text) AS hash
+            , tolqc AS struct
+            FROM tolqc
         )
-        SELECT COALESCE(frst_h.tbl_name, scnd_h.tbl_name) AS tbl_name
-          , COALESCE(frst_h.data_id, scnd_h.data_id) AS data_id
-          , COALESCE(frst_h.hash, scnd_h.hash) AS hash
-          , COALESCE(frst_h.struct, scnd_h.struct) AS struct
-        FROM frst_h FULL JOIN scnd_h USING (hash)
-        WHERE frst_h.tbl_name IS NULL
-          OR scnd_h.tbl_name IS NULL
+        SELECT COALESCE(mlwh_h.tbl_name, tolqc_h.tbl_name) AS tbl_name
+          , COALESCE(mlwh_h.data_id, tolqc_h.data_id) AS data_id
+          , COALESCE(mlwh_h.hash, tolqc_h.hash) AS hash
+          , COALESCE(mlwh_h.struct, tolqc_h.struct) AS struct
+        FROM mlwh_h FULL JOIN tolqc_h USING (hash)
+        ANTI JOIN diff_store AS mds
+          ON mlwh_h.hash = mds.mlwh_hash
+        ANTI JOIN diff_store AS qds
+          ON tolqc_h.hash = qds.tolqc_hash
+        WHERE mlwh_h.tbl_name IS NULL
+          OR tolqc_h.tbl_name IS NULL
         ORDER BY data_id, tbl_name
-    """)  # noqa: S608
+    """)
     logging.debug(sql)
-    con.execute(sql)
+    mismatches = conn.execute(sql).fetchall()
 
-    prev = con.fetchone()
-    while row := con.fetchone():
+    click.echo(f"Found {len(mismatches)} mistmatched rows to process")
+
+    prev = mismatches[0]
+    for row in mismatches[1:]:
         if prev:
             if row[1] == prev[1]:
                 # Same name
@@ -227,7 +291,7 @@ def compare_tables(con, frst, scnd):
         yield (prev,)
 
 
-def copy_data_to_dest(con, source, dest):
+def copy_data_to_dest(conn, source, dest):
     get_cols = inspect.cleandoc("""
         SELECT column_name
         FROM information_schema.columns
@@ -235,9 +299,24 @@ def copy_data_to_dest(con, source, dest):
           AND table_name = ?
         ORDER BY ordinal_position
     """)
-    con.execute(get_cols, (dest,))
-    col_list = "\n  , ".join(x[0] for x in con.fetchall())
-    con.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
+    conn.execute(get_cols, (dest,))
+    col_list = "\n  , ".join(x[0] for x in conn.fetchall())
+    conn.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
+
+
+def create_diff_store(conn):
+    create_store = inspect.cleandoc(
+        """
+        CREATE TABLE IF NOT EXISTS diff_store(
+            data_id VARCHAR
+            , mlwh_hash VARCHAR
+            , tolqc_hash VARCHAR
+            , differing_columns VARCHAR[]
+        )
+        """
+    )
+    logging.debug(create_store)
+    conn.execute(create_store)
 
 
 def table_map():
