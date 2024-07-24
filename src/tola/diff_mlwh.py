@@ -4,9 +4,11 @@ import duckdb
 import inspect
 import logging
 import pathlib
+import pyarrow
+import pytz
 import sys
 
-from functools import cache
+from typing import NamedTuple
 
 # from duckdb.duckdb import ConstraintException
 
@@ -17,6 +19,65 @@ from tola.ndjson import ndjson_row
 from tolqc.reports import mlwh_data_report_query_select
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
+
+
+class Mismatch(NamedTuple):
+    """Stores a row from the diff query"""
+
+    data_id: str
+    mlwh: str
+    tolqc: str
+    mlwh_hash: str
+    tolqc_hash: str
+
+
+class DiffStore:
+    """Accumulates diff results"""
+
+    def __init__(self):
+        self.data_id = []
+        self.mlwh_hash = []
+        self.tolqc_hash = []
+        self.differing_columns = []
+
+    def add(self, m: Mismatch):
+        self.data_id.append(m.data_id)
+        self.mlwh_hash.append(m.mlwh_hash)
+        self.tolqc_hash.append(m.tolqc_hash)
+
+        mlwh = m.mlwh
+        tolqc = m.tolqc
+        diff_cols = []
+        for fld in mlwh:
+            if mlwh[fld] != tolqc[fld]:
+                diff_cols.append(fld)
+        if not diff_cols:
+            msg = f"Failed to find any differing columns in:\n{mlwh = }\n{tolqc = }"
+            raise ValueError(msg)
+
+        self.differing_columns.append(diff_cols)
+
+    def arrow_table(self, now):
+        return pyarrow.Table.from_pydict(
+            {
+                "data_id": pyarrow.array(self.data_id),
+                "mlwh_hash": pyarrow.array(self.mlwh_hash),
+                "tolqc_hash": pyarrow.array(self.tolqc_hash),
+                "differing_columns": pyarrow.array(self.differing_columns),
+                "found_at": pyarrow.array([now] * len(self.data_id)),
+            }
+        )
+
+    def store(self, conn):
+        count = len(self.data_id)
+        if count == 0:
+            logging.info("No new differences found")
+            return
+        logging.info(f"Found {count} new differences")
+        (tz_name,) = conn.execute("SELECT current_setting('TimeZone')").fetchone()
+        now = datetime.datetime.now(tz=pytz.timezone(tz_name))
+        arrow_table__ = self.arrow_table(now)  # noqa: F841
+        conn.sql("INSERT INTO diff_store SELECT * FROM arrow_table__")
 
 
 def default_duckdb_file():
@@ -87,67 +148,18 @@ def cli(
         # except ConstraintException:
         #     click.echo(f"Error: {tbl_data_id}.data_id contains duplicates", err=True)
 
+    ds = DiffStore()
+    for m in compare_tables(conn):
+        ds.add(m)
+    ds.store(conn)
+
     if table:
         col_map = table_map().get(table)
         if not col_map:
             exit(f"No column map for table '{table}'")
-        for mismatches in compare_tables(conn):
-            if len(mismatches) != 2:
-                continue
-            (
-                (frst_tbl, frst_name, frst_hash, frst),
-                (scnd_tbl, scnd_name, scnd_hash, scnd),
-            ) = mismatches
-            if not (frst_tbl == "mlwh" and scnd_tbl == "tolqc"):
-                continue
-            if patch := get_patch_for_table(col_map, frst, scnd):
+        for m in compare_tables(conn):
+            if patch := get_patch_for_table(col_map, m.mlwh, m.tolqc):
                 sys.stdout.write(ndjson_row(patch))
-    else:
-        for mismatches in compare_tables(conn):
-            if len(mismatches) == 1:
-                ((tbl_name, name, hash_, struct),) = mismatches
-                # click.echo(f"\nOnly in {tbl_name}: {name}")
-            else:
-                store_diff(conn, mismatches)
-                # click.echo(f"\n{frst_name} {frst_tbl} | {scnd_tbl}")
-                # show_diff(frst, scnd)
-
-
-@cache
-def diff_insert_sql():
-    return inspect.cleandoc(
-        """
-        INSERT INTO diff_store(
-            data_id
-          , mlwh_hash
-          , tolqc_hash
-          , differing_columns
-        )
-        VALUES(?, ?, ?, ?)
-        """
-    )
-
-
-def store_diff(conn, mismatches):
-    (
-        (frst_tbl, frst_name, frst_hash, frst),
-        (scnd_tbl, scnd_name, scnd_hash, scnd),
-    ) = mismatches
-
-    diff_fields = []
-    for fld in frst:
-        if frst[fld] != scnd[fld]:
-            diff_fields.append(fld)
-
-    if not diff_fields:
-        click.echo(
-            "Failed to find any differing values in:\nmlwh = {frst}\ntolqc = {scnd}"
-        )
-        return
-
-    conn.execute(
-        diff_insert_sql(), (frst["data_id"], frst_hash, scnd_hash, diff_fields)
-    )
 
 
 def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
@@ -234,61 +246,49 @@ def check_for_duplicate_data_ids(conn, tbl_name):
 def compare_tables(conn):
     """
     Creates two tables using Common Table Expressions (CTEs, the WITH ...
-    statements) from the two table name arguments `frst` and `scnd` with an
-    MD5 hash of each row, joins the two tables on this `hash` column with a
-    full outer join, then filters by any rows where the result from one of
-    the tables is NULL. These will be the non-matching rows. Ordering by
-    `data_id` enables non-matching pairs of rows to be yielded from the
-    function.
+    statements) from the two tables `mlwh` and `tolqc`. The tables contain
+    the `data_id`, an MD5 hash of the entire row cast to VARCHAR, and the row
+    itself as a DuckDB STRUCT.
+
+    The join returns any rows where the `data_id` matches but the MD5 hash
+    does not.
+
+    ANTI JOINs to the `diff_store` table ignore any mismatches which have
+    already been seen.
     """
+
     sql = inspect.cleandoc("""
         WITH mlwh_h AS (
-          SELECT 'mlwh' AS tbl_name
-            , data_id
-            , md5(mlwh::text) AS hash
+          SELECT data_id
+            , md5(mlwh::VARCHAR) AS hash
             , mlwh AS struct
           FROM mlwh
         ),
         tolqc_h AS (
-          SELECT 'tolqc' AS tbl_name
-            , data_id
-            , md5(tolqc::text) AS hash
+          SELECT data_id
+            , md5(tolqc::VARCHAR) AS hash
             , tolqc AS struct
-            FROM tolqc
+          FROM tolqc
         )
-        SELECT COALESCE(mlwh_h.tbl_name, tolqc_h.tbl_name) AS tbl_name
-          , COALESCE(mlwh_h.data_id, tolqc_h.data_id) AS data_id
-          , COALESCE(mlwh_h.hash, tolqc_h.hash) AS hash
-          , COALESCE(mlwh_h.struct, tolqc_h.struct) AS struct
-        FROM mlwh_h FULL JOIN tolqc_h USING (hash)
+        SELECT mlwh_h.data_id
+          , mlwh_h.struct AS mlwh_struct
+          , tolqc_h.struct AS tolqc_struct
+          , mlwh_h.hash AS mlwh_hash
+          , tolqc_h.hash AS tolqc_hash
+        FROM mlwh_h JOIN tolqc_h
+          ON mlwh_h.data_id = tolqc_h.data_id
+          AND mlwh_h.hash != tolqc_h.hash
         ANTI JOIN diff_store AS mds
           ON mlwh_h.hash = mds.mlwh_hash
         ANTI JOIN diff_store AS qds
           ON tolqc_h.hash = qds.tolqc_hash
-        WHERE mlwh_h.tbl_name IS NULL
-          OR tolqc_h.tbl_name IS NULL
-        ORDER BY data_id, tbl_name
+        ORDER BY mlwh_h.data_id
     """)
     logging.debug(sql)
-    mismatches = conn.execute(sql).fetchall()
+    conn.execute(sql)
 
-    click.echo(f"Found {len(mismatches)} mistmatched rows to process")
-
-    prev = mismatches[0]
-    for row in mismatches[1:]:
-        if prev:
-            if row[1] == prev[1]:
-                # Same name
-                yield prev, row
-                prev = None
-            else:
-                yield (prev,)
-                prev = row
-        else:
-            prev = row
-
-    if prev:
-        yield (prev,)
+    while row := conn.fetchone():
+        yield Mismatch._make(row)
 
 
 def copy_data_to_dest(conn, source, dest):
@@ -303,21 +303,20 @@ def copy_data_to_dest(conn, source, dest):
     col_list = "\n  , ".join(x[0] for x in conn.fetchall())
     conn.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
 
-
 def create_diff_store(conn):
-    create_store = inspect.cleandoc(
+    sql = inspect.cleandoc(
         """
         CREATE TABLE IF NOT EXISTS diff_store(
             data_id VARCHAR
             , mlwh_hash VARCHAR
             , tolqc_hash VARCHAR
             , differing_columns VARCHAR[]
+            , found_at TIMESTAMP WITH TIME ZONE
         )
         """
     )
-    logging.debug(create_store)
-    conn.execute(create_store)
-
+    logging.debug(sql)
+    conn.execute(sql)
 
 def table_map():
     query = mlwh_data_report_query_select()
