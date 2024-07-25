@@ -220,18 +220,6 @@ def show_diff(frst, scnd):
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
-def check_for_duplicate_data_ids(conn, tbl_name):
-    conn.execute(f"""
-        SELECT data_id
-        FROM {tbl_name}
-        GROUP BY data_id
-        HAVING COUNT(*) > 1
-        ORDER BY data_id
-    """)  # noqa: S608
-    while row := conn.fetchone():
-        click.echo(f"Duplicate {tbl_name}.data_id: {row[0]}")
-
-
 def compare_tables(conn):
     """
     Creates two tables using Common Table Expressions (CTEs, the WITH ...
@@ -342,14 +330,7 @@ def table_map():
         "pacbio_run_metrics": {"run_id": "pacbio_run_metrics.id"},
         "platform": {"run_id": "run.id"},
     }
-    for desc in query.column_descriptions:
-        name = desc["name"]
-        tbl = desc["entity"].__tablename__
-        expr = desc["expr"]
-        if hasattr(expr, "base_columns"):
-            (col,) = expr.base_columns
-        else:
-            (col,) = expr.columns.values()
+    for name, tbl, col in name_table_column(query):
         out_name = f"{tbl}.id" if col.primary_key else col.name
         table_map.setdefault(tbl, {})[name] = out_name
 
@@ -360,76 +341,44 @@ def table_map():
     return table_map
 
 
+def name_table_column(query):
+    """
+    Returns a list of tuples (name, Table, Column) for each column of the
+    SQLAlchemy `query` argument.
+    """
+    cols = []
+    for desc in query.column_descriptions:
+        name = desc["name"]
+        tbl = desc["entity"].__tablename__
+        expr = desc["expr"]
+        if hasattr(expr, "base_columns"):
+            (col,) = expr.base_columns
+        else:
+            (col,) = expr.columns.values()
+        cols.append((name, tbl, col))
+
+    return cols
+
+
 @cache
 def column_definitions():
-    col_defs = {
-        "data_id": "VARCHAR",
-        "study_id": "BIGINT",
-        "sample_name": "VARCHAR",
-        # "supplier_name": 'VARCHAR',
-        "tol_specimen_id": "VARCHAR",
-        "biosample_accession": "VARCHAR",
-        "biospecimen_accession": "VARCHAR",
-        "scientific_name": "VARCHAR",
-        "taxon_id": "INTEGER",
-        "platform_type": "VARCHAR",
-        "instrument_model": "VARCHAR",
-        "instrument_name": "VARCHAR",
-        "pipeline_id_lims": "VARCHAR",
-        "run_id": "VARCHAR",
-        "tag_index": "VARCHAR",
-        "lims_run_id": "VARCHAR",
-        "element": "VARCHAR",
-        "run_start": "TIMESTAMPTZ",
-        "run_complete": "TIMESTAMPTZ",
-        "plex_count": "INTEGER",
-        "lims_qc": "VARCHAR",
-        "qc_date": "TIMESTAMPTZ",
-        "tag1_id": "VARCHAR",
-        "tag2_id": "VARCHAR",
-        "library_id": "VARCHAR",
-        # pacbio_run_metrics fields:
-        "movie_minutes": "INTEGER",
-        "binding_kit": "VARCHAR",
-        "sequencing_kit": "VARCHAR",
-        "sequencing_kit_lot_number": "VARCHAR",
-        "cell_lot_number": "VARCHAR",
-        "include_kinetics": "VARCHAR",
-        "loading_conc": "DOUBLE",
-        "control_num_reads": "INTEGER",
-        "control_read_length_mean": "BIGINT",
-        "control_concordance_mean": "DOUBLE",
-        "control_concordance_mode": "DOUBLE",
-        "local_base_rate": "DOUBLE",
-        "polymerase_read_bases": "BIGINT",
-        "polymerase_num_reads": "INTEGER",
-        "polymerase_read_length_mean": "DOUBLE",
-        "polymerase_read_length_n50": "INTEGER",
-        "insert_length_mean": "BIGINT",
-        "insert_length_n50": "INTEGER",
-        "unique_molecular_bases": "BIGINT",
-        "productive_zmws_num": "INTEGER",
-        "p0_num": "INTEGER",
-        "p1_num": "INTEGER",
-        "p2_num": "INTEGER",
-        "adapter_dimer_percent": "DOUBLE",
-        "short_insert_percent": "DOUBLE",
-        "hifi_read_bases": "BIGINT",
-        "hifi_num_reads": "INTEGER",
-        "hifi_read_length_mean": "INTEGER",
-        "hifi_read_quality_median": "INTEGER",
-        "hifi_number_passes_mean": "DOUBLE",
-        "hifi_low_quality_read_bases": "BIGINT",
-        "hifi_low_quality_num_reads": "INTEGER",
-        "hifi_low_quality_read_length_mean": "INTEGER",
-        "hifi_low_quality_read_quality_median": "INTEGER",
-        "hifi_barcoded_reads": "INTEGER",
-        "hifi_bases_in_barcoded_reads": "BIGINT",
-        "remote_path": "VARCHAR",
-    }
+    query = mlwh_data_report_query_select()
+    col_defs = {}
+
+    debug_str = "Column types from mlwh-data query:\n"
+    for name, _, col in name_table_column(query):
+        if name == "supplier_name":
+            continue
+        type_ = "TIMESTAMPTZ" if (s := str(col.type)) == "DATETIME" else s
+        debug_str += f"  {name} = {type_}\n"
+        col_defs[name] = type_
+    logging.debug(debug_str)
+
     table_cols = "\n, ".join(
         f"{n} {t} PRIMARY KEY" if n == "data_id" else f"{n} {t}"
         for n, t in col_defs.items()
     )
+
     json_cols = "\n, ".join(f"{n}: '{t}'" for n, t in col_defs.items())
+
     return (table_cols, json_cols)
