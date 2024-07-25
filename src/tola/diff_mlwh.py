@@ -8,6 +8,7 @@ import pyarrow
 import pytz
 import sys
 
+from functools import cache
 from typing import NamedTuple
 
 # from duckdb.duckdb import ConstraintException
@@ -131,22 +132,16 @@ def cli(
 ):
     """Compare the contents of the MLWH to the ToLQC database"""
 
-    logging.basicConfig(level=getattr(logging, log_level))
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(message)s",
+        force=True,
+    )
 
     conn = duckdb.connect(str(duckdb_file))
 
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     create_diff_db(conn, tqc, mlwh_ndjson, update)
-
-    for tbl_name in ("mlwh", "tolqc"):
-        check_for_duplicate_data_ids(conn, tbl_name)
-        # try:
-        #     conn.execute(
-        #         f"CREATE UNIQUE INDEX {tbl_data_id}_data_id_udx"
-        #         f"" ON {tbl_data_id} (data_id)"
-        #     )
-        # except ConstraintException:
-        #     click.echo(f"Error: {tbl_data_id}.data_id contains duplicates", err=True)
 
     ds = DiffStore()
     for m in compare_tables(conn):
@@ -166,7 +161,6 @@ def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
     # NDJSON from MLWH has different number of columns for Illumina and PacBio
     # data.  To create the same table structure for the `mlwh` and `tolqc`
     # tables we provide the column mapping.
-    columns_def = column_definitions()
     create_diff_store(conn)
 
     tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
@@ -175,27 +169,22 @@ def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
     if update or "tolqc" not in tables:
         logging.info(f"Downloading current data from {tqc.tolqc_alias}")
         tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
-        logging.info("Loading {tolqc_ndjson} into tolqc table")
-        conn.execute(
-            (
-                "CREATE OR REPLACE TABLE tolqc"
-                f" AS FROM read_json(?, columns = {columns_def})"
-            ),
-            (tolqc_ndjson,),
-        )
+        load_table_from_json(conn, "tolqc", tolqc_ndjson)
 
     if update or "mlwh" not in tables:
         if not mlwh_ndjson.exists():
             logging.info(f"Downloading data from MLWH into {mlwh_ndjson}")
             fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
-        logging.info(f"Loading {mlwh_ndjson} into mlwh table")
-        conn.execute(
-            (
-                "CREATE OR REPLACE TABLE mlwh"
-                f" AS FROM read_json(?, columns = {columns_def})"
-            ),
-            (str(mlwh_ndjson),),
-        )
+        load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
+
+
+def load_table_from_json(conn, name, file):
+    logging.info(f"Loading {file} into {name} table")
+    table_cols, json_cols = column_definitions()
+    conn.execute(f"CREATE OR REPLACE TABLE {name}({table_cols})")
+    conn.execute(
+        f"INSERT INTO {name} FROM read_json(?, columns = {{{json_cols}}})", (file,)
+    )
 
 
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
@@ -257,19 +246,12 @@ def compare_tables(conn):
     already been seen.
     """
 
+    conn.execute("SET temp_directory = '/tmp'")
+    for name in ("mlwh", "tolqc"):
+        build_h_table(conn, name)
+        cleanup_diff_store(conn, name)
+
     sql = inspect.cleandoc("""
-        WITH mlwh_h AS (
-          SELECT data_id
-            , md5(mlwh::VARCHAR) AS hash
-            , mlwh AS struct
-          FROM mlwh
-        ),
-        tolqc_h AS (
-          SELECT data_id
-            , md5(tolqc::VARCHAR) AS hash
-            , tolqc AS struct
-          FROM tolqc
-        )
         SELECT mlwh_h.data_id
           , mlwh_h.struct AS mlwh_struct
           , tolqc_h.struct AS tolqc_struct
@@ -284,30 +266,55 @@ def compare_tables(conn):
           ON tolqc_h.hash = qds.tolqc_hash
         ORDER BY mlwh_h.data_id
     """)
-    logging.debug(sql)
+    debug_sql(sql)
     conn.execute(sql)
 
     while row := conn.fetchone():
         yield Mismatch._make(row)
 
 
-def copy_data_to_dest(conn, source, dest):
-    get_cols = inspect.cleandoc("""
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'main'
-          AND table_name = ?
-        ORDER BY ordinal_position
-    """)
-    conn.execute(get_cols, (dest,))
-    col_list = "\n  , ".join(x[0] for x in conn.fetchall())
-    conn.execute(f"INSERT INTO {dest}\nSELECT {col_list}\nFROM {source}")
+def debug_sql(sql):
+    logging.debug(f"\n{sql};")
+
+
+def build_h_table(conn, name):
+    """
+    Create tempoary table with a hash of each row in table `name`
+    """
+    sql = inspect.cleandoc(f"""
+        CREATE TEMPORARY TABLE {name}_h AS
+          SELECT data_id
+            , md5({name}::VARCHAR) AS hash
+            , {name} AS struct
+          FROM {name}
+    """)  # noqa: S608
+    debug_sql(sql)
+    conn.execute(sql)
+
+
+def cleanup_diff_store(conn, name):
+    """
+    Remove any rows in `diff_store` which no longer match the current row in
+    the hash table
+    """
+    sql = inspect.cleandoc(f"""
+        DELETE FROM diff_store
+        WHERE data_id IN (
+          SELECT data_id
+          FROM diff_store
+          ANTI JOIN {name}_h AS h
+            ON diff_store.{name}_hash = h.hash
+        )
+    """)  # noqa: S608
+    debug_sql(sql)
+    conn.execute(sql)
+
 
 def create_diff_store(conn):
     sql = inspect.cleandoc(
         """
         CREATE TABLE IF NOT EXISTS diff_store(
-            data_id VARCHAR
+            data_id VARCHAR PRIMARY KEY
             , mlwh_hash VARCHAR
             , tolqc_hash VARCHAR
             , differing_columns VARCHAR[]
@@ -315,8 +322,9 @@ def create_diff_store(conn):
         )
         """
     )
-    logging.debug(sql)
+    debug_sql(sql)
     conn.execute(sql)
+
 
 def table_map():
     query = mlwh_data_report_query_select()
@@ -352,75 +360,76 @@ def table_map():
     return table_map
 
 
+@cache
 def column_definitions():
-    return inspect.cleandoc(
-        """
-        {
-            data_id: 'VARCHAR',
-            study_id: 'BIGINT',
-            sample_name: 'VARCHAR',
-            -- supplier_name: 'VARCHAR',
-            tol_specimen_id: 'VARCHAR',
-            biosample_accession: 'VARCHAR',
-            biospecimen_accession: 'VARCHAR',
-            scientific_name: 'VARCHAR',
-            taxon_id: 'INTEGER',
-            platform_type: 'VARCHAR',
-            instrument_model: 'VARCHAR',
-            instrument_name: 'VARCHAR',
-            pipeline_id_lims: 'VARCHAR',
-            run_id: 'VARCHAR',
-            tag_index: 'VARCHAR',
-            lims_run_id: 'VARCHAR',
-            element: 'VARCHAR',
-            run_start: 'TIMESTAMPTZ',
-            run_complete: 'TIMESTAMPTZ',
-            plex_count: 'INTEGER',
-            lims_qc: 'VARCHAR',
-            qc_date: 'TIMESTAMPTZ',
-            tag1_id: 'VARCHAR',
-            tag2_id: 'VARCHAR',
-            library_id: 'VARCHAR',
-
-            -- pacbio_run_metrics fields
-            movie_minutes: 'INTEGER',
-            binding_kit: 'VARCHAR',
-            sequencing_kit: 'VARCHAR',
-            sequencing_kit_lot_number: 'VARCHAR',
-            cell_lot_number: 'VARCHAR',
-            include_kinetics: 'VARCHAR',
-            loading_conc: 'DOUBLE',
-            control_num_reads: 'INTEGER',
-            control_read_length_mean: 'BIGINT',
-            control_concordance_mean: 'DOUBLE',
-            control_concordance_mode: 'DOUBLE',
-            local_base_rate: 'DOUBLE',
-            polymerase_read_bases: 'BIGINT',
-            polymerase_num_reads: 'INTEGER',
-            polymerase_read_length_mean: 'DOUBLE',
-            polymerase_read_length_n50: 'INTEGER',
-            insert_length_mean: 'BIGINT',
-            insert_length_n50: 'INTEGER',
-            unique_molecular_bases: 'BIGINT',
-            productive_zmws_num: 'INTEGER',
-            p0_num: 'INTEGER',
-            p1_num: 'INTEGER',
-            p2_num: 'INTEGER',
-            adapter_dimer_percent: 'DOUBLE',
-            short_insert_percent: 'DOUBLE',
-            hifi_read_bases: 'BIGINT',
-            hifi_num_reads: 'INTEGER',
-            hifi_read_length_mean: 'INTEGER',
-            hifi_read_quality_median: 'INTEGER',
-            hifi_number_passes_mean: 'DOUBLE',
-            hifi_low_quality_read_bases: 'BIGINT',
-            hifi_low_quality_num_reads: 'INTEGER',
-            hifi_low_quality_read_length_mean: 'INTEGER',
-            hifi_low_quality_read_quality_median: 'INTEGER',
-            hifi_barcoded_reads: 'INTEGER',
-            hifi_bases_in_barcoded_reads: 'BIGINT',
-
-            remote_path: 'VARCHAR',
-        }
-    """
+    col_defs = {
+        "data_id": "VARCHAR",
+        "study_id": "BIGINT",
+        "sample_name": "VARCHAR",
+        # "supplier_name": 'VARCHAR',
+        "tol_specimen_id": "VARCHAR",
+        "biosample_accession": "VARCHAR",
+        "biospecimen_accession": "VARCHAR",
+        "scientific_name": "VARCHAR",
+        "taxon_id": "INTEGER",
+        "platform_type": "VARCHAR",
+        "instrument_model": "VARCHAR",
+        "instrument_name": "VARCHAR",
+        "pipeline_id_lims": "VARCHAR",
+        "run_id": "VARCHAR",
+        "tag_index": "VARCHAR",
+        "lims_run_id": "VARCHAR",
+        "element": "VARCHAR",
+        "run_start": "TIMESTAMPTZ",
+        "run_complete": "TIMESTAMPTZ",
+        "plex_count": "INTEGER",
+        "lims_qc": "VARCHAR",
+        "qc_date": "TIMESTAMPTZ",
+        "tag1_id": "VARCHAR",
+        "tag2_id": "VARCHAR",
+        "library_id": "VARCHAR",
+        # pacbio_run_metrics fields:
+        "movie_minutes": "INTEGER",
+        "binding_kit": "VARCHAR",
+        "sequencing_kit": "VARCHAR",
+        "sequencing_kit_lot_number": "VARCHAR",
+        "cell_lot_number": "VARCHAR",
+        "include_kinetics": "VARCHAR",
+        "loading_conc": "DOUBLE",
+        "control_num_reads": "INTEGER",
+        "control_read_length_mean": "BIGINT",
+        "control_concordance_mean": "DOUBLE",
+        "control_concordance_mode": "DOUBLE",
+        "local_base_rate": "DOUBLE",
+        "polymerase_read_bases": "BIGINT",
+        "polymerase_num_reads": "INTEGER",
+        "polymerase_read_length_mean": "DOUBLE",
+        "polymerase_read_length_n50": "INTEGER",
+        "insert_length_mean": "BIGINT",
+        "insert_length_n50": "INTEGER",
+        "unique_molecular_bases": "BIGINT",
+        "productive_zmws_num": "INTEGER",
+        "p0_num": "INTEGER",
+        "p1_num": "INTEGER",
+        "p2_num": "INTEGER",
+        "adapter_dimer_percent": "DOUBLE",
+        "short_insert_percent": "DOUBLE",
+        "hifi_read_bases": "BIGINT",
+        "hifi_num_reads": "INTEGER",
+        "hifi_read_length_mean": "INTEGER",
+        "hifi_read_quality_median": "INTEGER",
+        "hifi_number_passes_mean": "DOUBLE",
+        "hifi_low_quality_read_bases": "BIGINT",
+        "hifi_low_quality_num_reads": "INTEGER",
+        "hifi_low_quality_read_length_mean": "INTEGER",
+        "hifi_low_quality_read_quality_median": "INTEGER",
+        "hifi_barcoded_reads": "INTEGER",
+        "hifi_bases_in_barcoded_reads": "BIGINT",
+        "remote_path": "VARCHAR",
+    }
+    table_cols = "\n, ".join(
+        f"{n} {t} PRIMARY KEY" if n == "data_id" else f"{n} {t}"
+        for n, t in col_defs.items()
     )
+    json_cols = "\n, ".join(f"{n}: '{t}'" for n, t in col_defs.items())
+    return (table_cols, json_cols)
