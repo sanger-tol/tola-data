@@ -4,12 +4,10 @@ import json
 import logging
 import pathlib
 import sys
-
 from types import SimpleNamespace
 from urllib.parse import quote
 
 import click
-
 from tol.core import DataSourceFilter
 
 from tola import tolqc_client

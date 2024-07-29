@@ -12,6 +12,7 @@ dependencies = [
     "boto3",
     "click",
     "duckdb ~= 1.0.0",
+    "flask",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "pyarrow",

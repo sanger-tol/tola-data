@@ -1,8 +1,9 @@
-import click
 import pathlib
 
-import tola.marshals
+import click
 from tolqc.model import Base
+
+import tola.marshals
 
 
 @click.command(help="Populate dictionary table in ToL QC db from TSV files")

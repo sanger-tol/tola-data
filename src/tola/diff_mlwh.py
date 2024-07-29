@@ -1,23 +1,21 @@
-import click
 import datetime
-import duckdb
 import inspect
 import logging
 import pathlib
-import pyarrow
-import pytz
 import sys
-
 from functools import cache
 from typing import NamedTuple
 
 # from duckdb.duckdb import ConstraintException
+import click
+import duckdb
+import pyarrow
+import pytz
+from tolqc.reports import mlwh_data_report_query_select
 
 from tola import db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
 from tola.ndjson import ndjson_row
-
-from tolqc.reports import mlwh_data_report_query_select
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 

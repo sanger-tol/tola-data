@@ -1,9 +1,10 @@
-import click
 import pathlib
 import re
-import tola.marshals
 
+import click
 from tolqc import Accession
+
+import tola.marshals
 
 
 @click.command(
