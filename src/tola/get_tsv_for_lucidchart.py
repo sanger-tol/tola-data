@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import inspect
-from subprocess import Popen, PIPE
+from subprocess import PIPE, Popen
 
 
 def main():

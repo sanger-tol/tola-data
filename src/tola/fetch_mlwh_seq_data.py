@@ -1,4 +1,3 @@
-import click
 import inspect
 import logging
 import re
@@ -6,7 +5,9 @@ import sys
 from functools import cache
 from io import StringIO
 
+import click
 from tol.core import DataSourceFilter
+
 from tola import db_connection, tolqc_client
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
