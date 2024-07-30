@@ -29,7 +29,7 @@ rm -rf tola-data
 
 # Copy the venv wrapper scripts for our commands to bin/
 mkdir "bin"
-commands="fetch-mlwh-seq-data status-duckdb tqc"
+commands="diff-mlwh fetch-mlwh-seq-data status-duckdb tqc"
 for file in $commands
 do
     cp "$VENV_DIR/bin/$file" "bin/$file"

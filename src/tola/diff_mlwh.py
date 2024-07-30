@@ -115,6 +115,43 @@ def default_mlwh_ndjson_file():
     show_default=True,
 )
 @click.option(
+    "--new/--quiet",
+    "show_new_diffs",
+    help="Print the most recently detected differences to STDOUT",
+    default=True,
+    show_default=True,
+)
+@click.option(
+    "--show-classes",
+    flag_value=True,
+    help="""Show the list of differences grouped by the names of columns
+      which differ and their counts""",
+)
+@click.option(
+    "--format",
+    type=click.Choice(
+        ["PRETTY", "NDJSON"],
+        case_sensitive=False,
+    ),
+    default="PRETTY",
+    show_default=True,
+    help="""Output differences found in either 'PRETTY'
+      (human readable) or 'NDJSON' format""",
+)
+@click.option(
+    "--today",
+    "since",
+    flag_value=TODAY,
+    type=click.DateTime(),
+    help="Only show differences found today",
+)
+@click.option(
+    "--since",
+    "since",
+    type=click.DateTime(),
+    help="Show differences detected since a particular date or time",
+)
+@click.option(
     "--table",
     help="Name of table for which to print patching NDJSON",
 )
@@ -125,6 +162,10 @@ def cli(
     log_level,
     duckdb_file,
     mlwh_ndjson,
+    show_new_diffs,
+    show_classes,
+    format,
+    since,
     table,
     update,
 ):
@@ -153,6 +194,10 @@ def cli(
         for m in compare_tables(conn):
             if patch := get_patch_for_table(col_map, m.mlwh, m.tolqc):
                 sys.stdout.write(ndjson_row(patch))
+    elif show_classes:
+        show_diff_classes(conn)
+    elif since or show_new_diffs:
+        show_stored_diffs(conn, since, show_new_diffs)
 
 
 def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
@@ -216,6 +261,48 @@ def show_diff(frst, scnd):
         scnd_v = scnd[key]
         if frst_v != scnd_v:
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
+
+
+def show_stored_diffs(conn, since=None, show_new_diffs=False):
+    sql = inspect.cleandoc("""
+        SELECT ds.data_id
+          , ds.differing_columns
+          , mlwh
+          , tolqc
+        FROM diff_store ds
+        JOIN mlwh USING (data_id)
+        JOIN tolqc USING (data_id)
+    """)
+    if since:
+        sql += "\nWHERE ds.found_at >= ?"
+        debug_sql(sql)
+        conn.execute(sql, (since,))
+    elif show_new_diffs:
+        sql += "\nWHERE ds.found_at = (SELECT MAX(found_at) FROM diff_store)"
+        debug_sql(sql)
+        conn.execute(sql)
+    else:
+        debug_sql(sql)
+        conn.execute(sql)
+
+    while diff := conn.fetchone():
+        data_id, cols, mlwh, tolqc = diff
+        click.echo(f"\n{data_id = }\n{cols = }")
+
+
+def show_diff_classes(conn):
+    sql = inspect.cleandoc("""
+        SELECT count(*) AS n
+          , differing_columns
+        FROM diff_store
+        GROUP BY differing_columns
+        ORDER BY differing_columns
+    """)
+    debug_sql(sql)
+    conn.execute(sql)
+    while c := conn.fetchone():
+        n, cols = c
+        click.echo(f"{n:>7}  {','.join(cols)}")
 
 
 def compare_tables(conn):
