@@ -3,12 +3,10 @@ import logging
 import os
 import pathlib
 import re
-
 from functools import cached_property
 
 import click
 import requests
-
 from tol.api_client2 import create_api_datasource
 from tol.core import core_data_object
 
