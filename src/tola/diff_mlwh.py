@@ -4,6 +4,7 @@ import logging
 import pathlib
 import sys
 from functools import cache
+from tempfile import NamedTemporaryFile
 from typing import NamedTuple
 
 # from duckdb.duckdb import ConstraintException
@@ -83,10 +84,6 @@ def default_duckdb_file():
     return pathlib.Path(f"diff_mlwh_{TODAY}.duckdb")
 
 
-def default_mlwh_ndjson_file():
-    return pathlib.Path(f"mlwh_{TODAY}.ndjson")
-
-
 @click.command
 @tolqc_client.tolqc_alias
 @tolqc_client.tolqc_url
@@ -95,8 +92,10 @@ def default_mlwh_ndjson_file():
 @click.option(
     "--duckdb-file",
     type=click.Path(path_type=pathlib.Path),
-    help="Name of duckdb database file.",
+    help="""Name of duckdb database file.
+      Taken from the DIFF_MLWH_DUCKDB environment variable if set""",
     default=default_duckdb_file(),
+    envvar="DIFF_MLWH_DUCKDB",
     show_default=True,
 )
 @click.option(
@@ -104,9 +103,9 @@ def default_mlwh_ndjson_file():
     type=click.Path(
         path_type=pathlib.Path,
     ),
-    help="Name of NDJSON file from fetch-mlwh-seq-data",
-    default=default_mlwh_ndjson_file(),
-    show_default=True,
+    envvar="MLWH_NDJSON",
+    help="""Name of NDJSON file from fetch-mlwh-seq-data.
+      Taken from the MLWH_NDJSON environment variable if set""",
 )
 @click.option(
     "--update/--no-update",
@@ -200,30 +199,40 @@ def cli(
         show_stored_diffs(conn, since, show_new_diffs)
 
 
-def create_diff_db(conn, tqc, mlwh_ndjson, update=False):
-    # NDJSON from MLWH has different number of columns for Illumina and PacBio
-    # data.  To create the same table structure for the `mlwh` and `tolqc`
-    # tables we provide the column mapping.
+def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
     create_diff_store(conn)
 
     tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
 
     # Fetch the current MLWH data from ToLQC
     if update or "tolqc" not in tables:
-        logging.info(f"Downloading current data from {tqc.tolqc_alias}")
-        tolqc_ndjson = tqc.download_file("report/mlwh-data?format=NDJSON")
-        load_table_from_json(conn, "tolqc", tolqc_ndjson)
+        tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
+        logging.info(
+            f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
+        )
+        tqc.download_file("report/mlwh-data?format=NDJSON", tolqc_tmp.name)
+        load_table_from_json(conn, "tolqc", tolqc_tmp.name)
 
     if update or "mlwh" not in tables:
-        if not mlwh_ndjson.exists():
-            logging.info(f"Downloading data from MLWH into {mlwh_ndjson}")
-            fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
-        load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
+        if mlwh_ndjson and mlwh_ndjson.exists():
+            load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
+        else:
+            mlwh_tmp = NamedTemporaryFile(
+                "w", prefix="mlwh_", suffix=".ndjson", delete_on_close=False
+            )
+            logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
+            fetch_mlwh_seq_data_to_file(tqc, mlwh_tmp)
+            load_table_from_json(conn, "mlwh", mlwh_tmp.name)
 
 
 def load_table_from_json(conn, name, file):
     logging.info(f"Loading {file} into {name} table")
+
+    # NDJSON from MLWH has different number of columns for Illumina and PacBio
+    # data.  To create the same table structure for the `mlwh` and `tolqc`
+    # tables we provide the column mapping.
     table_cols, json_cols = column_definitions()
+
     conn.execute(f"CREATE OR REPLACE TABLE {name}({table_cols})")
     conn.execute(
         f"INSERT INTO {name} FROM read_json(?, columns = {{{json_cols}}})", (file,)
@@ -232,8 +241,8 @@ def load_table_from_json(conn, name, file):
 
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh = db_connection.mlwh_db()
-    with mlwh_ndjson.open("w") as fh:
-        write_mlwh_data_to_filehandle(mlwh, tqc.list_project_study_ids(), fh)
+    write_mlwh_data_to_filehandle(mlwh, tqc.list_project_study_ids(), mlwh_ndjson)
+    mlwh_ndjson.close()
 
 
 def get_patch_for_table(col_map, frst, scnd):

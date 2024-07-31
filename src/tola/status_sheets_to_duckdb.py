@@ -10,7 +10,7 @@ import requests
 
 
 def status_db_today():
-    today = datetime.date.today().isoformat()
+    today = datetime.date.today().isoformat()  # noqa: DTZ011
     return f"tol_status_{today}.duckdb"
 
 
@@ -65,7 +65,7 @@ def cli(duckdb_file):
     # Start duckdb cli if run in a terminal
     if sys.stdout.isatty():
         con.close()
-        os.execlp("duckdb", "duckdb", duckdb_file)
+        os.execlp("duckdb", "duckdb", duckdb_file)  # noqa: S607
 
 
 def create_table(con, table_name, row_itr):
@@ -104,7 +104,7 @@ def create_table(con, table_name, row_itr):
     os.fsync(tsv_tmp.fileno())
 
     # Import the data from the temporary CSV file into duckdb
-    stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto(?)"
+    stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto(?)"  # noqa: S608
     con.execute(stmt, (tsv_tmp.name,))
 
 
