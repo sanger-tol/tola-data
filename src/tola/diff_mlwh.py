@@ -5,7 +5,7 @@ import pathlib
 import sys
 from functools import cache
 from tempfile import NamedTemporaryFile
-from typing import NamedTuple
+from typing import Any
 
 # from duckdb.duckdb import ConstraintException
 import click
@@ -21,14 +21,85 @@ from tola.ndjson import ndjson_row
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
 
-class Mismatch(NamedTuple):
+class Mismatch:
     """Stores a row from the diff query"""
 
-    data_id: str
-    mlwh: str
-    tolqc: str
-    mlwh_hash: str
-    tolqc_hash: str
+    __slots__ = (
+        "data_id",
+        "mlwh",
+        "tolqc",
+        "mlwh_hash",
+        "tolqc_hash",
+        "differing_columns",
+    )
+
+    def __init__(
+        self,
+        data_id: str,
+        mlwh: dict[str, Any],
+        tolqc: dict[str, Any],
+        mlwh_hash: str,
+        tolqc_hash: str,
+        differing_columns: list[str] = None,
+    ):
+        self.data_id = data_id
+        self.mlwh = mlwh
+        self.tolqc = tolqc
+        self.mlwh_hash = mlwh_hash
+        self.tolqc_hash = tolqc_hash
+        if differing_columns:
+            self.differing_columns = differing_columns
+        else:
+            self._build_differing_columns()
+
+    @property
+    def diff_class(self) -> list[str]:
+        return ",".join(self.differing_columns)
+
+    @property
+    def differences_dict(self):
+        dd = {"data_id": self.data_id}
+        for col in self.differing_columns:
+            dd[col] = (self.tolqc[col], self.mlwh[col])
+        return dd
+
+    def _build_differing_columns(self):
+        mlwh = self.mlwh
+        tolqc = self.tolqc
+
+        diff_cols = []
+        for fld in mlwh:
+            if mlwh[fld] != tolqc[fld]:
+                diff_cols.append(fld)
+        if not diff_cols:
+            msg = f"Failed to find any differing columns in:\n{mlwh = }\n{tolqc = }"
+            raise ValueError(msg)
+
+        self.differing_columns = diff_cols
+
+    def get_patch_for_table(self, col_map):
+        mlwh = self.mlwh
+        tolqc = self.tolqc
+
+        patch = {}
+        primary_key = None
+        for key, out_key in col_map.items():
+            if out_key.endswith(".id"):
+                primary_key = key
+                continue
+            mlwh_v = mlwh[key]
+            tolqc_v = tolqc[key]
+            if mlwh_v != tolqc_v:
+                patch[out_key] = mlwh_v
+        if not primary_key:
+            msg = f"Failed to find primary key in: {col_map}"
+            raise ValueError(msg)
+        if patch:
+            pk_out = col_map[primary_key]
+            patch[pk_out] = mlwh[primary_key]
+            return patch
+        return None
+
 
 
 class DiffStore:
@@ -44,18 +115,7 @@ class DiffStore:
         self.data_id.append(m.data_id)
         self.mlwh_hash.append(m.mlwh_hash)
         self.tolqc_hash.append(m.tolqc_hash)
-
-        mlwh = m.mlwh
-        tolqc = m.tolqc
-        diff_cols = []
-        for fld in mlwh:
-            if mlwh[fld] != tolqc[fld]:
-                diff_cols.append(fld)
-        if not diff_cols:
-            msg = f"Failed to find any differing columns in:\n{mlwh = }\n{tolqc = }"
-            raise ValueError(msg)
-
-        self.differing_columns.append(diff_cols)
+        self.differing_columns.append(m.differing_columns)
 
     def arrow_table(self, now):
         return pyarrow.Table.from_pydict(
@@ -128,14 +188,14 @@ def default_duckdb_file():
 )
 @click.option(
     "--format",
+    "output_format",
     type=click.Choice(
         ["PRETTY", "NDJSON"],
         case_sensitive=False,
     ),
-    default="PRETTY",
-    show_default=True,
     help="""Output differences found in either 'PRETTY'
-      (human readable) or 'NDJSON' format""",
+      (human readable) or 'NDJSON' format.
+      Defaults to 'PRETTY' if stdout is a terminal, else 'NDJSON'""",
 )
 @click.option(
     "--today",
@@ -163,12 +223,15 @@ def cli(
     mlwh_ndjson,
     show_new_diffs,
     show_classes,
-    format,
+    output_format,
     since,
     table,
     update,
 ):
     """Compare the contents of the MLWH to the ToLQC database"""
+
+    if not output_format:
+        output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
 
     logging.basicConfig(
         level=getattr(logging, log_level),
@@ -190,13 +253,14 @@ def cli(
         col_map = table_map().get(table)
         if not col_map:
             exit(f"No column map for table '{table}'")
-        for m in compare_tables(conn):
-            if patch := get_patch_for_table(col_map, m.mlwh, m.tolqc):
+        for m in show_stored_diffs(conn):
+            if patch := m.get_patch_for_table(col_map):
                 sys.stdout.write(ndjson_row(patch))
     elif show_classes:
         show_diff_classes(conn)
     elif since or show_new_diffs:
-        show_stored_diffs(conn, since, show_new_diffs)
+        for m in show_stored_diffs(conn, since, show_new_diffs):
+            sys.stdout.write(ndjson_row(m.differences_dict))
 
 
 def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
@@ -245,26 +309,6 @@ def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh_ndjson.close()
 
 
-def get_patch_for_table(col_map, frst, scnd):
-    diff = {}
-    primary_key = None
-    for key, out_key in col_map.items():
-        if out_key.endswith(".id"):
-            primary_key = key
-            continue
-        frst_v = frst[key]
-        scnd_v = scnd[key]
-        if frst_v != scnd_v:
-            diff[out_key] = frst_v
-    if not primary_key:
-        exit(f"Failed to find primary key in: {col_map}")
-    if diff:
-        pk_out = col_map[primary_key]
-        diff[pk_out] = frst[primary_key]
-        return diff
-    return None
-
-
 def show_diff(frst, scnd):
     for key, frst_v in frst.items():
         scnd_v = scnd[key]
@@ -275,9 +319,11 @@ def show_diff(frst, scnd):
 def show_stored_diffs(conn, since=None, show_new_diffs=False):
     sql = inspect.cleandoc("""
         SELECT ds.data_id
-          , ds.differing_columns
           , mlwh
           , tolqc
+          , ds.mlwh_hash
+          , ds.tolqc_hash
+          , ds.differing_columns
         FROM diff_store ds
         JOIN mlwh USING (data_id)
         JOIN tolqc USING (data_id)
@@ -295,8 +341,7 @@ def show_stored_diffs(conn, since=None, show_new_diffs=False):
         conn.execute(sql)
 
     while diff := conn.fetchone():
-        data_id, cols, mlwh, tolqc = diff
-        click.echo(f"\n{data_id = }\n{cols = }")
+        yield Mismatch(*diff)
 
 
 def show_diff_classes(conn):
@@ -352,7 +397,7 @@ def compare_tables(conn):
     conn.execute(sql)
 
     while row := conn.fetchone():
-        yield Mismatch._make(row)
+        yield Mismatch(*row)
 
 
 def debug_sql(sql):
