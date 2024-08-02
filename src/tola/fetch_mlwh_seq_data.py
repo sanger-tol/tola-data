@@ -4,19 +4,21 @@ import re
 import sys
 from functools import cache
 from io import StringIO
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import click
 from tol.core import DataSourceFilter
 
-from tola import db_connection, tolqc_client
+from tola import click_options, db_connection, diff_mlwh, tolqc_client
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 
 
 @click.command()
-@tolqc_client.tolqc_url
-@tolqc_client.api_token
-@tolqc_client.tolqc_alias
+@click_options.tolqc_url
+@click_options.api_token
+@click_options.tolqc_alias
 @click.option(
     "--stdout/--server",
     "write_to_stdout",
@@ -27,6 +29,14 @@ from tola.ndjson import ndjson_row
     ToLQC database.
     """,
 )
+@click.option(
+    "--diff-mlwh/--no-diff-mlwh",
+    "run_diff_mlwh",
+    default=False,
+    show_default=True,
+    help="Run diff-mlwh on the same data fetched from MLWH after import to ToLQC",
+)
+@click_options.diff_mlwh_duckdb
 @click.argument(
     "project_id_list",
     metavar="PROJECT_ID",
@@ -34,7 +44,15 @@ from tola.ndjson import ndjson_row
     nargs=-1,
     required=False,
 )
-def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
+def cli(
+    tolqc_url,
+    api_token,
+    tolqc_alias,
+    project_id_list,
+    write_to_stdout,
+    run_diff_mlwh,
+    diff_mlwh_duckdb,
+):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
@@ -55,14 +73,32 @@ def cli(tolqc_url, api_token, tolqc_alias, project_id_list, write_to_stdout):
     if write_to_stdout:
         write_mlwh_data_to_filehandle(mlwh, project_id_list, sys.stdout)
     else:
+        mlwh_data = None
+        if run_diff_mlwh:
+            mlwh_data = NamedTemporaryFile(
+                "w", prefix="mlwh_", suffix=".ndjson", delete_on_close=False
+            )
+
         for project_id in project_id_list:
             for platform, run_data_fetcher in (
                 ("PacBio", pacbio_fetcher),
                 ("Illumina", illumina_fetcher),
             ):
-                row_itr = run_data_fetcher(mlwh, project_id)
+                row_itr = run_data_fetcher(mlwh, project_id, mlwh_data)
                 rspns = chunk_requests(client, row_itr)
                 print(formatted_response(rspns, project_id, platform), end="")
+
+        if run_diff_mlwh:
+            mlwh_data.close()
+            diff_mlwh.run_mlwh_diff(
+                client,
+                diff_mlwh_duckdb=diff_mlwh_duckdb,
+                mlwh_ndjson=Path(mlwh_data.name),
+                show_new_diffs=True,
+                output_format="PRETTY",
+                update=True,
+            )
+
         patch_species(client)
 
 
@@ -128,13 +164,16 @@ def response_row_std_fields(row):
     return "\t".join(str(row[x]) for x in row if x not in ("project", "changes")) + "\n"
 
 
-def illumina_fetcher(mlwh, project_id):
+def illumina_fetcher(mlwh, project_id, save_data):
     logging.info(f"Fetching Illumina data for project '{project_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project_id,))
     for row in crsr:
         build_remote_path(row)
-        yield ndjson_row(row)
+        fmt = ndjson_row(row)
+        if save_data:
+            save_data.write(fmt)
+        yield fmt
 
 
 PIPELINE_TO_LIBRARY_TYPE = {
@@ -148,7 +187,7 @@ PIPELINE_TO_LIBRARY_TYPE = {
 }
 
 
-def pacbio_fetcher(mlwh, project_id):
+def pacbio_fetcher(mlwh, project_id, save_data):
     logging.info(f"Fetching PacBio data for project '{project_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
@@ -167,8 +206,10 @@ def pacbio_fetcher(mlwh, project_id):
         # Map MLWH library type to canonical library type
         if pidl := row.get("pipeline_id_lims"):
             row["pipeline_id_lims"] = PIPELINE_TO_LIBRARY_TYPE.get(pidl, pidl)
-
-        yield ndjson_row(row)
+        fmt = ndjson_row(row)
+        if save_data:
+            save_data.write(fmt)
+        yield fmt
 
 
 def trimmed_tag(tag):

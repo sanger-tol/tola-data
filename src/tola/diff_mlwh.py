@@ -1,4 +1,3 @@
-import datetime
 import inspect
 import io
 import logging
@@ -13,12 +12,9 @@ import duckdb
 import pyarrow
 from tolqc.reports import mlwh_data_report_query_select
 
-from tola import db_connection, tolqc_client
-from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
+from tola import click_options, db_connection, fetch_mlwh_seq_data, tolqc_client
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, field_style
-
-TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
 
 class Mismatch:
@@ -170,24 +166,12 @@ class DiffStore:
         )
 
 
-def default_duckdb_file():
-    return pathlib.Path(f"diff_mlwh_{TODAY}.duckdb")
-
-
 @click.command
-@tolqc_client.tolqc_alias
-@tolqc_client.tolqc_url
-@tolqc_client.api_token
-@tolqc_client.log_level
-@click.option(
-    "--duckdb-file",
-    type=click.Path(path_type=pathlib.Path),
-    help="""Name of duckdb database file.
-      Taken from the DIFF_MLWH_DUCKDB environment variable if set""",
-    default=default_duckdb_file(),
-    envvar="DIFF_MLWH_DUCKDB",
-    show_default=True,
-)
+@click_options.tolqc_alias
+@click_options.tolqc_url
+@click_options.api_token
+@click_options.log_level
+@click_options.diff_mlwh_duckdb
 @click.option(
     "--mlwh-ndjson",
     type=click.Path(
@@ -238,7 +222,7 @@ def default_duckdb_file():
 @click.option(
     "--today",
     "since",
-    flag_value=TODAY,
+    flag_value=click_options.TODAY,
     type=click.DateTime(),
     help="Only show differences found today",
 )
@@ -257,7 +241,7 @@ def cli(
     tolqc_url,
     api_token,
     log_level,
-    duckdb_file,
+    diff_mlwh_duckdb,
     mlwh_ndjson,
     show_new_diffs,
     show_classes,
@@ -269,21 +253,46 @@ def cli(
 ):
     """Compare the contents of the MLWH to the ToLQC database"""
 
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(message)s",
+        force=True,
+    )
+    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if column_class:
         column_class = column_class.split(",")
 
     if not output_format:
         output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
 
-    logging.basicConfig(
-        level=getattr(logging, log_level),
-        format="%(message)s",
-        force=True,
+    run_mlwh_diff(
+        tqc,
+        diff_mlwh_duckdb,
+        mlwh_ndjson,
+        show_new_diffs,
+        show_classes,
+        column_class,
+        output_format,
+        since,
+        table,
+        update,
     )
 
-    conn = duckdb.connect(str(duckdb_file))
 
-    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+def run_mlwh_diff(
+    tqc,
+    diff_mlwh_duckdb=None,
+    mlwh_ndjson=None,
+    show_new_diffs=False,
+    show_classes=False,
+    column_class=None,
+    output_format="NDJSON",
+    since=None,
+    table=None,
+    update=False,
+):
+    conn = duckdb.connect(str(diff_mlwh_duckdb))
+
     create_diff_db(conn, tqc, mlwh_ndjson, update)
 
     if show_classes:
@@ -373,7 +382,9 @@ def load_table_from_json(conn, name, file):
 
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh = db_connection.mlwh_db()
-    write_mlwh_data_to_filehandle(mlwh, tqc.list_project_study_ids(), mlwh_ndjson)
+    fetch_mlwh_seq_data.write_mlwh_data_to_filehandle(
+        mlwh, tqc.list_project_study_ids(), mlwh_ndjson
+    )
     mlwh_ndjson.close()
 
 
@@ -387,7 +398,6 @@ def show_diff(frst, scnd):
 def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None):
     args = []
     where = []
-    logging.debug(f"{since = }")
     if since:
         where.append("ds.found_at >= ?")
         args.append(since)
@@ -412,6 +422,9 @@ def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None
 
     if where:
         sql += "\nWHERE " + "\n  AND ".join(where)
+
+    sql += "\nORDER BY ds.data_id"
+
     debug_sql(sql)
     conn.execute(sql, args)
 
