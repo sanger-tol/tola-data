@@ -13,6 +13,7 @@ from tol.core import DataSourceFilter
 from tola import tolqc_client
 from tola.db_connection import ConnectionParamsException
 from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.pretty import bold, bold_green, field_style
 
 opt = SimpleNamespace(
     table=click.option(
@@ -640,15 +641,17 @@ def pretty_changes_itr(changes, apply_flag):
         fmt = io.StringIO()
         fmt.write(f"\n{key}  {bold(chng[key])}\n")
 
-        v_key_max = max(len(x) for x in v_keys)
         old_values = []
         new_values = []
+        v_key_max = 0
         for k in v_keys:
             old, new = chng[k]
             old_values.append(field_style(k, old))
             new_values.append(field_style(k, new))
-        old_val_max = max(len(x[0]) for x in old_values)
+            if (gtv := len(k)) > v_key_max:
+                v_key_max = gtv
 
+        old_val_max = max(len(x[0]) for x in old_values)
         for k, (old_val, old_style), (new_val, new_style) in zip(
             v_keys, old_values, new_values, strict=True
         ):
@@ -659,18 +662,6 @@ def pretty_changes_itr(changes, apply_flag):
 
     if not apply_flag:
         yield "\n" + dry_warning(len(changes))
-
-
-def field_style(key, val):
-    if val == "":
-        return "<empty_string>", bold_red
-    if val is None:
-        return "null", dim
-    if isinstance(val, datetime.date):
-        return val.isoformat(), bold
-    if isinstance(val, int) and val >= 10_000 and not key.endswith("_id"):
-        return f"{val:_}", bold
-    return repr(val), bold
 
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):
@@ -697,22 +688,6 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
         else:
             for oid in ids_from_ndjson_stream(key, sys.stdin):
                 yield oid
-
-
-def dim(txt):
-    return click.style(txt, dim=True)
-
-
-def bold_green(txt):
-    return click.style(txt, bold=True, fg="green")
-
-
-def bold_red(txt):
-    return click.style(txt, bold=True, fg="red")
-
-
-def bold(txt):
-    return click.style(txt, bold=True)
 
 
 def guess_file_type(file):

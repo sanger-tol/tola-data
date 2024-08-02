@@ -1,5 +1,6 @@
 import datetime
 import inspect
+import io
 import logging
 import pathlib
 import sys
@@ -7,16 +8,15 @@ from functools import cache
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-# from duckdb.duckdb import ConstraintException
 import click
 import duckdb
 import pyarrow
-import pytz
 from tolqc.reports import mlwh_data_report_query_select
 
 from tola import db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import write_mlwh_data_to_filehandle
 from tola.ndjson import ndjson_row
+from tola.pretty import bold, field_style
 
 TODAY = datetime.date.today().isoformat()  # noqa: DTZ011
 
@@ -60,7 +60,7 @@ class Mismatch:
     def differences_dict(self):
         dd = {"data_id": self.data_id}
         for col in self.differing_columns:
-            dd[col] = (self.tolqc[col], self.mlwh[col])
+            dd[col] = (self.mlwh[col], self.tolqc[col])
         return dd
 
     def _build_differing_columns(self):
@@ -77,14 +77,14 @@ class Mismatch:
 
         self.differing_columns = diff_cols
 
-    def get_patch_for_table(self, col_map):
+    def get_patch_for_table(self, table, col_map):
         mlwh = self.mlwh
         tolqc = self.tolqc
 
         patch = {}
         primary_key = None
         for key, out_key in col_map.items():
-            if out_key.endswith(".id"):
+            if out_key == table + ".id":
                 primary_key = key
                 continue
             mlwh_v = mlwh[key]
@@ -100,6 +100,37 @@ class Mismatch:
             return patch
         return None
 
+    def pretty(self):
+        fmt = io.StringIO()
+        fmt.write(f"\n{bold(self.data_id)}\n")
+
+        max_col_width = 0
+        max_mlwh_val_width = 0
+        mlwh_values = []
+        tolqc_values = []
+        for col in self.differing_columns:
+            if (x := len(col)) > max_col_width:
+                max_col_width = x
+            mlwh_v, mlwh_style = field_style(col, self.mlwh[col])
+            if (y := len(mlwh_v)) > max_mlwh_val_width:
+                max_mlwh_val_width = y
+            mlwh_values.append((mlwh_v, mlwh_style))
+            tolqc_values.append(field_style(col, self.tolqc[col]))
+
+        fmt.write(f"  {'':{max_col_width}}  {'MLWH':{max_mlwh_val_width}}  ToLQC\n")
+        for col, (mlwh_v, mlwh_style), (tolqc_v, tolqc_style) in zip(
+            self.differing_columns,
+            mlwh_values,
+            tolqc_values,
+            strict=True,
+        ):
+            mlwh_fmt = f"{mlwh_v:{max_mlwh_val_width}}"
+            fmt.write(
+                f"  {col:>{max_col_width}}  {mlwh_style(mlwh_fmt)}"
+                f"  {tolqc_style(tolqc_v)}\n"
+            )
+
+        return fmt.getvalue()
 
 
 class DiffStore:
@@ -117,14 +148,13 @@ class DiffStore:
         self.tolqc_hash.append(m.tolqc_hash)
         self.differing_columns.append(m.differing_columns)
 
-    def arrow_table(self, now):
+    def arrow_table(self):
         return pyarrow.Table.from_pydict(
             {
                 "data_id": pyarrow.array(self.data_id),
                 "mlwh_hash": pyarrow.array(self.mlwh_hash),
                 "tolqc_hash": pyarrow.array(self.tolqc_hash),
                 "differing_columns": pyarrow.array(self.differing_columns),
-                "found_at": pyarrow.array([now] * len(self.data_id)),
             }
         )
 
@@ -134,10 +164,10 @@ class DiffStore:
             logging.info("No new differences found")
             return
         logging.info(f"Found {count} new differences")
-        (tz_name,) = conn.execute("SELECT current_setting('TimeZone')").fetchone()
-        now = datetime.datetime.now(tz=pytz.timezone(tz_name))
-        arrow_table__ = self.arrow_table(now)  # noqa: F841
-        conn.sql("INSERT INTO diff_store SELECT * FROM arrow_table__")
+        arrow_table__ = self.arrow_table()  # noqa: F841
+        conn.sql(
+            "INSERT INTO diff_store SELECT *, current_timestamp FROM arrow_table__"
+        )
 
 
 def default_duckdb_file():
@@ -174,10 +204,12 @@ def default_duckdb_file():
     show_default=True,
 )
 @click.option(
-    "--new/--quiet",
+    "--new/--all",
     "show_new_diffs",
-    help="Print the most recently detected differences to STDOUT",
-    default=True,
+    help="""Print the most recently detected mismatches to STDOUT
+      instead of the default of printing all stored mismatches.
+      Overridden by the --since or --today options""",
+    default=False,
     show_default=True,
 )
 @click.option(
@@ -185,6 +217,12 @@ def default_duckdb_file():
     flag_value=True,
     help="""Show the list of differences grouped by the names of columns
       which differ and their counts""",
+)
+@click.option(
+    "--class",
+    "column_class",
+    help="""Show the differences with this combination of columns which differ.
+      (See output from --show-classes)""",
 )
 @click.option(
     "--format",
@@ -223,12 +261,16 @@ def cli(
     mlwh_ndjson,
     show_new_diffs,
     show_classes,
+    column_class,
     output_format,
     since,
     table,
     update,
 ):
     """Compare the contents of the MLWH to the ToLQC database"""
+
+    if column_class:
+        column_class = column_class.split(",")
 
     if not output_format:
         output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
@@ -244,32 +286,50 @@ def cli(
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     create_diff_db(conn, tqc, mlwh_ndjson, update)
 
-    ds = DiffStore()
-    for m in compare_tables(conn):
-        ds.add(m)
-    ds.store(conn)
+    if show_classes:
+        show_diff_classes(conn)
+        return
 
+    itr = fetch_stored_diffs(conn, since, show_new_diffs, column_class)
     if table:
         col_map = table_map().get(table)
         if not col_map:
             exit(f"No column map for table '{table}'")
-        for m in show_stored_diffs(conn):
-            if patch := m.get_patch_for_table(col_map):
+        for m in itr:
+            if patch := m.get_patch_for_table(table, col_map):
                 sys.stdout.write(ndjson_row(patch))
-    elif show_classes:
-        show_diff_classes(conn)
-    elif since or show_new_diffs:
-        for m in show_stored_diffs(conn, since, show_new_diffs):
-            sys.stdout.write(ndjson_row(m.differences_dict))
+    else:
+        if output_format == "PRETTY":
+            click.echo_via_pager(pretty_diff_iterator(itr))
+        else:
+            for m in itr:
+                sys.stdout.write(ndjson_row(m.differences_dict))
+
+
+def pretty_diff_iterator(itr):
+    n = 0
+    for m in itr:
+        n += 1
+        yield m.pretty()
+
+    if n:
+        yield f"\n{bold(n)} mismatches between MLWH and ToLQC"
 
 
 def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
-    create_diff_store(conn)
-
     tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
+
+    do_compare_tables = update
+    if "diff_store" not in tables:
+        do_compare_tables = True
+        create_diff_store(conn)
+
+    if "update_log" not in tables:
+        conn.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
 
     # Fetch the current MLWH data from ToLQC
     if update or "tolqc" not in tables:
+        do_compare_tables = True
         tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
         logging.info(
             f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
@@ -278,6 +338,7 @@ def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
         load_table_from_json(conn, "tolqc", tolqc_tmp.name)
 
     if update or "mlwh" not in tables:
+        do_compare_tables = True
         if mlwh_ndjson and mlwh_ndjson.exists():
             load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
         else:
@@ -287,6 +348,13 @@ def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
             logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
             fetch_mlwh_seq_data_to_file(tqc, mlwh_tmp)
             load_table_from_json(conn, "mlwh", mlwh_tmp.name)
+
+    if do_compare_tables:
+        conn.execute("INSERT INTO update_log VALUES (current_timestamp)")
+        ds = DiffStore()
+        for m in compare_tables(conn):
+            ds.add(m)
+        ds.store(conn)
 
 
 def load_table_from_json(conn, name, file):
@@ -316,7 +384,20 @@ def show_diff(frst, scnd):
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
-def show_stored_diffs(conn, since=None, show_new_diffs=False):
+def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None):
+    args = []
+    where = []
+    logging.debug(f"{since = }")
+    if since:
+        where.append("ds.found_at >= ?")
+        args.append(since)
+    elif show_new_diffs:
+        where.append("ds.found_at >= (SELECT MAX(updated_at) FROM update_log)")
+
+    if column_class:
+        where.append("ds.differing_columns = ?")
+        args.append(column_class)
+
     sql = inspect.cleandoc("""
         SELECT ds.data_id
           , mlwh
@@ -328,17 +409,11 @@ def show_stored_diffs(conn, since=None, show_new_diffs=False):
         JOIN mlwh USING (data_id)
         JOIN tolqc USING (data_id)
     """)
-    if since:
-        sql += "\nWHERE ds.found_at >= ?"
-        debug_sql(sql)
-        conn.execute(sql, (since,))
-    elif show_new_diffs:
-        sql += "\nWHERE ds.found_at = (SELECT MAX(found_at) FROM diff_store)"
-        debug_sql(sql)
-        conn.execute(sql)
-    else:
-        debug_sql(sql)
-        conn.execute(sql)
+
+    if where:
+        sql += "\nWHERE " + "\n  AND ".join(where)
+    debug_sql(sql)
+    conn.execute(sql, args)
 
     while diff := conn.fetchone():
         yield Mismatch(*diff)
@@ -361,10 +436,9 @@ def show_diff_classes(conn):
 
 def compare_tables(conn):
     """
-    Creates two tables using Common Table Expressions (CTEs, the WITH ...
-    statements) from the two tables `mlwh` and `tolqc`. The tables contain
-    the `data_id`, an MD5 hash of the entire row cast to VARCHAR, and the row
-    itself as a DuckDB STRUCT.
+    Creates two tables from the two tables `mlwh` and `tolqc`. The tables
+    contain the `data_id`, an MD5 hash of the entire row cast to VARCHAR, and
+    the row itself as a DuckDB STRUCT.
 
     The join returns any rows where the `data_id` matches but the MD5 hash
     does not.
@@ -380,13 +454,17 @@ def compare_tables(conn):
 
     sql = inspect.cleandoc("""
         SELECT mlwh_h.data_id
-          , mlwh_h.struct AS mlwh_struct
-          , tolqc_h.struct AS tolqc_struct
+          , mlwh AS mlwh_struct
+          , tolqc AS tolqc_struct
           , mlwh_h.hash AS mlwh_hash
           , tolqc_h.hash AS tolqc_hash
         FROM mlwh_h JOIN tolqc_h
           ON mlwh_h.data_id = tolqc_h.data_id
           AND mlwh_h.hash != tolqc_h.hash
+        JOIN mlwh
+          ON mlwh_h.data_id = mlwh.data_id
+        JOIN tolqc
+          ON tolqc_h.data_id = tolqc.data_id
         ANTI JOIN diff_store AS mds
           ON mlwh_h.hash = mds.mlwh_hash
         ANTI JOIN diff_store AS qds
@@ -412,7 +490,6 @@ def build_h_table(conn, name):
         CREATE TEMPORARY TABLE {name}_h AS
           SELECT data_id
             , md5({name}::VARCHAR) AS hash
-            , {name} AS struct
           FROM {name}
     """)  # noqa: S608
     debug_sql(sql)
@@ -440,7 +517,7 @@ def cleanup_diff_store(conn, name):
 def create_diff_store(conn):
     sql = inspect.cleandoc(
         """
-        CREATE TABLE IF NOT EXISTS diff_store(
+        CREATE TABLE diff_store(
             data_id VARCHAR PRIMARY KEY
             , mlwh_hash VARCHAR
             , tolqc_hash VARCHAR
@@ -456,20 +533,14 @@ def create_diff_store(conn):
 def table_map():
     query = mlwh_data_report_query_select()
 
-    # {
-    #     "name": "sample_name",
-    #     "type": String(),
-    #     "aliased": False,
-    #     "expr": "<sqlalchemy.sql.elements.Label at 0x10bf3fe80; sample_name>",
-    #     "entity": "<class 'tolqc.sample_data_models.Sample'>",
-    # }
-
     table_map = {
         "file": {"data_id": "data.id"},
         "pacbio_run_metrics": {"run_id": "pacbio_run_metrics.id"},
         "platform": {"run_id": "run.id"},
     }
     for name, tbl, col in name_table_column(query):
+        if col.name == "library_type_id":
+            click.echo(f"{col.name = } {col.foreign_keys = }", err=True)
         out_name = f"{tbl}.id" if col.primary_key else col.name
         table_map.setdefault(tbl, {})[name] = out_name
 
@@ -485,9 +556,19 @@ def name_table_column(query):
     Returns a list of tuples (name, Table, Column) for each column of the
     SQLAlchemy `query` argument.
     """
+
     cols = []
     for desc in query.column_descriptions:
+        # {
+        #     "name": "sample_name",
+        #     "type": String(),
+        #     "aliased": False,
+        #     "expr": "<sqlalchemy.sql.elements.Label at 0x10bf3fe80; sample_name>",
+        #     "entity": "<class 'tolqc.sample_data_models.Sample'>",
+        # }
         name = desc["name"]
+        if name == "supplier_name":
+            continue
         tbl = desc["entity"].__tablename__
         expr = desc["expr"]
         if hasattr(expr, "base_columns"):
@@ -506,8 +587,6 @@ def column_definitions():
 
     debug_str = "Column types from mlwh-data query:\n"
     for name, _, col in name_table_column(query):
-        if name == "supplier_name":
-            continue
         type_ = "TIMESTAMPTZ" if (s := str(col.type)) == "DATETIME" else s
         debug_str += f"  {name} = {type_}\n"
         col_defs[name] = type_
