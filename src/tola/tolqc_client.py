@@ -5,7 +5,6 @@ import pathlib
 import re
 from functools import cached_property
 
-import click
 import requests
 from tol.api_client2 import create_api_datasource
 from tol.core import core_data_object
@@ -15,57 +14,6 @@ from tola.db_connection import get_connection_params_entry
 ca_file = pathlib.Path("/etc/ssl/certs/ca-certificates.crt")
 if ca_file.exists():
     os.environ.setdefault("REQUESTS_CA_BUNDLE", str(ca_file))
-
-
-tolqc_alias = click.option(
-    "--tolqc-alias",
-    help="Name of connection parameters alias in ~/.connection_params.json file.",
-    default="tolqc",
-    show_default=True,
-)
-
-tolqc_url = click.option(
-    "--tolqc-url",
-    envvar="TOLQC_URL",
-    help=(
-        "URL of ToL QC API. Overrides TOLQC_URL environment variable if set,"
-        " which in turn overrides the ~/.connection_params.json value of"
-        " `api_url` for the alias."
-    ),
-)
-
-api_token = click.option(
-    "--api-token",
-    envvar="TOLQC_API_KEY",
-    help=(
-        "Token for the ToL QC API. Overrides TOLQC_API_KEY environment variable"
-        " if set, which in turn overrides the ~/.connection_params.json value"
-        " of `api_token` for the alias."
-    ),
-)
-
-file_format = click.option(
-    "--format",
-    "file_format",
-    type=click.Choice(
-        ["NDJSON", "TXT"],
-        case_sensitive=False,
-    ),
-    default=None,
-    show_default=True,
-    help="Format of input file(s) or STDIN",
-)
-
-log_level = click.option(
-    "--log-level",
-    type=click.Choice(
-        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        case_sensitive=False,
-    ),
-    default="WARNING",
-    hidden=True,
-    help="Diagnostic messages to show.",
-)
 
 
 class TolClient:

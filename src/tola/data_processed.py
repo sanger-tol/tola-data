@@ -1,16 +1,15 @@
 import sys
 
 import click
-
 from tol.core import DataSourceFilter
 
-from tola import tolqc_client
+from tola import click_options, tolqc_client
 
 
 @click.command
-@tolqc_client.tolqc_alias
-@tolqc_client.tolqc_url
-@tolqc_client.api_token
+@click_options.tolqc_alias
+@click_options.tolqc_url
+@click_options.api_token
 @click.option(
     "--set",
     "set_processed",
@@ -62,7 +61,7 @@ def cli(tolqc_alias, tolqc_url, api_token, name_list, set_processed):
 
 def set_data_processed(ads, fetched_data, set_processed):
     set_val = None if set_processed == "null" else int(set_processed)
-    Obj = ads.data_object_factory
+    Obj = ads.data_object_factory  # noqa: N806
     updates = [
         Obj("data", id_=x.id, attributes={"processed": set_val})
         for x in fetched_data.values()

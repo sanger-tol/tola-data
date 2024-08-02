@@ -1,4 +1,3 @@
-import datetime
 import io
 import json
 import logging
@@ -10,7 +9,7 @@ from urllib.parse import quote
 import click
 from tol.core import DataSourceFilter
 
-from tola import tolqc_client
+from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsException
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 from tola.pretty import bold, bold_green, field_style
@@ -67,10 +66,10 @@ opt = SimpleNamespace(
 
 
 @click.group()
-@tolqc_client.tolqc_alias
-@tolqc_client.tolqc_url
-@tolqc_client.api_token
-@tolqc_client.log_level
+@click_options.tolqc_alias
+@click_options.tolqc_url
+@click_options.api_token
+@click_options.log_level
 @click.pass_context
 def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
@@ -94,7 +93,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
 @opt.key
 @opt.id_list
 @opt.file
-@tolqc_client.file_format
+@click_options.file_format
 @click.option(
     "--column-name",
     "--col",
@@ -306,7 +305,7 @@ def add(ctx, table, key, apply_flag, input_files):
 @opt.table
 @opt.key
 @opt.file
-@tolqc_client.file_format
+@click_options.file_format
 @opt.id_list
 def show(client, table, key, file_list, file_format, id_list):
     """Show rows from a table in the ToLQC database
@@ -335,7 +334,7 @@ def show(client, table, key, file_list, file_format, id_list):
 @opt.table
 @opt.apply_flag
 @opt.file
-@tolqc_client.file_format
+@click_options.file_format
 @opt.id_list
 def delete(ctx, table, apply_flag, file_list, file_format, id_list):
     """Delete rows from a table which match ND-JSON input lines
