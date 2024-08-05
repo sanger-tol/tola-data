@@ -164,7 +164,7 @@ def response_row_std_fields(row):
     return "\t".join(str(row[x]) for x in row if x not in ("project", "changes")) + "\n"
 
 
-def illumina_fetcher(mlwh, project_id, save_data):
+def illumina_fetcher(mlwh, project_id, save_data=False):
     logging.info(f"Fetching Illumina data for project '{project_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), (project_id,))
@@ -187,7 +187,7 @@ PIPELINE_TO_LIBRARY_TYPE = {
 }
 
 
-def pacbio_fetcher(mlwh, project_id, save_data):
+def pacbio_fetcher(mlwh, project_id, save_data=False):
     logging.info(f"Fetching PacBio data for project '{project_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), (project_id,))
