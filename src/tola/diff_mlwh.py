@@ -349,6 +349,7 @@ def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
     if update or "mlwh" not in tables:
         do_compare_tables = True
         if mlwh_ndjson and mlwh_ndjson.exists():
+            logging.info(f"Loading MLWH data from {mlwh_ndjson}")
             load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
         else:
             mlwh_tmp = NamedTemporaryFile(
