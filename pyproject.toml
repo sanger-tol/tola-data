@@ -35,3 +35,6 @@ tqc="tola.tqc_command:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
