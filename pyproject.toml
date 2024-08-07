@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "tola"
 version = "1.0.10"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "SQLAlchemy ~= 2.0",
     "boto3",
@@ -28,6 +28,7 @@ data-processed="tola.data_processed:cli"
 diff-mlwh="tola.diff_mlwh:cli"
 duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
+goat-client="tola.goat_client:cli"
 load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
@@ -38,3 +39,33 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ARG",
+    "B",
+    "BLE",
+    "C4",
+    "COM",
+    "DTZ",
+    "E",
+    "EM",
+    "F",
+    "I",
+    "ISC",
+    "LOG",
+    "N",
+    "PYI",
+    "S",
+    "SIM",
+    "U"
+]
+ignore = [
+    "COM812",
+    "C901"
+]
+
+[tool.ruff.lint.per-file-ignores]
+"{test_*,*_test,conftest}.py" = ["S101"]
+

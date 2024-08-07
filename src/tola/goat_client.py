@@ -1,8 +1,12 @@
 import json
 import logging
 import re
-import requests
 import sys
+
+import click
+import requests
+
+from tola.ndjson import ndjson_row
 
 
 class GoaTClient:
@@ -166,15 +170,39 @@ def command_line_args(args=sys.argv[1:]):
     return raw_flag, tax_list
 
 
-if __name__ == "__main__":
+@click.command
+@click.option(
+    "--raw",
+    "raw_flag",
+    flag_value=True,
+    default=False,
+    show_default=True,
+    help="""Print the full JSON reply from GoaT
+      instead of ND-JSON suitable for feeding into `tqc`""",
+)
+@click.argument(
+    "taxon_id_list",
+    nargs=-1,
+    required=True,
+)
+def cli(raw_flag, taxon_id_list):
+    """Print species information from GoaT given a list of NCBI Taxon IDs,
+
+    e.g.  goat-client 116150
+    """
+
     gc = GoaTClient()
-    raw_flag, tax_list = command_line_args()
-    if len(tax_list) == 0:
-        tax_list = 13579, 116150, 348721, 2980486, 237398
     if raw_flag:
-        for taxon_id in tax_list:
+        for taxon_id in taxon_id_list:
             print(json.dumps(gc.raw_results_from_taxon_id(taxon_id), indent=2))
     else:
-        for taxon_id in tax_list:
-            species_info = gc.get_species_info(taxon_id)
-            print(json.dumps(species_info, indent=2))
+        for taxon_id in taxon_id_list:
+            if sp_info := gc.get_species_info(taxon_id):
+                species_id = sp_info.pop("species_id")
+                sys.stdout.write(ndjson_row({"species.id": species_id, **sp_info}))
+            else:
+                click.echo(f"No such Taxon ID {taxon_id}", err=True)
+
+
+if __name__ == "__main__":
+    cli()
