@@ -553,8 +553,8 @@ def table_map():
         "platform": {"run_id": "run.id"},
     }
     for name, tbl, col in name_table_column(query):
-        if col.name == "library_type_id":
-            click.echo(f"{col.name = } {col.foreign_keys = }", err=True)
+        # if col.name == "library_type_id":
+        #     click.echo(f"{col.name = } {col.foreign_keys = }", err=True)
         out_name = f"{tbl}.id" if col.primary_key else col.name
         table_map.setdefault(tbl, {})[name] = out_name
 
