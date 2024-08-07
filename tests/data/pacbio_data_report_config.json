@@ -65,6 +65,10 @@
             "caption": "Control polymerase read length {specimen}"
         },
         {
+            "pattern": "readlength_plot_new\\.png",
+            "caption": "New control polymerase read length {specimen}"
+        },
+        {
             "pattern": "readlength_histogram\\.png",
             "caption": "Mean readlength histogram {specimen}"
         },

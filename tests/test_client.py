@@ -1,8 +1,7 @@
 import logging
+
 import pytest
-
 from tol.core import DataSourceFilter
-
 from tola.tolqc_client import TolClient
 
 

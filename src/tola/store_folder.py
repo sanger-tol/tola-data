@@ -1,6 +1,7 @@
 import logging
 import re
 from pathlib import Path
+
 from ulid import ULID
 
 
@@ -11,6 +12,15 @@ class FilePattern:
         self.is_image = is_image
         self.pattern = re.compile(pattern)
         self.caption = caption
+
+    def __repr__(self):
+        return str(
+            {
+                "is_image": self.is_image,
+                "pattern": self.pattern,
+                "caption": self.caption,
+            }
+        )
 
     def matches(self, file: Path):
         return bool(re.fullmatch(self.pattern, file.name))
@@ -66,12 +76,9 @@ class FilePatternSet:
                             f"Name for {ke.args[0]!r} is missing."
                             f" Names provided were: {names!r}"
                         )
-                        raise ValueError(msg)
+                        raise ValueError(msg) from None
 
-                    spec = {
-                        "file": file.name,
-                        "caption": caption
-                    }
+                    spec = {"file": file.name, "caption": caption}
                     if fp.is_image:
                         found.setdefault("image_file_list", []).append(spec)
                     else:
@@ -80,5 +87,23 @@ class FilePatternSet:
         found["files_bytes_total"] = size_bytes
 
         logging.debug(f"Found {count} files out of a possible {max_count} patterns")
+        if patterns:
+            logging.debug(f"No files found for: {patterns!r}")
 
         return found
+
+
+class FolderLocation:
+    """Root folder for upload of data files"""
+
+    __slots__ = "folder_location_id", "s3_bucket", "prefix", "pattern_set"
+
+    def __init__(self, folder_location_id, uri_prefix, files_template):
+        self.folder_location_id = folder_location_id
+        self.parse_s3_uri(uri_prefix)
+        self.pattern_set = FilePatternSet(config=files_template)
+
+    def parse_s3_uri(self, uri_prefix):
+        if m := re.match(r"s3://([^/]+)/(.+)", uri_prefix):
+            self.s3_bucket = m.group(1)
+            self.prefix = m.group(2)

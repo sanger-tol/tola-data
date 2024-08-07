@@ -10,6 +10,7 @@ from tol.api_client2 import create_api_datasource
 from tol.core import core_data_object
 
 from tola.db_connection import get_connection_params_entry
+from tola.store_folder import FolderLocation
 
 ca_file = pathlib.Path("/etc/ssl/certs/ca-certificates.crt")
 if ca_file.exists():
@@ -148,3 +149,20 @@ class TolClient:
             if study_id := proj["attributes"].get("study_id"):
                 project_study_ids.append(study_id)
         return sorted(project_study_ids)
+
+    @cached_property
+    def __folder_location_dict(self):
+        rspns_json = self.json_get("data/folder_location")
+        fldr_loc = {}
+        for fl in rspns_json["data"]:
+            fldr_loc_id = fl["id"]
+            attr = fl["attributes"]
+            fldr_loc[fldr_loc_id] = FolderLocation(
+                fldr_loc_id,
+                attr["uri_prefix"],
+                attr["files_template"],
+            )
+        return fldr_loc
+
+    def get_folder_location(self, folder_location_id: str) -> FolderLocation:
+        return self.__folder_location_dict.get(folder_location_id)
