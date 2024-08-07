@@ -1,11 +1,10 @@
 import os
 import sys
-
-import boto3
-
 from configparser import ConfigParser
 from functools import cached_property
 from pathlib import Path
+
+import boto3
 
 
 class S3ConfigError(Exception):
@@ -57,3 +56,12 @@ class S3Client:
         response = self.s3.list_buckets()
         for item in response["Buckets"]:
             print(item["CreationDate"], item["Name"])
+
+
+"""
+    response = self.s3.put_object(
+        Body=str(file),
+        Bucket='tola-test',
+        Key="/".join((folder_location_id, folder_ulid, file.name))
+    )
+"""
