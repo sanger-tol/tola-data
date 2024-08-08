@@ -43,13 +43,25 @@ def test_folder_location(client):
 
 
 def test_files_upload(client, pacbio_data_dir):
-    upload_files(
+    data_fldr = upload_files(
         client,
         folder_location_id="pacbio_data_s3",
         table="data",
-        directory=pacbio_data_dir,
         spec={
             "data.id": "m84098_240508_102324_s2#2093",
+            "directory": pacbio_data_dir,
             "specimen": "mBalPhy2",
         },
     )
+    pacbio_fldr = upload_files(
+        client,
+        folder_location_id="pacbio_data_s3",
+        table="pacbio_run_metrics",
+        spec={
+            "pacbio_run_metrics.id": "m84098_240508_102324_s2",
+            "directory": pacbio_data_dir,
+            "specimen": "mBalPhy2",
+        },
+    )
+    assert data_fldr
+    assert pacbio_fldr

@@ -131,9 +131,14 @@ def upload_files(
     client,
     folder_location_id: str = None,
     table: str = None,
-    directory: Path = None,
     spec: dict = None,
 ):
+    dir_str = spec.get("directory")
+    if not dir_str:
+        msg = f"Missing directory field in spec {spec}"
+        raise ValueError(msg)
+    directory = Path(dir_str)
+
     fldr_loc = client.get_folder_location(folder_location_id)
     if not fldr_loc:
         msg = f"No such FolderLocation {folder_location_id!r}"
@@ -151,6 +156,7 @@ def upload_files(
         msg = f"Failed to fetch {table} with {id_key} = {oid!r}"
         raise ValueError(msg)
 
+    # Find files and upload to S3
     files = fldr_loc.pattern_set.scan_files(directory, spec)
     ulid = str(ULID())
     for key, file_list in files.items():
@@ -187,9 +193,16 @@ def upload_files(
 
     # Delete S3 files in old Folder
     if old_fldr := entry.folder:
+        if old_fldr.id == ulid:
+            msg = (
+                f"Error: Folder attached to existing {table} {oid}",
+                f" matches the new ULID {ulid}",
+            )
+            raise ValueError(msg)
         file_list = fldr_loc.list_files(old_fldr)
-        logging.info(file_list)
         client.s3.delete_files(fldr_loc.s3_bucket, file_list)
 
-    # Delete old Folder from ToLQC
-    client.ads.delete("folder", [old_fldr.id])
+        # Delete old Folder from ToLQC
+        client.ads.delete("folder", [old_fldr.id])
+
+    return {id_key: oid, "folder.id": ulid, **files}
