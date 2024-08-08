@@ -197,6 +197,19 @@ class DiffStore:
     show_default=True,
 )
 @click.option(
+    "--today",
+    "since",
+    flag_value=click_options.TODAY,
+    type=click.DateTime(),
+    help="Only show differences found today",
+)
+@click.option(
+    "--since",
+    "since",
+    type=click.DateTime(),
+    help="Show differences detected since a particular date or time",
+)
+@click.option(
     "--show-classes",
     flag_value=True,
     help="""Show the list of differences grouped by the names of columns
@@ -218,19 +231,6 @@ class DiffStore:
     help="""Output differences found in either 'PRETTY'
       (human readable) or 'NDJSON' format.
       Defaults to 'PRETTY' if stdout is a terminal, else 'NDJSON'""",
-)
-@click.option(
-    "--today",
-    "since",
-    flag_value=click_options.TODAY,
-    type=click.DateTime(),
-    help="Only show differences found today",
-)
-@click.option(
-    "--since",
-    "since",
-    type=click.DateTime(),
-    help="Show differences detected since a particular date or time",
 )
 @click.option(
     "--table",

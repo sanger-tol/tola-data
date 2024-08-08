@@ -13,6 +13,7 @@ from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsException
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 from tola.pretty import bold, bold_green, field_style
+from tola.store_folder import upload_files
 
 opt = SimpleNamespace(
     table=click.option(
@@ -373,7 +374,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
                 dry_warning(tail.format(bold(count), s(count)))
 
 
-@cli.command(hidden=True)
+@cli.command()
 @click.pass_context
 @opt.table
 @click.option(
@@ -381,30 +382,49 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
     help="Name of folder_location.id",
     required=True,
 )
-@opt.file
-@click.argument(
-    "pk_result_dirs",
-    nargs=-1,
-    required=False,
-    type=click.Path(
-        path_type=pathlib.Path,
-        exists=True,
-        readable=True,
-        file_okay=False,
-    ),
-)
-def store_folder(ctx, table, location, input_files, pk_result_dirs):
-    """Store the result files found in the listed PK_RESULT_DIRS in S3
-
-    Each element of PK_RESULT_DIRS has the format:
-
-      PK=RESULT_DIR
-
-    where PK is the primary key value of row in the `table`, and RESULT_DIR is
-    the directory on the filesystem containing the files to store. The same
-    data can alternatively be provided in ND-JSON format in the `--files`
-    arguments with the RESULT_DIR under the key `result_dir`.
+@opt.input_files
+def store_folders(ctx, table, location, input_files):
     """
+    Upload files to S3 storage. Each row of the ND-JSON format INPUT_FILES
+    must contain a primary key value for the table, a `directory` entry with
+    the path to the local directory containging the files to be uploaded,
+    plus any key/value pairs for named format specifiers in the captions in
+    the template. e.g.
+
+        {
+
+            "pacbio_run_metrics.id": "m84098_240508_102324_s2",
+
+            "directory": "",
+
+            "specimen": "mBalPhy2"
+
+        }
+
+    where the captions templates in `folder_location.files_template` contain `
+    {specimen}` strings.
+
+    """
+
+    client = ctx.obj
+
+    input_obj = input_objects_or_exit(ctx, input_files)
+    stored_folders = []
+    for spec in input_obj:
+        stored_folders.append(
+            upload_files(
+                client,
+                folder_location_id=location,
+                table=table,
+                spec=spec,
+            )
+        )
+
+    if sys.stdout.isatty():
+        click.echo_via_pager(pretty_dict_itr(stored_folders, "folder.id"))
+    else:
+        for fldr in stored_folders:
+            sys.stdout.write(ndjson_row(fldr))
 
 
 def input_objects_or_exit(ctx, input_files):
