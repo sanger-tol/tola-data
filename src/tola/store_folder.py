@@ -1,6 +1,7 @@
 import logging
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 from ulid import ULID
 
@@ -84,7 +85,7 @@ class FilePatternSet:
                     else:
                         found.setdefault("other_file_list", []).append(spec)
                     break
-        found["files_bytes_total"] = size_bytes
+        found["files_total_bytes"] = size_bytes
 
         logging.debug(f"Found {count} files out of a possible {max_count} patterns")
         if patterns:
@@ -107,3 +108,88 @@ class FolderLocation:
         if m := re.match(r"s3://([^/]+)/(.+)", uri_prefix):
             self.s3_bucket = m.group(1)
             self.prefix = m.group(2)
+
+    def list_files(self, folder):
+        file_list = []
+        ulid = folder.id
+        for attr_key in ("image_file_list", "other_file_list"):
+            for spec in getattr(folder, attr_key):
+                file_list.append(
+                    "/".join(
+                        (
+                            self.prefix,
+                            ulid,
+                            spec["file"],
+                        )
+                    )
+                )
+
+        return file_list
+
+
+def upload_files(
+    client,
+    folder_location_id: str = None,
+    table: str = None,
+    directory: Path = None,
+    spec: dict = None,
+):
+    fldr_loc = client.get_folder_location(folder_location_id)
+    if not fldr_loc:
+        msg = f"No such FolderLocation {folder_location_id!r}"
+        raise ValueError(msg)
+
+    id_key = table + ".id"
+    oid = spec.get(id_key)
+    if not oid:
+        msg = f"Missing expected value for '{id_key}' in row"
+        raise ValueError(msg)
+    # Can remove call to `quote()` when ApiDataSource is fixed to
+    # correctly escape IDs
+    (entry,) = client.ads.get_by_ids(table, [quote(oid)])
+    if not entry:
+        msg = f"Failed to fetch {table} with {id_key} = {oid!r}"
+        raise ValueError(msg)
+
+    files = fldr_loc.pattern_set.scan_files(directory, spec)
+    ulid = str(ULID())
+    for key, file_list in files.items():
+        if not key.endswith("_file_list"):
+            continue
+        for fs in file_list:
+            file = fs["file"]
+            local = str(directory / file)
+            remote = "/".join((fldr_loc.prefix, ulid, file))
+            logging.info(f"Uploading: {local}\nTo: {remote}")
+            client.s3.put_file(local, fldr_loc.s3_bucket, remote)
+
+    # Store and link new Folder
+    obj_factory = client.ads.data_object_factory
+    fldr = obj_factory(
+        "folder",
+        id_=ulid,
+        attributes={
+            "folder_location_id": folder_location_id,
+            **files,
+        },
+    )
+    client.ads.upsert("folder", [fldr])
+    client.ads.upsert(
+        table,
+        [
+            obj_factory(
+                table,
+                id_=oid,
+                attributes={"folder_ulid": ulid},
+            ),
+        ],
+    )
+
+    # Delete S3 files in old Folder
+    if old_fldr := entry.folder:
+        file_list = fldr_loc.list_files(old_fldr)
+        logging.info(file_list)
+        client.s3.delete_files(fldr_loc.s3_bucket, file_list)
+
+    # Delete old Folder from ToLQC
+    client.ads.delete("folder", [old_fldr.id])
