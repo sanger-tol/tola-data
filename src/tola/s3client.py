@@ -57,6 +57,19 @@ class S3Client:
         for item in response["Buckets"]:
             print(item["CreationDate"], item["Name"])
 
+    def put_file(self, local, bucket, remote):
+        return self.s3.put_object(
+            Body=local,
+            Bucket=bucket,
+            Key=remote,
+        )
+
+    def delete_files(self, bucket, file_list):
+        return self.s3.delete_objects(
+            Bucket=bucket,
+            Delete={"Objects": [{"Key": x} for x in file_list]},
+        )
+
 
 """
     response = self.s3.put_object(

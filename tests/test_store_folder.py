@@ -3,27 +3,53 @@ import logging
 import pathlib
 
 import pytest
-from tola.store_folder import FilePatternSet, FolderLocation
+from tola.store_folder import FilePatternSet, FolderLocation, upload_files
 from tola.tolqc_client import TolClient
 
 
-def test_scan_files():
-    data_dir = pathlib.Path(__file__).parent / "data"
+@pytest.fixture
+def client():
+    return TolClient(tolqc_alias="tolqc-flask")
+
+
+@pytest.fixture
+def data_dir():
+    return pathlib.Path(__file__).parent / "data"
+
+
+@pytest.fixture
+def pacbio_data_dir(data_dir):
+    return data_dir / "pacbio_data_dir"
+
+
+def test_scan_files(data_dir, pacbio_data_dir):
     config = json.load((data_dir / "pacbio_data_report_config.json").open())
     fp_set = FilePatternSet(config=config)
     assert fp_set
 
     with pytest.raises(ValueError, match=r"Name for 'specimen' is missing"):
-        fp_set.scan_files(data_dir / "pacbio_data_dir", {"x": "mBalPhy2"})
+        fp_set.scan_files(pacbio_data_dir, {"x": "mBalPhy2"})
 
-    found = fp_set.scan_files(data_dir / "pacbio_data_dir", {"specimen": "mBalPhy2"})
+    found = fp_set.scan_files(pacbio_data_dir, {"specimen": "mBalPhy2"})
     logging.debug(found)
     assert found
-    assert found["files_bytes_total"] == 0  # Test files are all empty
+    assert found["files_total_bytes"] == 38  # Each test file is 2 bytes
 
 
-def test_folder_location():
-    cl = TolClient(tolqc_alias="tolqc-flask")
-    fl = cl.get_folder_location("pacbio_data_s3")
+def test_folder_location(client):
+    fl = client.get_folder_location("pacbio_data_s3")
     assert isinstance(fl, FolderLocation)
     assert isinstance(fl.pattern_set, FilePatternSet)
+
+
+def test_files_upload(client, pacbio_data_dir):
+    upload_files(
+        client,
+        folder_location_id="pacbio_data_s3",
+        table="data",
+        directory=pacbio_data_dir,
+        spec={
+            "data.id": "m84098_240508_102324_s2#2093",
+            "specimen": "mBalPhy2",
+        },
+    )

@@ -1,18 +1,19 @@
 import json
 import logging
 import os
-import pathlib
 import re
 from functools import cached_property
+from pathlib import Path
 
 import requests
 from tol.api_client2 import create_api_datasource
 from tol.core import core_data_object
 
 from tola.db_connection import get_connection_params_entry
+from tola.s3client import S3Client
 from tola.store_folder import FolderLocation
 
-ca_file = pathlib.Path("/etc/ssl/certs/ca-certificates.crt")
+ca_file = Path("/etc/ssl/certs/ca-certificates.crt")
 if ca_file.exists():
     os.environ.setdefault("REQUESTS_CA_BUNDLE", str(ca_file))
 
@@ -50,6 +51,10 @@ class TolClient:
         tolqc.page_size = self.page_size
         core_data_object(tolqc)
         return tolqc
+
+    @cached_property
+    def s3(self):
+        return S3Client()
 
     def _set_proxy(self, conf):
         if proxy := conf.get("proxy"):
@@ -150,6 +155,9 @@ class TolClient:
                 project_study_ids.append(study_id)
         return sorted(project_study_ids)
 
+    def get_folder_location(self, folder_location_id: str) -> FolderLocation:
+        return self.__folder_location_dict.get(folder_location_id)
+
     @cached_property
     def __folder_location_dict(self):
         rspns_json = self.json_get("data/folder_location")
@@ -163,6 +171,3 @@ class TolClient:
                 attr["files_template"],
             )
         return fldr_loc
-
-    def get_folder_location(self, folder_location_id: str) -> FolderLocation:
-        return self.__folder_location_dict.get(folder_location_id)
