@@ -135,9 +135,15 @@ def upload_files(
 ):
     dir_str = spec.get("directory")
     if not dir_str:
-        msg = f"Missing directory field in spec {spec}"
+        msg = "Missing 'directory' field"
         raise ValueError(msg)
     directory = Path(dir_str)
+    if not directory.exists():
+        msg = f"No such directory '{directory}'"
+        raise ValueError(msg)
+    elif not directory.is_dir():
+        msg = f"Not a directory: '{directory}'"
+        raise ValueError(msg)
 
     fldr_loc = client.get_folder_location(folder_location_id)
     if not fldr_loc:

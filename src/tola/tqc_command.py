@@ -410,21 +410,36 @@ def store_folders(ctx, table, location, input_files):
 
     input_obj = input_objects_or_exit(ctx, input_files)
     stored_folders = []
+    error = None
     for spec in input_obj:
-        stored_folders.append(
-            upload_files(
-                client,
-                folder_location_id=location,
-                table=table,
-                spec=spec,
+        try:
+            stored_folders.append(
+                upload_files(
+                    client,
+                    folder_location_id=location,
+                    table=table,
+                    spec=spec,
+                )
             )
-        )
+        except Exception as excn:  # noqa: BLE001
+            error = spec, excn
+            break
 
-    if sys.stdout.isatty():
-        click.echo_via_pager(pretty_dict_itr(stored_folders, "folder.id"))
-    else:
-        for fldr in stored_folders:
-            sys.stdout.write(ndjson_row(fldr))
+    if stored_folders:
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_dict_itr(stored_folders, "folder.id"))
+        else:
+            for fldr in stored_folders:
+                sys.stdout.write(ndjson_row(fldr))
+
+    if error:
+        spec, excn = error
+        sys.exit(
+            f"{excn.__class__.__name__}: "
+            + "; ".join(excn.args)
+            + " when storing:\n"
+            + json.dumps(spec, indent=4)
+        )
 
 
 def input_objects_or_exit(ctx, input_files):
