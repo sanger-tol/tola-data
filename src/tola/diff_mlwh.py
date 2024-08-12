@@ -309,7 +309,14 @@ def run_mlwh_diff(
                 sys.stdout.write(ndjson_row(patch))
     else:
         if output_format == "PRETTY":
-            click.echo_via_pager(pretty_diff_iterator(itr))
+            if sys.stdout.isatty():
+                click.echo_via_pager(pretty_diff_iterator(itr))
+            else:
+                # Prevent empty emails being sent from cron jobs.
+                # echo_via_pager() prints a newline if there are no diffs to
+                # print, so avoid it if not attached to a TTY.
+                for txt in pretty_diff_iterator(itr):
+                    click.echo(txt)
         else:
             for m in itr:
                 sys.stdout.write(ndjson_row(m.differences_dict))
