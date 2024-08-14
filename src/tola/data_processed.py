@@ -73,7 +73,8 @@ def set_data_processed(ads, fetched_data, set_processed):
 
 def print_data_row(data):
     flag = "null" if (x := data.processed) is None else x
-    print(f"{flag:<4}  {data.date.isoformat()}  {data.name}")
+    date_str = d.isoformat() if (d := data.date) else ""
+    print(f"{flag:<4}  {date_str:25}  {data.name}")
 
 
 def list_unproccessed_data(ads):
