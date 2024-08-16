@@ -1,5 +1,6 @@
 import inspect
 import logging
+import os
 import re
 import sys
 from functools import cache
@@ -75,9 +76,7 @@ def cli(
     else:
         mlwh_data = None
         if run_diff_mlwh:
-            mlwh_data = NamedTemporaryFile(
-                "w", prefix="mlwh_", suffix=".ndjson", delete_on_close=False
-            )
+            mlwh_data = NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")
 
         for project_id in project_id_list:
             for platform, run_data_fetcher in (
@@ -89,7 +88,9 @@ def cli(
                 print(formatted_response(rspns, project_id, platform), end="")
 
         if run_diff_mlwh:
-            mlwh_data.close()
+            # Ensure data is flushed to storage
+            mlwh_data.flush()
+            os.fsync(mlwh_data.fileno())
             diff_mlwh.run_mlwh_diff(
                 client,
                 diff_mlwh_duckdb=diff_mlwh_duckdb,

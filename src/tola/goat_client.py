@@ -1,5 +1,4 @@
 import json
-import logging
 import re
 import sys
 
@@ -74,6 +73,7 @@ class GoaTResult:
         info = {
             "species_id": self.scientific_name,
             "hierarchy_name": self.hierarchy_name(),
+            "tolid_prefix": self.get_name("tolid_prefix"),
             "strain": self.get_strain(),
             "common_name": self.get_name("common name"),
             "taxon_id": self.taxon_id,
@@ -155,19 +155,6 @@ class GoaTResult:
     def get_taxon_group(self):
         tol_id = self.get_name("tolid_prefix")
         return self.LETTER_GROUP.get(tol_id[0]) if tol_id else None
-
-
-def command_line_args(args=sys.argv[1:]):
-    raw_flag = False
-    tax_list = []
-    for r in args:
-        if re.match(r"-+raw", r):
-            raw_flag = True
-        elif re.fullmatch(r"\d+", r):
-            tax_list.append(r)
-        else:
-            logging.warning(f"Unrecognised argument: '{r}'")
-    return raw_flag, tax_list
 
 
 @click.command
