@@ -67,7 +67,10 @@ class GoaTClient:
 class GoaTResult:
     def __init__(self, args):
         for name, val in args.items():
-            setattr(self, name, val)
+            if name == "taxon_id":
+                setattr(self, name, int(val))
+            else:
+                setattr(self, name, val)
 
     def make_info(self):
         info = {
