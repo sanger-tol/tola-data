@@ -1,13 +1,13 @@
+import json
+import urllib.parse
+from pathlib import Path
+
 import click
 import mysql.connector
 import psycopg2
-import json
-import urllib.parse
-
-from pathlib import Path
+from psycopg2.extras import DictCursor
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from psycopg2.extras import DictCursor
 
 
 class ConnectionParamsException(Exception):

@@ -3,9 +3,10 @@
 import datetime
 import io
 import re
-import requests
 import sys
 from pathlib import Path
+
+import requests
 
 
 def main(tsv_files):

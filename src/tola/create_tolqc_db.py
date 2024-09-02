@@ -1,14 +1,11 @@
 import click
-
+import tolqc.assembly_models
+import tolqc.sample_data_models
+import tolqc.system_models
 from sqlalchemy import MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import configure_mappers
 from sqlalchemy.schema import DropTable
-
-import tolqc.assembly_models
-import tolqc.sample_data_models
-import tolqc.system_models
-
 from tolqc.model import Base
 
 from tola import db_connection

@@ -3,6 +3,7 @@
 from sys import stderr, stdout
 
 from tol.core import DataSourceFilter
+
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 from tola.tolqc_client import TolClient

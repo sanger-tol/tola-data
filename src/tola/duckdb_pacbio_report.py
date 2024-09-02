@@ -1,13 +1,13 @@
 import csv
-import click
 import datetime
-import duckdb
 import inspect
 import pathlib
 import re
 import textwrap
-
 from functools import cache
+
+import click
+import duckdb
 
 FILE_TYPE = click.Path(
     dir_okay=False,

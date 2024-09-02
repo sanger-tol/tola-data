@@ -1,8 +1,10 @@
-import click
 import logging
-import tola.query_result_formaters
+
+import click
 from sqlalchemy import select
 from sqlalchemy.orm import Bundle
+
+import tola.query_result_formaters
 from tola import db_connection
 from tola.tolqc_schema import (
     Allocation,
