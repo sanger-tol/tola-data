@@ -124,31 +124,30 @@ def edit_col(
     in --file arugments, or alternatively piped to STDIN.
     """
 
+    if key == "id":
+        key = f"{table}.id"
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_list_or_exit(client, table, key, id_list)
 
     ads = client.ads
-    obj_factory = ads.data_object_factory
     if set_value:
         # Leave value as a string if it is a .id field
         py_value = set_value if key.endswith(".id") else convert_type(set_value)
         updates = []
         changes = []
         for obj in fetched:
-            val = getattr(obj, column_name)
-            logging.debug(f"{obj.attributes}")
-            oid = getattr(obj, key)
+            flat = core_data_object_to_dict(obj)
+            oid = flat[key]
+            val = flat.get(column_name)
 
             # Would value be changed?
             if val != py_value:
-                updates.append(
-                    obj_factory(table, id_=obj.id, attributes={column_name: py_value})
-                )
+                updates.append({key: oid, column_name: py_value})
                 changes.append({key: oid, column_name: (val, py_value)})
 
         if updates:
             if apply_flag:
-                ads.upsert(table, updates)
+                ads.upsert(table, dicts_to_core_data_objects(ads, table, updates))
 
             if sys.stdout.isatty():
                 click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
