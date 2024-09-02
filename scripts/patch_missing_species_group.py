@@ -1,6 +1,7 @@
 import sys
 
 from tol.core import DataSourceFilter
+
 from tola.goat_client import GoaTResult
 from tola.ndjson import ndjson_row
 from tola.tolqc_client import TolClient

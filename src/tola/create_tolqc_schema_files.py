@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-import black
 import datetime
 import inspect
 import pathlib
 import re
 import sys
+
+import black
 
 from tola.tolqc_schema import Base
 

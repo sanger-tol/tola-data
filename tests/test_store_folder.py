@@ -3,6 +3,7 @@ import logging
 import pathlib
 
 import pytest
+
 from tola.store_folder import FilePatternSet, FolderLocation, upload_files
 from tola.tolqc_client import TolClient
 

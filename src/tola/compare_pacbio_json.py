@@ -1,9 +1,9 @@
-import click
 import csv
 import json
 import pathlib
 import re
 
+import click
 
 FILE_TYPE = click.Path(
     dir_okay=False,

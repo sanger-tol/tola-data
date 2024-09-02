@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: MIT
 
-import click
-import re
 import pathlib
-import tola.marshals
+import re
 
+import click
 from tolqc.sample_data_models import Project
+
+import tola.marshals
 
 
 @click.command(help="Update list of Projects from tol_track.conf (or similar) file")
