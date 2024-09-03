@@ -113,16 +113,17 @@ class FolderLocation:
         file_list = []
         ulid = folder.id
         for attr_key in ("image_file_list", "other_file_list"):
-            for spec in getattr(folder, attr_key):
-                file_list.append(
-                    "/".join(
-                        (
-                            self.prefix,
-                            ulid,
-                            spec["file"],
+            if spec_list := getattr(folder, attr_key):
+                for spec in spec_list:
+                    file_list.append(
+                        "/".join(
+                            (
+                                self.prefix,
+                                ulid,
+                                spec["file"],
+                            )
                         )
                     )
-                )
 
         return file_list
 
@@ -138,10 +139,7 @@ def upload_files(
         msg = "Missing 'directory' field"
         raise ValueError(msg)
     directory = Path(dir_str)
-    if not directory.exists():
-        msg = f"No such directory '{directory}'"
-        raise ValueError(msg)
-    elif not directory.is_dir():
+    if not directory.is_dir():
         msg = f"Not a directory: '{directory}'"
         raise ValueError(msg)
 
