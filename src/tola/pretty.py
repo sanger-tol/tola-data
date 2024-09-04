@@ -1,4 +1,5 @@
 import datetime
+import json
 
 from click import style
 
@@ -14,6 +15,8 @@ def field_style(column_name, val):
         return val.isoformat(), bold
     if isinstance(val, int) and val >= 10_000 and not column_name.endswith("_id"):
         return f"{val:_}", bold
+    if isinstance(val, dict | list):
+        return json.dumps(val, indent=2), bold
     return repr(val), bold
 
 
