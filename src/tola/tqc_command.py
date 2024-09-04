@@ -524,7 +524,8 @@ def fetch_list_or_exit(client, table, key, id_list):
     # Check if we found a data record for each name
     if missed := set(id_list) - key_fetched.keys():
         sys.exit(
-            f"Error: Failed to fetch records for {table}.{key} in: {sorted(missed)}"
+            "Error: Failed to fetch records from "
+            f"{table} for {key} in: {sorted(missed)}"
         )
 
     # Return objects in the order they were requested
