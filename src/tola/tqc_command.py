@@ -426,7 +426,9 @@ def store_folders(ctx, table, location, input_files):
 
     if stored_folders:
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_dict_itr(stored_folders, "folder.id"))
+            click.echo_via_pager(
+                pretty_dict_itr(stored_folders, "folder.id", head="Stored {} folder{}:")
+            )
         else:
             for fldr in stored_folders:
                 sys.stdout.write(ndjson_row(fldr))
@@ -657,7 +659,10 @@ def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
             if k == key:
                 style = bold_green
 
-            fmt.write(f" {k:>{max_hdr}}  {style(v)}\n")
+            first, *rest = v.splitlines()
+            fmt.write(f" {k:>{max_hdr}}  {style(first)}\n")
+            for r in rest:
+                fmt.write(f" {'':{max_hdr}}  {style(r)}\n")
         yield fmt.getvalue()
 
     if tail:
