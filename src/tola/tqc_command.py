@@ -189,6 +189,9 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     if key == "id":
         key = f"{table}.id"
 
+    # Modification metadata is not editable
+    ignore = {"modified_by", "modified_at"}
+
     input_obj = input_objects_or_exit(ctx, input_files)
 
     client = ctx.obj
@@ -202,6 +205,8 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
         attr = {}
         chng = {key: inp[key]}
         for k, inp_v in inp.items():
+            if k in ignore:
+                continue
             if k != key:
                 flat_v = flat.get(k)
                 if inp_v != flat_v:
