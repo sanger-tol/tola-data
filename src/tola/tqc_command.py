@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import os
 import pathlib
 import sys
 from types import SimpleNamespace
@@ -75,6 +76,7 @@ opt = SimpleNamespace(
 def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
     logging.basicConfig(level=getattr(logging, log_level))
+    setup_pager()
     try:
         ctx.obj = tolqc_client.TolClient(
             tolqc_url, api_token, tolqc_alias, page_size=100
@@ -771,3 +773,17 @@ def s(x):
     """Formatting plurals. Argument can be an `int` or an iterable"""
     n = x if isinstance(x, int) else len(x)
     return "" if n == 1 else "s"
+
+
+def setup_pager():
+    os.environ.setdefault(
+        "LESS",
+        " ".join(
+            (
+                "--no-init",
+                "--quit-if-one-screen",
+                "--ignore-case",
+                "--RAW-CONTROL-CHARS",
+            )
+        ),
+    )
