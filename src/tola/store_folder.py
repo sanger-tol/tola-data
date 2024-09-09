@@ -91,7 +91,7 @@ class FilePatternSet:
         if patterns:
             logging.debug(f"No files found for: {patterns!r}")
 
-        return found
+        return found if count else None
 
 
 class FolderLocation:
@@ -161,43 +161,44 @@ def upload_files(
         raise ValueError(msg)
 
     # Find files and upload to S3
-    files = fldr_loc.pattern_set.scan_files(directory, spec)
-    ulid = str(ULID())
-    for key, file_list in files.items():
-        if not key.endswith("_file_list"):
-            continue
-        for fs in file_list:
-            file = fs["file"]
-            local = str(directory / file)
-            remote = "/".join((fldr_loc.prefix, ulid, file))
-            logging.info(f"Uploading: {local}\nTo: {remote}")
-            client.s3.put_file(local, fldr_loc.s3_bucket, remote)
+    ulid = None
+    if files := fldr_loc.pattern_set.scan_files(directory, spec):
+        ulid = str(ULID())
+        for key, file_list in files.items():
+            if not key.endswith("_file_list"):
+                continue
+            for fs in file_list:
+                file = fs["file"]
+                local = str(directory / file)
+                remote = "/".join((fldr_loc.prefix, ulid, file))
+                logging.info(f"Uploading: {local}\nTo: {remote}")
+                client.s3.put_file(local, fldr_loc.s3_bucket, remote)
 
-    # Store and link new Folder
-    obj_factory = client.ads.data_object_factory
-    fldr = obj_factory(
-        "folder",
-        id_=ulid,
-        attributes={
-            "folder_location_id": folder_location_id,
-            **files,
-        },
-    )
-    client.ads.upsert("folder", [fldr])
-    client.ads.upsert(
-        table,
-        [
-            obj_factory(
-                table,
-                id_=oid,
-                attributes={"folder_ulid": ulid},
-            ),
-        ],
-    )
+        # Store and link new Folder
+        obj_factory = client.ads.data_object_factory
+        fldr = obj_factory(
+            "folder",
+            id_=ulid,
+            attributes={
+                "folder_location_id": folder_location_id,
+                **files,
+            },
+        )
+        client.ads.upsert("folder", [fldr])
+        client.ads.upsert(
+            table,
+            [
+                obj_factory(
+                    table,
+                    id_=oid,
+                    attributes={"folder_ulid": ulid},
+                ),
+            ],
+        )
 
     # Delete S3 files in old Folder
     if old_fldr := entry.folder:
-        if old_fldr.id == ulid:
+        if ulid and old_fldr.id == ulid:
             msg = (
                 f"Error: Folder attached to existing {table} {oid}",
                 f" matches the new ULID {ulid}",
@@ -209,4 +210,4 @@ def upload_files(
         # Delete old Folder from ToLQC
         client.ads.delete("folder", [old_fldr.id])
 
-    return {id_key: oid, "folder.id": ulid, **files}
+    return {id_key: oid, "folder.id": ulid, **files} if files else None

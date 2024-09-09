@@ -429,14 +429,13 @@ def store_folders(ctx, table, location, input_files):
     error = None
     for spec in input_obj:
         try:
-            stored_folders.append(
-                upload_files(
+            if fldr := upload_files(
                     client,
                     folder_location_id=location,
                     table=table,
                     spec=spec,
-                )
-            )
+                ):
+                stored_folders.append(fldr)
         except Exception as excn:  # noqa: BLE001
             error = spec, excn
             break
