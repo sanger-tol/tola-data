@@ -308,8 +308,16 @@ def add(ctx, table, key, apply_flag, input_files):
 @opt.key
 @opt.file
 @click_options.file_format
+@click.option(
+    "--modified/--hide",
+    "-m/-M",
+    "show_modified",
+    default=False,
+    show_default=True,
+    help="For LogBase derived tables, show who last modified row and when",
+)
 @opt.id_list
-def show(client, table, key, file_list, file_format, id_list):
+def show(client, table, key, file_list, file_format, show_modified, id_list):
     """Show rows from a table in the ToLQC database
 
     ID_LIST is a list of IDs to operate on, which can additionally be provided
@@ -325,10 +333,12 @@ def show(client, table, key, file_list, file_format, id_list):
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
-        click.echo_via_pager(pretty_cdo_itr(fetched, key))
+        click.echo_via_pager(pretty_cdo_itr(fetched, key, show_modified=show_modified))
     else:
         for cdo in fetched:
-            sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
+            sys.stdout.write(
+                ndjson_row(core_data_object_to_dict(cdo, show_modified=show_modified))
+            )
 
 
 @cli.command
@@ -560,21 +570,33 @@ def obj_rel_name(key):
     return key[:-3] if key.endswith(".id") else None
 
 
-def core_data_object_to_dict(cdo):
+def core_data_object_to_dict(cdo, show_modified=False):
     """Flattens a CoreDataObject to a dict"""
 
     # The object's ID
     flat = {cdo_type_id(cdo): cdo.id}
 
+    # Save LogBase fields
+    modfd = {}
+
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
-        flat[f"{rel_name}.id"] = rltd.id if (rltd := getattr(cdo, rel_name)) else None
+        rltd = getattr(cdo, rel_name)
+        if rel_name == "modified_user":
+            modfd["modified_by"] = rltd.name if rltd else None
+        else:
+            flat[f"{rel_name}.id"] = rltd.id if rltd else None
 
     # The object's attributes
     for k, v in cdo.attributes.items():
-        if k in ("modified_at", "modified_by"):
+        if k == "modified_at":
+            modfd[k] = v
             continue
         flat[k] = v
+
+    if show_modified and modfd:
+        for attr in ("modified_by", "modified_at"):
+            flat[attr] = modfd.get(attr)
 
     return flat
 
@@ -622,12 +644,14 @@ def dicts_to_core_data_objects(ads, table, flat_list):
     return cdo_out
 
 
-def pretty_cdo_itr(cdo_list, key, head=None, tail=None):
+def pretty_cdo_itr(cdo_list, key, head=None, tail=None, show_modified=False):
     if not cdo_list:
         return []
 
     cdo_key = cdo_type_id(cdo_list[0])
-    flat_list = [core_data_object_to_dict(x) for x in cdo_list]
+    flat_list = [
+        core_data_object_to_dict(x, show_modified=show_modified) for x in cdo_list
+    ]
     return pretty_dict_itr(flat_list, key, cdo_key, head, tail)
 
 
