@@ -329,7 +329,7 @@ def pretty_diff_iterator(itr):
         yield m.pretty()
 
     if n:
-        yield f"\n{bold(n)} mismatches between MLWH and ToLQC"
+        yield f"\n{bold(n)} mismatche{'s' if n > 1 else ''} between MLWH and ToLQC"
 
 
 def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):

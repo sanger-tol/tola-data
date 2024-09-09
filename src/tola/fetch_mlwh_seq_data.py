@@ -454,6 +454,7 @@ def patch_species(client):
                     changes[prop] = val
             if changes:
                 updates.append(obj_factory("species", id_=sp.id, attributes=changes))
+                logging.debug(f"Updating Species '{sp.id}' fields: {changes}")
     for page in client.pages(updates):
         ads.upsert("species", page)
 

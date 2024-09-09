@@ -24,7 +24,7 @@ def main():
 def git_tag_version():
     run(("git", "pull", "--tags"), check=True)  # noqa: S603
     git_tag = run(("git", "tag"), capture_output=True, text=True, check=True)  # noqa: S603, S607
-    tags = sorted(git_tag.stdout.split("\n"), key=natural, reverse=True)
+    tags = sorted(git_tag.stdout.splitlines(), key=natural, reverse=True)
     return tags[0] if tags else None
 
 
