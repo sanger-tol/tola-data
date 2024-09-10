@@ -431,6 +431,7 @@ def patch_species(client):
     obj_factory = ads.data_object_factory
     filt = DataSourceFilter(
         exact={
+            "tolid_prefix": None,
             "taxon_family": None,
             "taxon_order": None,
             "taxon_phylum": None,
@@ -442,10 +443,14 @@ def patch_species(client):
     for sp in client.ads.get_list("species", object_filters=filt):
         if spec_info := gc.get_species_info(sp.taxon_id):
             if sp.id != spec_info["species_id"]:
-                logging.info(
-                    f"Species with taxon_id = '{sp.taxon_id}' should be"
-                    f" named '{spec_info['species_id']}' not '{sp.id}'"
-                )
+                if not reassign_species(client, sp, spec_info):
+                    logging.info(
+                        f"Species with taxon_id = '{sp.taxon_id}' should be"
+                        f" named '{spec_info['species_id']}' not '{sp.id}'"
+                    )
+                continue
+
+            # Do not overwrite exisiting attributes but fill in any blanks
             changes = {}
             for prop, val in spec_info.items():
                 if prop == "species_id":
@@ -457,6 +462,40 @@ def patch_species(client):
                 logging.debug(f"Updating Species '{sp.id}' fields: {changes}")
     for page in client.pages(updates):
         ads.upsert("species", page)
+
+
+def reassign_species(client, bad_sp, spec_info):
+    ads = client.ads
+    obj_factory = ads.data_object_factory
+
+    # Is there an existing species with the correct name?
+    (good_sp,) = ads.get_by_ids("species", [spec_info["species_id"]])
+    if not good_sp:
+        return False
+
+    # Move specimens from the bad to the good species
+    updates = []
+    for spcmn in bad_sp.specimens:
+        updates.append(
+            obj_factory(
+                "specimen",
+                id_=spcmn.id,
+                attributes={
+                    "species_id": good_sp.id,
+                },
+            )
+        )
+    if updates:
+        ads.upsert("specimen", updates)
+
+    # Delete any edits of the bad species
+    if edits := bad_sp.edit_history:
+        ads.delete("edit_species", [x.id for x in edits])
+
+    # Delete the bad species entry
+    ads.delete("species", [bad_sp.id])
+
+    return good_sp
 
 
 if __name__ == "__main__":
