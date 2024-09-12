@@ -16,6 +16,7 @@ dependencies = [
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "pyarrow",
+    "python-irodsclient",
     "python-ulid",
     "requests",
     "ruff",
