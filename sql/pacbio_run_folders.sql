@@ -1,20 +1,25 @@
--- Using DuckDB to analyse input and output JSON data
--- from loading pacbio_run_metrics image Folders
+-- Using DuckDB to analyse input and output JSON data from loading
+-- pacbio_run_metrics image Folders
 
+-- Input to `tqc store-folders`
+CREATE TABLE dirs AS FROM 'pacbio_run_dirs.ndjson';
+ALTER TABLE dirs RENAME COLUMN "pacbio_run_metrics.id" TO run_id;
+
+-- Output from `tqc store-folders`
 CREATE TABLE store AS FROM 'pacbio_run_folders_stored.ndjson';
 ALTER TABLE store RENAME COLUMN "pacbio_run_metrics.id" TO run_id;
 ALTER TABLE store RENAME COLUMN "folder.id" TO folder_ulid;
 
-CREATE TABLE dirs AS FROM 'pacbio_run_dirs.ndjson';
-ALTER TABLE dirs RENAME COLUMN "pacbio_run_metrics.id" TO run_id;
-
+-- Splat image_file_list JSON column into a new table
 CREATE TABLE files AS
   SELECT * EXCLUDE (image_file_list)
     , unnest(image_file_list, "recursive" := true)
   FROM store;
 
+-- Store a list of all possible file names
 CREATE TABLE file_dict AS SELECT DISTINCT file FROM files ORDER BY ALL;
 
+-- Directories which didn't contain any files
 CREATE VIEW v_no_files AS
   SELECT run_id
     , directory
@@ -23,7 +28,8 @@ CREATE VIEW v_no_files AS
   ANTI JOIN files USING (run_id)
   ORDER BY ALL;
 
-CREATE OR REPLACE VIEW v_file_folder_counts AS
+-- Summary of what files were found
+CREATE VIEW v_file_folder_counts AS
   WITH folder_files AS (
       SELECT folder_ulid
         , array_agg(file ORDER BY file) file_list
@@ -37,7 +43,7 @@ CREATE OR REPLACE VIEW v_file_folder_counts AS
   GROUP BY file_list
   ORDER BY n_folders DESC, n_files DESC, file_list;
 
-CREATE OR REPLACE TABLE file_report AS
+CREATE TABLE file_report AS
   WITH all_files AS (
     -- Cartesian join to list all possible
     -- folder / file combinations
