@@ -471,7 +471,7 @@ def reassign_species(client, bad_sp, spec_info):
     # Is there an existing species with the correct name?
     (good_sp,) = ads.get_by_ids("species", [spec_info["species_id"]])
     if not good_sp:
-        return False
+        return
 
     # Move specimens from the bad to the good species
     updates = []
