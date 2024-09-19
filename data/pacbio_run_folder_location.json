@@ -1,0 +1,80 @@
+{
+  "folder_location.id": "pacbio_run_s3",
+  "uri_prefix": "s3://tolqc-dev/pacbio_run",
+  "files_template": {
+    "image_file_patterns": [
+      {
+        "caption": "Base yield density",
+        "pattern": "base_yield_plot\\.png"
+      },
+      {
+        "caption": "Barcode quality distribution",
+        "pattern": "bq_histogram\\.png"
+      },
+      {
+        "caption": "Read quality distribution",
+        "pattern": "ccs_accuracy_hist\\.png"
+      },
+      {
+        "caption": "Read length distribution (all)",
+        "pattern": "ccs_all_readlength_hist_plot\\.png"
+      },
+      {
+        "caption": "HiFi yield by read length",
+        "pattern": "ccs_hifi_read_length_yield_plot\\.png"
+      },
+      {
+        "caption": "Number of passes",
+        "pattern": "ccs_npasses_hist\\.png"
+      },
+      {
+        "caption": "HiFi read length distribution",
+        "pattern": "ccs_readlength_hist_plot\\.png"
+      },
+      {
+        "caption": "Control concordance",
+        "pattern": "concordance_plot\\.png"
+      },
+      {
+        "caption": "Insert read length density",
+        "pattern": "hexbin_length_plot\\.png"
+      },
+      {
+        "caption": "CpG methylation in reads",
+        "pattern": "m5c_detections\\.png"
+      },
+      {
+        "caption": "CpG methylation in reads histogram",
+        "pattern": "m5c_detections_hist\\.png"
+      },
+      {
+        "caption": "Number of reads per barcode",
+        "pattern": "nreads\\.png"
+      },
+      {
+        "caption": "Number of reads per barcode histogram",
+        "pattern": "nreads_histogram\\.png"
+      },
+      {
+        "caption": "Loading evaluation",
+        "pattern": "raw_read_length_plot\\.png"
+      },
+      {
+        "caption": "Polymerase read length",
+        "pattern": "readLenDist0\\.png"
+      },
+      {
+        "caption": "Control polymerase read length",
+        "pattern": "readlength_plot\\.png"
+      },
+      {
+        "caption": "Mean readlength histogram",
+        "pattern": "readlength_histogram\\.png"
+      },
+      {
+        "caption": "Accuracy versus read length density",
+        "pattern": "readlength_qv_hist2d\\.hexbin\\.png"
+      }
+    ]
+  }
+}
