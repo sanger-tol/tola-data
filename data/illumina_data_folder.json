@@ -1,0 +1,32 @@
+{
+    "folder_location.id": "illumina_data_s3",
+    "uri_prefix": "s3://tolqc-dev/illumina_data",
+    "files_template": {
+        "image_file_patterns": [
+            {
+                "pattern": ".+_F0xB00-gc-content\\.png",
+                "caption": "{library_type} G|C Content"
+            },
+            {
+                "pattern": ".+_F0xB00-acgt-cycles\\.png",
+                "caption": "{library_type} A|C|G|T Content Per Cycle"
+            },
+            {
+                "pattern": ".+_F0xB00-quals\\.png",
+                "caption": "{library_type} Quality Per Cycle (Overlaid)"
+            },
+            {
+                "pattern": ".+_F0xB00-quals2\\.png",
+                "caption": "{library_type} Quality Per Cycle (Split)"
+            },
+            {
+                "pattern": ".+_F0xB00-quals-hm\\.png",
+                "caption": "{library_type} Quality Frequencies, Per Cycle Heat Map"
+            },
+            {
+                "pattern": ".+_F0xB00-quals3\\.png",
+                "caption": "{library_type} Quality Frequencies, Separate Curve Per Cycle"
+            }
+        ]
+    }
+}
