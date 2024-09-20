@@ -55,6 +55,17 @@ log_level = click.option(
     help="Diagnostic messages to show.",
 )
 
+input_files = click.argument(
+    "input_files",
+    nargs=-1,
+    required=False,
+    type=click.Path(
+        path_type=pathlib.Path,
+        exists=True,
+        readable=True,
+    ),
+)
+
 
 def default_diff_mlwh_duckdb():
     return pathlib.Path(f"diff_mlwh_{TODAY}.duckdb")
