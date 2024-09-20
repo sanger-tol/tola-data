@@ -12,7 +12,7 @@ from tol.core import DataSourceFilter
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsException
-from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.ndjson import get_input_objects, ndjson_row, parse_ndjson_stream
 from tola.pretty import bold, bold_green, field_style
 from tola.store_folder import upload_files
 
@@ -41,16 +41,6 @@ opt = SimpleNamespace(
         ),
         multiple=True,
         help="Input file names.",
-    ),
-    input_files=click.argument(
-        "input_files",
-        nargs=-1,
-        required=False,
-        type=click.Path(
-            path_type=pathlib.Path,
-            exists=True,
-            readable=True,
-        ),
     ),
     id_list=click.argument(
         "id_list",
@@ -177,7 +167,7 @@ def edit_col(
 @opt.table
 @opt.key
 @opt.apply_flag
-@opt.input_files
+@click_options.input_files
 def edit_rows(ctx, table, key, apply_flag, input_files):
     """Populate or update rows in a table from ND-JSON input
 
@@ -233,7 +223,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
 @opt.table
 @opt.key
 @opt.apply_flag
-@opt.input_files
+@click_options.input_files
 def add(ctx, table, key, apply_flag, input_files):
     """Add new rows to a table from ND-JSON input
 
@@ -398,7 +388,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
     help="Name of folder_location.id",
     required=True,
 )
-@opt.input_files
+@click_options.input_files
 def store_folders(ctx, table, location, input_files):
     """
     Upload files to S3 storage. Each row of the ND-JSON format INPUT_FILES
@@ -430,11 +420,11 @@ def store_folders(ctx, table, location, input_files):
     for spec in input_obj:
         try:
             if fldr := upload_files(
-                    client,
-                    folder_location_id=location,
-                    table=table,
-                    spec=spec,
-                ):
+                client,
+                folder_location_id=location,
+                table=table,
+                spec=spec,
+            ):
                 stored_folders.append(fldr)
         except Exception as excn:  # noqa: BLE001
             error = spec, excn
@@ -464,14 +454,7 @@ def input_objects_or_exit(ctx, input_files):
         err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
         sys.exit(ctx.get_help() + "\n\n" + err)
 
-    input_obj = []
-    if input_files:
-        for file in input_files:
-            with file.open() as fh:
-                input_obj.extend(parse_ndjson_stream(fh))
-    else:
-        input_obj.extend(parse_ndjson_stream(sys.stdin))
-
+    input_obj = get_input_objects(input_files)
     if not input_obj:
         sys.exit("No input objects")
 

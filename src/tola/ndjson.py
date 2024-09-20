@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import sys
 
 import pytz
 
@@ -58,3 +59,15 @@ def parse_ndjson_row(line):
             stripped = v.strip()
             row[k] = None if stripped == "" else stripped
     return row
+
+
+def get_input_objects(input_files):
+    input_obj = []
+    if input_files:
+        for file in input_files:
+            with file.open() as fh:
+                input_obj.extend(parse_ndjson_stream(fh))
+    else:
+        input_obj.extend(parse_ndjson_stream(sys.stdin))
+
+    return input_obj
