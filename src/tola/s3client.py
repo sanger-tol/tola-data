@@ -59,6 +59,7 @@ class S3Client:
 
     def put_file(self, local, bucket, remote):
         return self.s3.put_object(
+            ACL="public-read",  # Might be better to set a policy on the bucket?
             Body=local,
             Bucket=bucket,
             Key=remote,
