@@ -633,9 +633,7 @@ def create_or_update_macros_and_views(conn):
         # e.g. taxon_hash(9627) produces '2/e/9/7/6/a'
         """
         MACRO taxon_hash(taxon_id) AS
-          md5(taxon_id::VARCHAR)[:6].split('').list_reduce(
-            (x, y) -> concat(x, '/', y)
-          )
+          md5(taxon_id::VARCHAR)[:6].split('').array_to_string('/')
         """,
         # Converts species scientific name to hierarchy_name
         r"""
