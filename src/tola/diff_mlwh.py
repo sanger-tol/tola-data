@@ -373,6 +373,8 @@ def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
             ds.add(m)
         ds.store(conn)
 
+    create_or_update_macros_and_views(conn)
+
 
 def load_table_from_json(conn, name, file):
     logging.info(f"Loading {file} into {name} table")
@@ -621,3 +623,43 @@ def column_definitions():
     json_cols = "\n, ".join(f"{n}: '{t}'" for n, t in col_defs.items())
 
     return (table_cols, json_cols)
+
+
+def create_or_update_macros_and_views(conn):
+    """Useful DuckDB macros and views"""
+
+    for sql_def in (
+        # Implements speciesops directory hash.
+        # e.g. taxon_hash(9627) produces '2/e/9/7/6/a'
+        """
+        MACRO taxon_hash(taxon_id) AS
+          md5(taxon_id::VARCHAR)[:6].split('').list_reduce(
+            (x, y) -> concat(x, '/', y)
+          )
+        """,
+        # Converts species scientific name to hierarchy_name
+        r"""
+        MACRO species_hn(species) AS
+            regexp_replace(species, '\W+', '_', 'g').trim('_')
+        """,
+        # Uses taxon_hash() and species_hn() to build path to lustre directory
+        """
+        MACRO species_lustre(taxon_id, species) AS
+          CONCAT_WS('/'
+            , '/lustre/scratch122/tol/data'
+            , taxon_hash(taxon_id)
+            , species_hn(species))
+        """,
+        # Creates a view of the tolqc table showing the species directories
+        """
+        VIEW species_dir AS
+          SELECT DISTINCT scientific_name AS species_id
+            , taxon_id
+            , species_lustre(taxon_id, scientific_name) AS directory
+          FROM tolqc
+          WHERE taxon_id IS NOT NULL
+            AND scientific_name IS NOT NULL
+          ORDER BY ALL
+        """,
+    ):
+        conn.execute("CREATE OR REPLACE " + sql_def)
