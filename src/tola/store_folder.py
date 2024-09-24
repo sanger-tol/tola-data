@@ -172,7 +172,7 @@ def upload_files(
                 local = directory / file
                 remote = "/".join((fldr_loc.prefix, ulid, file))
                 logging.info(f"Uploading: {local}\nTo: {remote}")
-                client.s3.put_file(local.open(), fldr_loc.s3_bucket, remote)
+                client.s3.put_file(local.open("rb"), fldr_loc.s3_bucket, remote)
 
         # Store and link new Folder
         obj_factory = client.ads.data_object_factory
