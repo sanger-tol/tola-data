@@ -305,26 +305,28 @@ def run_mlwh_diff(
         show_diff_classes(conn)
         return
 
-    itr = fetch_stored_diffs(conn, since, show_new_diffs, column_class)
+    diffs = fetch_stored_diffs(conn, since, show_new_diffs, column_class)
+    conn.close()
+
     if table:
         col_map = table_map().get(table)
         if not col_map:
             exit(f"No column map for table '{table}'")
-        for m in itr:
+        for m in diffs:
             if patch := m.get_patch_for_table(table, col_map):
                 sys.stdout.write(ndjson_row(patch))
     else:
         if output_format == "PRETTY":
             if sys.stdout.isatty():
-                click.echo_via_pager(pretty_diff_iterator(itr))
+                click.echo_via_pager(pretty_diff_iterator(diffs))
             else:
                 # Prevent empty emails being sent from cron jobs.
                 # echo_via_pager() prints a newline if there are no diffs to
                 # print, so avoid it if not attached to a TTY.
-                for txt in pretty_diff_iterator(itr):
+                for txt in pretty_diff_iterator(diffs):
                     click.echo(txt)
         else:
-            for m in itr:
+            for m in diffs:
                 sys.stdout.write(ndjson_row(m.differences_dict))
 
 
@@ -437,8 +439,7 @@ def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None
     debug_sql(sql)
     conn.execute(sql, args)
 
-    while diff := conn.fetchone():
-        yield Mismatch(*diff)
+    return [Mismatch(*diff) for diff in conn.fetchall()]
 
 
 def show_diff_classes(conn):
