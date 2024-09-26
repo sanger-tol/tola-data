@@ -291,9 +291,15 @@ def run_mlwh_diff(
     table=None,
     update=False,
 ):
-    conn = duckdb.connect(str(diff_mlwh_duckdb))
+    if not diff_mlwh_duckdb.exists():
+        update = True
+    conn = duckdb.connect(
+        database=str(diff_mlwh_duckdb),
+        read_only=not update,
+    )
 
-    create_diff_db(conn, tqc, mlwh_ndjson, update)
+    if update:
+        create_diff_db(conn, tqc, mlwh_ndjson)
 
     if show_classes:
         show_diff_classes(conn)
@@ -332,46 +338,39 @@ def pretty_diff_iterator(itr):
         yield f"\n{bold(n)} mismatch{'es' if n > 1 else ''} between MLWH and ToLQC"
 
 
-def create_diff_db(conn, tqc, mlwh_ndjson=None, update=False):
+def create_diff_db(conn, tqc, mlwh_ndjson=None):
     tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
 
-    do_compare_tables = update
     if "diff_store" not in tables:
-        do_compare_tables = True
         create_diff_store(conn)
 
     if "update_log" not in tables:
         conn.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
 
     # Fetch the current MLWH data from ToLQC
-    if update or "tolqc" not in tables:
-        do_compare_tables = True
-        tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
-        logging.info(
-            f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
+    tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
+    logging.info(
+        f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
+    )
+    tqc.download_file("report/mlwh-data?format=NDJSON", tolqc_tmp.name)
+    load_table_from_json(conn, "tolqc", tolqc_tmp.name)
+
+    if mlwh_ndjson and mlwh_ndjson.exists():
+        logging.info(f"Loading MLWH data from {mlwh_ndjson}")
+        load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
+    else:
+        mlwh_tmp = NamedTemporaryFile(
+            "w", prefix="mlwh_", suffix=".ndjson", delete_on_close=False
         )
-        tqc.download_file("report/mlwh-data?format=NDJSON", tolqc_tmp.name)
-        load_table_from_json(conn, "tolqc", tolqc_tmp.name)
+        logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
+        fetch_mlwh_seq_data_to_file(tqc, mlwh_tmp)
+        load_table_from_json(conn, "mlwh", mlwh_tmp.name)
 
-    if update or "mlwh" not in tables:
-        do_compare_tables = True
-        if mlwh_ndjson and mlwh_ndjson.exists():
-            logging.info(f"Loading MLWH data from {mlwh_ndjson}")
-            load_table_from_json(conn, "mlwh", str(mlwh_ndjson))
-        else:
-            mlwh_tmp = NamedTemporaryFile(
-                "w", prefix="mlwh_", suffix=".ndjson", delete_on_close=False
-            )
-            logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
-            fetch_mlwh_seq_data_to_file(tqc, mlwh_tmp)
-            load_table_from_json(conn, "mlwh", mlwh_tmp.name)
-
-    if do_compare_tables:
-        conn.execute("INSERT INTO update_log VALUES (current_timestamp)")
-        ds = DiffStore()
-        for m in compare_tables(conn):
-            ds.add(m)
-        ds.store(conn)
+    conn.execute("INSERT INTO update_log VALUES (current_timestamp)")
+    ds = DiffStore()
+    for m in compare_tables(conn):
+        ds.add(m)
+    ds.store(conn)
 
     create_or_update_macros_and_views(conn)
 
