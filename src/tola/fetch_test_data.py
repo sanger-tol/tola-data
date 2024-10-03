@@ -18,9 +18,9 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
-from sqlalchemy.types import Integer
-from tolqc.model import Base
-from tolqc.sample_data_models import (
+from tolqc.schema.assembly_models import Dataset, DatasetElement
+from tolqc.schema.base import Base
+from tolqc.schema.sample_data_models import (
     AccessionTypeDict,
     Centre,
     Data,
@@ -73,6 +73,12 @@ data_dir = pathlib.Path()
     ),
 )
 @click.option(
+    "--samples/--datasets",
+    "build_samples",
+    help="Output Samples or Datasets",
+    show_default=True,
+)
+@click.option(
     "--echo-sql/--no-echo-sql",
     help="Echo SQLAlchemy SQL to STDERR",
     default=False,
@@ -84,10 +90,13 @@ data_dir = pathlib.Path()
     default=False,
     show_default=True,
 )
-def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db):
+def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db, build_samples):
     # Fetch sample data
     engine = create_engine(db_uri, echo=echo_sql)
-    sample_data = build_sample_data(sessionmaker(bind=engine))
+    ssn_maker = sessionmaker(bind=engine)
+    sample_data = (
+        build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
+    )
     sys.stdout.write(code_string(sample_data))
 
     if create_db:
@@ -144,6 +153,20 @@ def build_sample_data(ssn_maker):
         # Fetch data for a list of test species
         species_list = "Juncus effusus", "Brachiomonas submarina"
         fetched.extend(fetch_species_data(session, species_list))
+    return fetched
+
+
+def build_dataset_data(ssn_maker):
+    with ssn_maker() as session:
+        statement = (
+            select(Dataset)
+            .options(
+                selectinload(Dataset.data_assn)
+                .selectinload(DatasetElement.data)
+                .selectinload(Data.files)
+            )
+        )
+        fetched = session.scalars(statement).all()
     return fetched
 
 
@@ -262,7 +285,7 @@ def sqlalchemy_data_objects_repr(sql_alchemy_data):
         attribs = []
         for col in self.__mapper__.columns:
             name = col.name
-            if name in ('modified_at', 'modified_by'):
+            if name in ("modified_at", "modified_by"):
                 continue
             value = getattr(self, name)
             if value is not None:
