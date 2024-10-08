@@ -19,16 +19,21 @@ class DateTimeZoneEncoder(json.JSONEncoder):
     def default(self, obj):
         # Test for datetime first, since it is a subclass of date
         if isinstance(obj, datetime.datetime):
-            # Is the datetime timezone "aware"?
-            if not obj.tzinfo or obj.tzinfo.utcoffset(obj) is None:
-                # No, datetime is "naive"
-                obj = DEFAULT_TZ.localize(obj)
+            obj = set_timezone_if_naive(obj)
             return obj.isoformat()
         if isinstance(obj, datetime.date):
             return obj.isoformat()
 
         # This line means any exceptions raised will come from the base class
         return json.JSONEncoder.default(self, obj)
+
+
+def set_timezone_if_naive(dt: datetime.datetime) -> datetime.datetime:
+    # Is the datetime timezone "aware"?
+    if not dt.tzinfo or dt.tzinfo.utcoffset(dt) is None:
+        # No, datetime is "naive"
+        dt = DEFAULT_TZ.localize(dt)
+    return dt
 
 
 def ndjson_row(data):

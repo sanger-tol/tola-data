@@ -4,6 +4,7 @@ import logging
 import os
 import pathlib
 import sys
+from datetime import datetime
 from types import SimpleNamespace
 from urllib.parse import quote
 
@@ -12,7 +13,11 @@ from tol.core import DataSourceFilter
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsException
-from tola.ndjson import get_input_objects, ndjson_row, parse_ndjson_stream
+from tola.ndjson import (
+    get_input_objects,
+    ndjson_row,
+    parse_ndjson_stream,
+)
 from tola.pretty import bold, bold_green, field_style
 from tola.store_folder import upload_files
 
@@ -447,6 +452,123 @@ def store_folders(ctx, table, location, input_files):
             + " when storing:\n"
             + json.dumps(spec, indent=4)
         )
+
+
+@cli.command()
+@click.pass_context
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(
+        path_type=pathlib.Path,
+    ),
+    default=pathlib.Path(),
+    show_default=True,
+    help=(
+        "Location the output. If the location is a directory, a file containing"
+        " the dataset info named `datasets.ndjson` will be created or appended to."
+        " If it is a file, a file of that name will be created or appended to."
+        " If it is a dash character, ND-JSON will be printed to STDOUT."
+        " Alternatively an output location can be specified in each line of the"
+        " ND-JSON input."
+    ),
+)
+@click_options.input_files
+def dataset(ctx, output, input_files):
+    """
+    Store new datasets, populating the `dataset` and `dataset_element` tables
+    in the ToLQC database, and giving each newly created dataset a current
+    status of "Pending". ND-JSON input files should contain data structured
+    as:
+
+      {"elements": [...], "output": <str>}
+
+    The format of each item in the "elements" list is:
+
+      {"data.id": <str>, "remote_path": <str>}
+
+    where either "data.id" or "remote_path" must be specified. Each element is
+    resolved to an existing `data.data_id` via the supplied "data.id", or via
+    `file.remote_path` where "remote_path" is supplied and "data.id" is not.
+
+    The output location can be specified either by the "--output" command line
+    option, or individually for each row in the ND-JSON in an "output"
+    field.
+
+    A "dataset.id" field can also be included, but a ULID will otherwise be
+    automatically generated.
+    """
+
+    client = ctx.obj
+
+    stored_datasets = {}
+    input_obj = input_objects_or_exit(ctx, input_files)
+    if out_count := count_output_field(input_obj):
+        # Check that all the input rows have "output" set
+        if out_count != len(input_obj):
+            sys.exit(
+                f"Only {out_count} of {len(input_obj)}"
+                ' input rows have the "output" field set'
+            )
+
+        # Store datasets one-by-one to the server, since the output file for
+        # any row might be unwriteable.
+        for obj in input_obj:
+            row_output = obj.pop("output")
+            store_dataset_rows(client, row_output, (obj,), stored_datasets)
+    else:
+        store_dataset_rows(client, output, input_obj, stored_datasets)
+
+
+def store_dataset_rows(client, output, rows, stored_datasets):
+    if str(output) == "-":
+        file = sys.stdout
+    else:
+        file_path = output / "datasets.ndjson" if output.is_dir() else output
+        file = file_path.open('a')
+    # Store datasets
+
+
+def count_output_field(input_obj):
+    n = 0
+    for obj in input_obj:
+        if obj.get("output"):
+            n += 1
+    return n
+
+
+@cli.command()
+@click.pass_context
+@opt.table
+@click_options.input_files
+def status(ctx, table, input_files):
+    """
+    Store new current statuses for specimens, datasets or assemblies. The
+    format of each line of the ND-JSON input should be:
+
+      {"<table>.id": <str>, "status_type.id": <str>, "status_time": <datetime>}
+
+    where "status_type.id" is the name of the status to be set. If this status
+    is already set, a new status will not be created, and the current status
+    will be returned showing the time set on the server.
+
+    The "status_time" field is optional, and will be set to the current time
+    on the server if omitted. The value should be an ISO-8601 string.
+    """
+
+    client = ctx.obj
+
+    input_obj = input_objects_or_exit(ctx, input_files)
+    parse_datetime_fields(("status_time",), input_obj)
+    stored_status = {}
+
+
+def parse_datetime_fields(field_list, input_obj):
+    for obj in input_obj:
+        for fld in field_list:
+            if x := obj.get(fld):
+                dt = datetime.fromisoformat(x)
+                obj[fld] = dt
 
 
 def input_objects_or_exit(ctx, input_files):
