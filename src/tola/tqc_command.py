@@ -466,12 +466,18 @@ def store_folders(ctx, table, location, input_files):
     default=pathlib.Path(),
     show_default=True,
     help=(
-        "Location the output. If the location is a directory, a file containing"
-        " the dataset info named `datasets.ndjson` will be created or appended to."
-        " If it is a file, a file of that name will be created or appended to."
-        " If it is a dash character, ND-JSON will be printed to STDOUT."
-        " Alternatively an output location can be specified in each line of the"
-        " ND-JSON input."
+        """
+        Location the output. If the location is a directory, a file containing
+        the dataset info named "datasets.ndjson" will be created or appended
+        to.
+
+        If it is a file, a file of that name will be created or appended to.
+
+        If it is a dash character, ND-JSON will be printed to STDOUT.
+
+        Alternatively an "output" location can be specified in each line of
+        the ND-JSON input.
+        """
     ),
 )
 @click.option(
@@ -496,7 +502,7 @@ def dataset(ctx, output, noisy, input_files):
 
     where either "data.id" or "remote_path" must be specified. Each element is
     resolved to an existing `data.data_id` via the supplied "data.id", or via
-    `file.remote_path` where "remote_path" is supplied and "data.id" is not.
+    `file.remote_path` if "remote_path" is supplied but "data.id" is not.
 
     The output location can be specified either by the "--output" command line
     option, or individually for each row in the ND-JSON in an "output"
@@ -543,16 +549,14 @@ def store_dataset_rows(client, output, rows, stored_datasets):
             dsr["dataset.id"] = str(ULID())
 
     # Store datasets and record response in stored_datasets dict
-    for chunk in client.pages(rows):
-        rspns = client.json_post(
-            "loader/dataset", "".join([ndjson_row(x) for x in chunk])
-        )
-        for label, ds_rows in rspns.items():
-            # Write dataset info to file
-            if label == "new":
-                for dsr in ds_rows:
-                    file.write(ndjson_row(dsr))
-            stored_datasets.setdefault(label, []).extend(ds_rows)
+    rspns = client.ndjson_post("loader/dataset", (ndjson_row(x) for x in rows))
+
+    for label, ds_rows in rspns.items():
+        # Write dataset info to file
+        if label == "new":
+            for dsr in ds_rows:
+                file.write(ndjson_row(dsr))
+        stored_datasets.setdefault(label, []).extend(ds_rows)
 
 
 def echo_datasets(stored_datasets):
@@ -588,18 +592,53 @@ def status(ctx, table, input_files):
     is already set, a new status will not be created, and the current status
     will be returned showing the time set on the server.
 
-    The "status_time" field is optional, and will be set to the current time
-    on the server if omitted. The value should be an ISO-8601 string.
+    The "status_time" field is optional and will be set to the current time on
+    the server if omitted. If provided it should be an ISO-8601 format
+    string, which can be the date without the time portion.
     """
 
     client = ctx.obj
 
     input_obj = input_objects_or_exit(ctx, input_files)
     parse_datetime_fields(("status_time",), input_obj)
-    stored_status = {}
+    stored_status = client.ndjson_post(
+        f"loader/status/{table}", (ndjson_row(x) for x in input_obj)
+    )
+
+    if stored_status:
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_status_itr(stored_status, table))
+        else:
+            key = f"{table}.id"
+            id_status = {}
+            for st_list in stored_status.values():
+                for st in st_list:
+                    id_status[st[key]] = st
+            for st_id in (x[key] for x in input_obj):
+                if st := id_status.get(st_id):
+                    sys.stdout.write(ndjson_row(st))
+                else:
+                    sys.exit(
+                        "Error: failed to fetch status"
+                        f" for {st_id} from server response"
+                    )
+
+
+def pretty_status_itr(stored_status, table):
+    for label in sorted(stored_status):
+        stored = stored_status[label]
+        plural = "" if len(stored) == 1 else "es"
+        max_hdr = max(len(x) for x in stored[0])
+        yield f"\n{bold(len(stored))} {label} {table} status{plural}\n"
+        for st in stored:
+            yield pretty_dict(st, max_hdr)
 
 
 def parse_datetime_fields(field_list, input_obj):
+    """
+    Parsing the date / time fields into datetime objects ensures that time
+    zones will be added when stringified by the `ndjson_row()` function.
+    """
     for obj in input_obj:
         for fld in field_list:
             if x := obj.get(fld):
@@ -823,22 +862,26 @@ def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
     yield head.format(bold(count), s(count)) + "\n"
 
     for flat in row_list:
-        fmt = io.StringIO()
-        fmt.write("\n")
-        for k, v in flat.items():
-            v, style = field_style(k, v)
-            if k == key:
-                style = bold_green
-
-            first, *rest = v.splitlines()
-            fmt.write(f" {k:>{max_hdr}}  {style(first)}\n")
-            for r in rest:
-                fmt.write(f" {'':{max_hdr}}  {style(r)}\n")
-        yield fmt.getvalue()
+        yield pretty_dict(flat, max_hdr, key)
 
     if tail:
         count = len(row_list)
         yield "\n" + tail.format(bold(count), s(count))
+
+
+def pretty_dict(flat, max_hdr, key=None):
+    fmt = io.StringIO()
+    fmt.write("\n")
+    for k, v in flat.items():
+        v, style = field_style(k, v)
+        if k == key:
+            style = bold_green
+
+        first, *rest = v.splitlines()
+        fmt.write(f" {k:>{max_hdr}}  {style(first)}\n")
+        for r in rest:
+            fmt.write(f" {'':{max_hdr}}  {style(r)}\n")
+    return fmt.getvalue()
 
 
 def pretty_changes_itr(changes, apply_flag):
