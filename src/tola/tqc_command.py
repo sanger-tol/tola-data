@@ -609,19 +609,23 @@ def status(ctx, table, input_files):
         if sys.stdout.isatty():
             click.echo_via_pager(pretty_status_itr(stored_status, table))
         else:
-            key = f"{table}.id"
-            id_status = {}
-            for st_list in stored_status.values():
-                for st in st_list:
-                    id_status[st[key]] = st
-            for st_id in (x[key] for x in input_obj):
-                if st := id_status.get(st_id):
-                    sys.stdout.write(ndjson_row(st))
-                else:
-                    sys.exit(
-                        "Error: failed to fetch status"
-                        f" for {st_id} from server response"
-                    )
+            print_statuses_in_input_order(table, input_obj, stored_status)
+
+
+def print_statuses_in_input_order(table, input_obj, stored_status):
+    # Build a dict storing statuses by parent object ID
+    key = f"{table}.id"
+    id_status = {}
+    for st_list in stored_status.values():
+        for st in st_list:
+            id_status[st[key]] = st
+
+    # Write out the statuses in the same order they were input
+    for st_id in (x[key] for x in input_obj):
+        if st := id_status.get(st_id):
+            sys.stdout.write(ndjson_row(st))
+        else:
+            sys.exit(f"Error: Failed to find status for {st_id!r} in server response")
 
 
 def pretty_status_itr(stored_status, table):
