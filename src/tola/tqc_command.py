@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import click
 from tol.core import DataSourceFilter
+from ulid import ULID
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsException
@@ -473,8 +474,14 @@ def store_folders(ctx, table, location, input_files):
         " ND-JSON input."
     ),
 )
+@click.option(
+    "--noisy/--quiet",
+    default=True,
+    show_default=True,
+    help="List new and existing datasets to STDERR",
+)
 @click_options.input_files
-def dataset(ctx, output, input_files):
+def dataset(ctx, output, noisy, input_files):
     """
     Store new datasets, populating the `dataset` and `dataset_element` tables
     in the ToLQC database, and giving each newly created dataset a current
@@ -519,14 +526,43 @@ def dataset(ctx, output, input_files):
     else:
         store_dataset_rows(client, output, input_obj, stored_datasets)
 
+    if noisy:
+        echo_datasets(stored_datasets)
+
 
 def store_dataset_rows(client, output, rows, stored_datasets):
     if str(output) == "-":
         file = sys.stdout
     else:
         file_path = output / "datasets.ndjson" if output.is_dir() else output
-        file = file_path.open('a')
-    # Store datasets
+        file = file_path.open("a")
+
+    # Add ULID dataset.id to any row without a dataset.id
+    for dsr in rows:
+        if not dsr.get("dataset.id"):
+            dsr["dataset.id"] = str(ULID())
+
+    # Store datasets and record response in stored_datasets dict
+    for chunk in client.pages(rows):
+        rspns = client.json_post(
+            "loader/dataset", "".join([ndjson_row(x) for x in chunk])
+        )
+        for label, ds_rows in rspns.items():
+            # Write dataset info to file
+            if label == "new":
+                for dsr in ds_rows:
+                    file.write(ndjson_row(dsr))
+            stored_datasets.setdefault(label, []).extend(ds_rows)
+
+
+def echo_datasets(stored_datasets):
+    for label in sorted(stored_datasets):
+        stored = stored_datasets[label]
+        click.echo(f"\n{bold(len(stored))} {label} dataset{s(stored)}:", err=True)
+        for ds in stored:
+            click.echo(f"  {bold(ds['dataset.id'])}", err=True)
+            for ele in ds["elements"]:
+                click.echo(f"    {ele['data.id']}", err=True)
 
 
 def count_output_field(input_obj):
