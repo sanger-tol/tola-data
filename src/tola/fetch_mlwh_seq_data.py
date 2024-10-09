@@ -91,6 +91,7 @@ def cli(
             # Ensure data is flushed to storage
             mlwh_data.flush()
             os.fsync(mlwh_data.fileno())
+
             diff_mlwh.run_mlwh_diff(
                 client,
                 diff_mlwh_duckdb=diff_mlwh_duckdb,
