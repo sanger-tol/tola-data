@@ -84,7 +84,7 @@ def cli(
                 ("Illumina", illumina_fetcher),
             ):
                 row_itr = run_data_fetcher(mlwh, project_id, mlwh_data)
-                rspns = chunk_requests(client, row_itr)
+                rspns = client.ndjson_post("loader/seq-data", row_itr)
                 print(formatted_response(rspns, project_id, platform), end="")
 
         if run_diff_mlwh:
@@ -109,33 +109,6 @@ def write_mlwh_data_to_filehandle(mlwh, project_id_list, fh):
         for run_data_fetcher in (pacbio_fetcher, illumina_fetcher):
             for row in run_data_fetcher(mlwh, project_id):
                 fh.write(row)
-
-
-def chunk_requests(client, row_itr):
-    max_request_size = 2 * 1024**2
-    merged_rspns = {}
-    for chunk in chunk_rows(row_itr, max_request_size):
-        rspns = client.json_post("loader/seq-data", chunk)
-        merge_response(merged_rspns, rspns)
-    return merged_rspns
-
-
-def chunk_rows(row_itr, max_request_size):
-    chunk = StringIO()
-    for row in row_itr:
-        if chunk.tell() + len(row) > max_request_size:
-            yield chunk.getvalue()
-            chunk.seek(0)
-            chunk.truncate(0)
-        chunk.write(row)
-
-    yield chunk.getvalue()
-
-
-def merge_response(merged, rspns):
-    for x in rspns:
-        mrg = merged.setdefault(x, [])
-        mrg.extend(rspns[x])
 
 
 def formatted_response(response, project_id, platform):

@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from functools import cached_property
+from io import StringIO
 from pathlib import Path
 
 import requests
@@ -93,6 +94,25 @@ class TolClient:
             timeout=120,
         )
         return self._check_response(r)
+
+    def ndjson_post(self, path, ndjson_str_itr, max_request_size=2 * 1024**2):
+        rspns = {}
+        for chunk in self.chunk_rows(ndjson_str_itr, max_request_size):
+            chunk_rspns = self.json_post(path, chunk)
+            for label, array in chunk_rspns.items():
+                rspns.setdefault(label, []).extend(array)
+        return rspns
+
+    def chunk_rows(self, ndjson_str_itr, max_request_size):
+        chunk = StringIO()
+        for ndj_str in ndjson_str_itr:
+            if chunk.tell() + len(ndj_str) > max_request_size:
+                yield chunk.getvalue()
+                chunk.seek(0)
+                chunk.truncate(0)
+            chunk.write(ndj_str)
+
+        yield chunk.getvalue()
 
     def download_file(self, path, filename=None):
         r = requests.get(
