@@ -161,7 +161,7 @@ class DiffStore:
             return
         logging.info(f"Found {count} new differences")
         arrow_table__ = self.arrow_table()  # noqa: F841
-        conn.sql(
+        conn.execute(
             "INSERT INTO diff_store SELECT *, current_timestamp FROM arrow_table__"
         )
 
@@ -299,7 +299,13 @@ def run_mlwh_diff(
     )
 
     if update:
-        create_diff_db(conn, tqc, mlwh_ndjson)
+        conn.execute("BEGIN TRANSACTION")
+        try:
+            create_diff_db(conn, tqc, mlwh_ndjson)
+        except duckdb.Error as err:
+            conn.rollback()
+            raise err
+        conn.commit()
 
     if show_classes:
         show_diff_classes(conn)
