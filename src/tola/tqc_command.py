@@ -19,7 +19,7 @@ from tola.ndjson import (
     ndjson_row,
     parse_ndjson_stream,
 )
-from tola.pretty import bold, bold_green, field_style
+from tola.pretty import bold, bold_green, colour_pager, field_style
 from tola.store_folder import upload_files
 
 opt = SimpleNamespace(
@@ -148,7 +148,7 @@ def edit_col(
                 ads.upsert(table, dicts_to_core_data_objects(ads, table, updates))
 
             if sys.stdout.isatty():
-                click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
+                colour_pager(pretty_changes_itr(changes, apply_flag))
             else:
                 for row in changes:
                     sys.stdout.write(ndjson_row(row))
@@ -162,7 +162,7 @@ def edit_col(
             oid = getattr(obj, key)
             show_data.append({key: oid, column_name: val})
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_dict_itr(show_data, key))
+            colour_pager(pretty_dict_itr(show_data, key))
         else:
             for row in show_data:
                 sys.stdout.write(ndjson_row(row))
@@ -216,7 +216,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
             for chunk in client.pages(dicts_to_core_data_objects(ads, table, updates)):
                 ads.upsert(table, chunk)
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_changes_itr(changes, apply_flag))
+            colour_pager(pretty_changes_itr(changes, apply_flag))
         else:
             for chng in changes:
                 sys.stdout.write(ndjson_row(chng))
@@ -295,9 +295,7 @@ def add(ctx, table, key, apply_flag, input_files):
         )
 
     if sys.stdout.isatty():
-        click.echo_via_pager(
-            pretty_cdo_itr(new_obj, key, head="Created {} new row{}:\n")
-        )
+        colour_pager(pretty_cdo_itr(new_obj, key, head="Created {} new row{}:\n"))
     else:
         for cdo in new_obj:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))
@@ -334,7 +332,7 @@ def show(client, table, key, file_list, file_format, show_modified, id_list):
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
     fetched = fetch_all(client, table, key, id_list)
     if sys.stdout.isatty():
-        click.echo_via_pager(pretty_cdo_itr(fetched, key, show_modified=show_modified))
+        colour_pager(pretty_cdo_itr(fetched, key, show_modified=show_modified))
     else:
         for cdo in fetched:
             sys.stdout.write(
@@ -377,7 +375,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
             tail = "Dry run. Use '--apply' flag to delete {} row{}.\n"
 
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_cdo_itr(db_obj, key, head=head, tail=tail))
+            colour_pager(pretty_cdo_itr(db_obj, key, head=head, tail=tail))
         else:
             for dlt in db_obj:
                 sys.stdout.write(ndjson_row(core_data_object_to_dict(dlt)))
@@ -438,8 +436,12 @@ def store_folders(ctx, table, location, input_files):
 
     if stored_folders:
         if sys.stdout.isatty():
-            click.echo_via_pager(
-                pretty_dict_itr(stored_folders, "folder.id", head="Stored {} folder{}:")
+            colour_pager(
+                pretty_dict_itr(
+                    stored_folders,
+                    "folder.id",
+                    head="Stored {} folder{}:",
+                )
             )
         else:
             for fldr in stored_folders:
@@ -607,7 +609,7 @@ def status(ctx, table, input_files):
 
     if stored_status:
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_status_itr(stored_status, table))
+            colour_pager(pretty_status_itr(stored_status, table))
         else:
             print_statuses_in_input_order(table, input_obj, stored_status)
 

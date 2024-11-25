@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from click import style
+import click
 
 
 def field_style(column_name, val):
@@ -21,16 +21,26 @@ def field_style(column_name, val):
 
 
 def dim(txt):
-    return style(txt, dim=True)
+    return click.style(txt, dim=True)
 
 
 def bold_green(txt):
-    return style(txt, bold=True, fg="green")
+    return click.style(txt, bold=True, fg="green")
 
 
 def bold_red(txt):
-    return style(txt, bold=True, fg="red")
+    return click.style(txt, bold=True, fg="red")
 
 
 def bold(txt):
-    return style(txt, bold=True)
+    return click.style(txt, bold=True)
+
+
+
+def colour_pager(itr):
+    """
+    click fails to detect that output can be coloured when the script is at
+    the end of a UNIX pipe and STDOUT is a tty, so we set the `color`
+    parmameter here to `True` which overrides its autodetection.
+    """
+    click.echo_via_pager(itr, color=True)

@@ -14,7 +14,7 @@ from tolqc.reports import mlwh_data_report_query_select
 
 from tola import click_options, db_connection, fetch_mlwh_seq_data, tolqc_client
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, field_style
+from tola.pretty import bold, colour_pager, field_style
 
 
 class Mismatch:
@@ -324,7 +324,7 @@ def run_mlwh_diff(
     else:
         if output_format == "PRETTY":
             if sys.stdout.isatty():
-                click.echo_via_pager(pretty_diff_iterator(diffs))
+                colour_pager(pretty_diff_iterator(diffs))
             else:
                 # Prevent empty emails being sent from cron jobs.
                 # echo_via_pager() prints a newline if there are no diffs to
@@ -628,7 +628,7 @@ def column_definitions():
 
     json_cols = "\n, ".join(f"{n}: '{t}'" for n, t in col_defs.items())
 
-    return (table_cols, json_cols)
+    return table_cols, json_cols
 
 
 def create_or_update_macros_and_views(conn):
