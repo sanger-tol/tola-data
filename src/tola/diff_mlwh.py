@@ -14,7 +14,7 @@ from tolqc.reports import mlwh_data_report_query_select
 
 from tola import click_options, db_connection, fetch_mlwh_seq_data, tolqc_client
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager, field_style
+from tola.pretty import bold, colour_pager, dim, field_style
 
 
 class Mismatch:
@@ -27,6 +27,7 @@ class Mismatch:
         "mlwh_hash",
         "tolqc_hash",
         "differing_columns",
+        "reasons",
     )
 
     def __init__(
@@ -37,12 +38,14 @@ class Mismatch:
         mlwh_hash: str,
         tolqc_hash: str,
         differing_columns: list[str] = None,
+        reasons: list[str] = None,
     ):
         self.data_id = data_id
         self.mlwh = mlwh
         self.tolqc = tolqc
         self.mlwh_hash = mlwh_hash
         self.tolqc_hash = tolqc_hash
+        self.reasons = reasons
         if differing_columns:
             self.differing_columns = differing_columns
         else:
@@ -98,7 +101,10 @@ class Mismatch:
 
     def pretty(self):
         fmt = io.StringIO()
-        fmt.write(f"\n{bold(self.data_id)}\n")
+        fmt.write(f"\n{bold(self.data_id)}")
+        if self.reasons:
+            fmt.write(f"  ({' & '.join(bold(x) for x in self.reasons)})")
+        fmt.write("\n")
 
         max_col_width = 0
         max_mlwh_val_width = 0
@@ -222,6 +228,17 @@ class DiffStore:
       (See output from --show-classes)""",
 )
 @click.option(
+    "--show-reasons",
+    flag_value=True,
+    help="""Show the list of reasons for differences between the MLWH and
+      ToLQC databases.""",
+)
+@click.option(
+    "--reason",
+    help="""Show the differences tagged with this reason.
+      (See output from --show-reasons)""",
+)
+@click.option(
     "--format",
     "output_format",
     type=click.Choice(
@@ -246,6 +263,8 @@ def cli(
     show_new_diffs,
     show_classes,
     column_class,
+    show_reasons,
+    reason,
     output_format,
     since,
     table,
@@ -272,6 +291,8 @@ def cli(
         show_new_diffs,
         show_classes,
         column_class,
+        show_reasons,
+        reason,
         output_format,
         since,
         table,
@@ -286,6 +307,8 @@ def run_mlwh_diff(
     show_new_diffs=False,
     show_classes=False,
     column_class=None,
+    show_reasons=False,
+    reason=None,
     output_format="NDJSON",
     since=None,
     table=None,
@@ -311,7 +334,11 @@ def run_mlwh_diff(
         show_diff_classes(conn)
         return
 
-    diffs = fetch_stored_diffs(conn, since, show_new_diffs, column_class)
+    if show_reasons:
+        show_reason_dict(conn)
+        return
+
+    diffs = fetch_stored_diffs(conn, since, show_new_diffs, column_class, reason)
     conn.close()
 
     if table:
@@ -354,6 +381,9 @@ def create_diff_db(conn, tqc, mlwh_ndjson=None):
 
     if "update_log" not in tables:
         conn.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
+
+    if "reason" not in tables:
+        create_reasons_tables(conn)
 
     # Fetch the current MLWH data from ToLQC
     tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
@@ -412,7 +442,9 @@ def show_diff(frst, scnd):
             click.echo(f"  {key}: {frst_v!r} | {scnd[key]!r}")
 
 
-def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None):
+def fetch_stored_diffs(
+    conn, since=None, show_new_diffs=False, column_class=None, reason=None
+):
     args = []
     where = []
     if since:
@@ -425,16 +457,28 @@ def fetch_stored_diffs(conn, since=None, show_new_diffs=False, column_class=None
         where.append("ds.differing_columns = ?")
         args.append(column_class)
 
+    if reason:
+        where.append("list_has_all(drl.reasons, ?)")
+        args.append([reason])
+
     sql = inspect.cleandoc("""
+        WITH drl AS (
+            SELECT data_id
+              , array_agg(reason ORDER BY reason) AS reasons
+            FROM diff_reason
+            GROUP BY data_id
+        )
         SELECT ds.data_id
           , mlwh
           , tolqc
           , ds.mlwh_hash
           , ds.tolqc_hash
           , ds.differing_columns
+          , drl.reasons
         FROM diff_store ds
         JOIN mlwh USING (data_id)
         JOIN tolqc USING (data_id)
+        LEFT JOIN drl USING (data_id)
     """)
 
     if where:
@@ -461,6 +505,23 @@ def show_diff_classes(conn):
     while c := conn.fetchone():
         n, cols = c
         click.echo(f"{n:>7}  {','.join(cols)}")
+
+
+def show_reason_dict(conn):
+    sql = inspect.cleandoc("""
+        SELECT reason_dict
+        FROM reason_dict
+        ORDER BY reason
+    """)
+    debug_sql(sql)
+    conn.execute(sql)
+
+    reasons = [x[0] for x in conn.fetchall()]
+    if not reasons:
+        return
+    max_name = max(len(x["reason"]) for x in reasons)
+    for rd in reasons:
+        click.echo(f" {rd['reason']:>{max_name}}:  {rd['description'] or dim('null')}")
 
 
 def compare_tables(conn):
@@ -552,6 +613,31 @@ def create_diff_store(conn):
             , tolqc_hash VARCHAR
             , differing_columns VARCHAR[]
             , found_at TIMESTAMP WITH TIME ZONE
+        )
+        """
+    )
+    debug_sql(sql)
+    conn.execute(sql)
+
+
+def create_reasons_tables(conn):
+    sql = inspect.cleandoc(
+        """
+        CREATE TABLE reason_dict(
+            reason VARCHAR PRIMARY KEY
+            , description VARCHAR
+        )
+        """
+    )
+    debug_sql(sql)
+    conn.execute(sql)
+
+    sql = inspect.cleandoc(
+        """
+        CREATE TABLE diff_reason(
+            data_id VARCHAR
+            , reason VARCHAR REFERENCES reason_dict (reason)
+            , PRIMARY KEY (data_id, reason)
         )
         """
     )
