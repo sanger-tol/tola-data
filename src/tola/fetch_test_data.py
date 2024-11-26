@@ -158,13 +158,10 @@ def build_sample_data(ssn_maker):
 
 def build_dataset_data(ssn_maker):
     with ssn_maker() as session:
-        statement = (
-            select(Dataset)
-            .options(
-                selectinload(Dataset.data_assn)
-                .selectinload(DatasetElement.data)
-                .selectinload(Data.files)
-            )
+        statement = select(Dataset).options(
+            selectinload(Dataset.data_assn)
+            .selectinload(DatasetElement.data)
+            .selectinload(Data.files)
         )
         fetched = session.scalars(statement).all()
     return fetched

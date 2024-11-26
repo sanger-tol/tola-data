@@ -42,7 +42,8 @@ def today_dir():
     show_default=True,
 )
 @click.option(
-    "--dir", "report_dir",
+    "--dir",
+    "report_dir",
     default=today_dir(),
     type=click.Path(path_type=pathlib.Path),
     help="Directory to store duckdb database and report in",
@@ -89,7 +90,9 @@ def cli(ctx, csv_files, report_dir, duckdb_file):
     full_report_grouped_by_idx(con, report_dir / "pacbio_partitioned.csv")
     multi_specimen_csv = report_dir / "pacbio_multi_specimens.csv"
     report_multi_specimen_idx(con, multi_specimen_csv)
-    filter_sample_swaps(multi_specimen_csv, report_dir / "pacbio_multi_specimen_swaps.csv")
+    filter_sample_swaps(
+        multi_specimen_csv, report_dir / "pacbio_multi_specimen_swaps.csv"
+    )
     missing_from_rprt(con, report_dir / "pacbio_missing_from_rprt.csv")
 
 

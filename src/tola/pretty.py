@@ -36,7 +36,6 @@ def bold(txt):
     return click.style(txt, bold=True)
 
 
-
 def colour_pager(itr):
     """
     click fails to detect that output can be coloured when the script is at
