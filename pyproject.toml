@@ -19,8 +19,13 @@ dependencies = [
     "python-irodsclient",
     "python-ulid",
     "requests",
-    "ruff",
     'importlib-metadata; python_version>="3.8"',
+]
+
+[project.optional-dependencies]
+devel = [
+    "pytest",
+    "ruff",
 ]
 
 [project.scripts]
