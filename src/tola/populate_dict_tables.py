@@ -19,7 +19,6 @@ import tola.marshals
     ),
 )
 def main(mrshl, tsv_file):
-
     table_class = table_name_to_class()
 
     for dict_file in tsv_file:

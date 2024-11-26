@@ -281,5 +281,5 @@ def json_file_key_counts(file):
     return json.dumps(stats, sort_keys=True, indent=2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

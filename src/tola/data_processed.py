@@ -42,9 +42,7 @@ def cli(tolqc_alias, tolqc_url, api_token, name_list, set_processed):
 
     if name_list:
         filt = DataSourceFilter(in_list={"name": name_list})
-        fetched_data = {
-            x.name: x for x in ads.get_list("data", object_filters=filt)
-        }
+        fetched_data = {x.name: x for x in ads.get_list("data", object_filters=filt)}
 
         # Check if we found a data record for each name
         if missed := set(name_list) - fetched_data.keys():

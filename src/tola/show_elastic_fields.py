@@ -8,9 +8,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def main(args):
-    src = ApiDataSource(
-        {"url": "https://portal.tol.sanger.ac.uk/api/v1", "key": ""}
-    )
+    src = ApiDataSource({"url": "https://portal.tol.sanger.ac.uk/api/v1", "key": ""})
     filt = DataSourceFilter()
 
     if "--TOLP-5914" in args:
@@ -23,7 +21,7 @@ def main(args):
                 "mlwh_study_id": "5901",  # Darwin Tree of Life
             }
             run_data = src.get_list(
-                'run_data',
+                "run_data",
                 object_filters=filt,
                 sort_by="mlwh_instrument_model",
             )
@@ -32,7 +30,7 @@ def main(args):
             for rd in run_data:
                 n += 1
                 id_set.add(rd.id)
-            if (n == len(id_set)):
+            if n == len(id_set):
                 attempt_ok += 1
             else:
                 info(f"Got {n} items {len(id_set)} unique")
@@ -43,7 +41,6 @@ def main(args):
             info(f"Wrong number of entries {tries - attempt_ok} fetches out of {tries}")
 
         return 0
-
 
     # filt.exact = {"tolqc_run_id": None}
     filt.exact = {
