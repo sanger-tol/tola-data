@@ -3,6 +3,7 @@ import io
 import logging
 import pathlib
 import sys
+from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
 from typing import Any
 
@@ -232,6 +233,12 @@ class DiffStore:
       ToLQC databases.""",
 )
 @click.option(
+    "--add-reasons",
+    help="""Add reasons to the DuckDB diff database. Input is a file
+      (or STDIN if value given is "-") in ND-JSON format with keys
+      "reason" and "description" on each row.""",
+)
+@click.option(
     "--reason",
     help="""Show the differences tagged with this reason.
       (See output from --show-reasons)""",
@@ -262,6 +269,7 @@ def cli(
     show_classes,
     column_class,
     show_reasons,
+    add_reasons,
     reason,
     output_format,
     since,
@@ -290,6 +298,7 @@ def cli(
         show_classes,
         column_class,
         show_reasons,
+        add_reasons,
         reason,
         output_format,
         since,
@@ -306,6 +315,7 @@ def run_mlwh_diff(
     show_classes=False,
     column_class=None,
     show_reasons=False,
+    add_reasons=None,
     reason=None,
     output_format="NDJSON",
     since=None,
@@ -316,23 +326,22 @@ def run_mlwh_diff(
         update = True
     conn = duckdb.connect(
         database=str(diff_mlwh_duckdb),
-        read_only=not update,
+        read_only=not (update or add_reasons),
     )
 
     if update:
-        conn.execute("BEGIN TRANSACTION")
-        try:
-            create_diff_db(conn, tqc, mlwh_ndjson)
-        except duckdb.Error as err:
-            conn.rollback()
-            raise err
-        conn.commit()
+        with transaction(conn) as crsr:
+            create_diff_db(crsr, tqc, mlwh_ndjson)
 
     if show_classes:
         show_diff_classes(conn)
         return
 
-    if show_reasons:
+    if add_reasons:
+        with transaction(conn) as crsr:
+            load_reasons_ndjson(crsr, add_reasons)
+
+    if show_reasons or add_reasons:
         show_reason_dict(conn)
         return
 
@@ -359,6 +368,23 @@ def run_mlwh_diff(
         else:
             for m in diffs:
                 sys.stdout.write(ndjson_row(m.differences_dict))
+
+
+@contextmanager
+def transaction(conn):
+    crsr = conn.cursor()
+    crsr.execute("BEGIN TRANSACTION")
+    try:
+        yield crsr
+    except duckdb.Error as err:
+        crsr.rollback()
+        raise err
+    crsr.commit()
+
+
+def load_reasons_ndjson(conn, add_reasons):
+    file = "/dev/stdin" if add_reasons == "-" else add_reasons
+    conn.execute("INSERT OR REPLACE INTO reason_dict FROM read_json(?)", (file,))
 
 
 def pretty_diff_iterator(itr):
