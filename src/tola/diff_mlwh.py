@@ -227,21 +227,33 @@ class DiffStore:
       (See output from --show-classes)""",
 )
 @click.option(
-    "--show-reasons",
+    "--show-reason-dict",
     flag_value=True,
-    help="""Show the list of reasons for differences between the MLWH and
+    help="""Show the dictionary of reasons for differences between the MLWH and
       ToLQC databases.""",
 )
 @click.option(
-    "--add-reasons",
-    help="""Add reasons to the DuckDB diff database. Input is a file
+    "--edit-reason-dict",
+    metavar="FILE",
+    help="""Add reasons to the dictionary of known reasons. Input is a file
       (or STDIN if value given is "-") in ND-JSON format with keys
-      "reason" and "description" on each row.""",
+      "reason" and "description" on each row. Changes in description fields
+      will replace the stored description for each reason.""",
 )
 @click.option(
     "--reason",
     help="""Show the differences tagged with this reason.
-      (See output from --show-reasons)""",
+      (See output from --show-reason-dict for the list of reasons)""",
+)
+@click.option(
+    "--store-reason",
+    metavar="REASON",
+    help="Store the reason for the list of `data_id` supplied",
+)
+@click.argument(
+    "data_id_list",
+    metavar="DATA_ID_LIST",
+    nargs=-1,
 )
 @click.option(
     "--format",
@@ -268,15 +280,21 @@ def cli(
     show_new_diffs,
     show_classes,
     column_class,
-    show_reasons,
-    add_reasons,
+    show_reason_dict,
+    edit_reason_dict,
     reason,
+    store_reason,
+    data_id_list,
     output_format,
     since,
     table,
     update,
 ):
-    """Compare the contents of the MLWH to the ToLQC database"""
+    """
+    Compare the contents of the MLWH to the ToLQC database
+
+    DATA_ID_LIST is a list of `data_id` values to act on.
+    """
 
     logging.basicConfig(
         level=getattr(logging, log_level),
@@ -297,9 +315,11 @@ def cli(
         show_new_diffs,
         show_classes,
         column_class,
-        show_reasons,
-        add_reasons,
+        show_reason_dict,
+        edit_reason_dict,
         reason,
+        store_reason,
+        data_id_list,
         output_format,
         since,
         table,
@@ -314,9 +334,11 @@ def run_mlwh_diff(
     show_new_diffs=False,
     show_classes=False,
     column_class=None,
-    show_reasons=False,
-    add_reasons=None,
+    show_reason_dict=False,
+    edit_reason_dict=None,
     reason=None,
+    store_reason=None,
+    data_id_list=None,
     output_format="NDJSON",
     since=None,
     table=None,
@@ -326,7 +348,7 @@ def run_mlwh_diff(
         update = True
     conn = duckdb.connect(
         database=str(diff_mlwh_duckdb),
-        read_only=not (update or add_reasons),
+        read_only=not (update or edit_reason_dict or store_reason),
     )
 
     if update:
@@ -337,15 +359,25 @@ def run_mlwh_diff(
         show_diff_classes(conn)
         return
 
-    if add_reasons:
+    if edit_reason_dict:
         with transaction(conn) as crsr:
-            load_reasons_ndjson(crsr, add_reasons)
+            load_reason_dict_ndjson(crsr, edit_reason_dict)
 
-    if show_reasons or add_reasons:
+    if show_reason_dict or edit_reason_dict:
         show_reason_dict(conn)
         return
 
-    diffs = fetch_stored_diffs(conn, since, show_new_diffs, column_class, reason)
+    if store_reason and data_id_list:
+        store_reasons(conn, store_reason, data_id_list)
+
+    diffs = fetch_stored_diffs(
+        conn,
+        since,
+        show_new_diffs,
+        column_class,
+        reason,
+        data_id_list,
+    )
     conn.close()
 
     if table:
@@ -382,9 +414,25 @@ def transaction(conn):
     crsr.commit()
 
 
-def load_reasons_ndjson(conn, add_reasons):
-    file = "/dev/stdin" if add_reasons == "-" else add_reasons
-    conn.execute("INSERT OR REPLACE INTO reason_dict FROM read_json(?)", (file,))
+def load_reason_dict_ndjson(conn, edit_reason_dict):
+    file = "/dev/stdin" if edit_reason_dict == "-" else edit_reason_dict
+    sql = inspect.cleandoc("""
+        INSERT OR REPLACE INTO reason_dict
+        FROM read_json(?, columns = {
+          reason: 'VARCHAR', description: 'VARCHAR'
+        })
+    """)
+    debug_sql(sql)
+    conn.execute(sql, (file,))
+
+
+def store_reasons(conn, reason, data_id_list):
+    sql = inspect.cleandoc("""
+        INSERT OR IGNORE INTO diff_reason(data_id, reason)
+        FROM (SELECT unnest(list_transform(?, x -> (x, ?)), recursive := true))
+    """)
+    debug_sql(sql)
+    conn.execute(sql, (data_id_list, reason))
 
 
 def pretty_diff_iterator(itr):
@@ -467,7 +515,12 @@ def show_diff(frst, scnd):
 
 
 def fetch_stored_diffs(
-    conn, since=None, show_new_diffs=False, column_class=None, reason=None
+    conn,
+    since=None,
+    show_new_diffs=False,
+    column_class=None,
+    reason=None,
+    data_id_list=None,
 ):
     args = []
     where = []
@@ -484,6 +537,10 @@ def fetch_stored_diffs(
     if reason:
         where.append("list_has_all(drl.reasons, ?)")
         args.append([reason])
+
+    if data_id_list:
+        where.append("list_contains(?, ds.data_id)")
+        args.append(data_id_list)
 
     sql = inspect.cleandoc("""
         WITH drl AS (
