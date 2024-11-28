@@ -13,7 +13,7 @@ import pyarrow
 
 from tola import click_options, db_connection, fetch_mlwh_seq_data, tolqc_client
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager, dim, field_style
+from tola.pretty import bg_green, bg_red, bold, colour_pager, dim, field_style
 
 
 class Mismatch:
@@ -54,11 +54,17 @@ class Mismatch:
     def diff_class(self) -> list[str]:
         return ",".join(self.differing_columns)
 
-    @property
-    def differences_dict(self):
-        dd = {"data_id": self.data_id}
-        for col in self.differing_columns:
-            dd[col] = (self.mlwh[col], self.tolqc[col])
+    def differences_dict(self, show_columns):
+        dd = {
+            "data_id": self.data_id,
+            "reasons": rsns if (rsns := self.reasons) else [],
+        }
+        col_names = set(self.differing_columns)
+        if show_columns:
+            col_names |= show_columns
+        for col in self.mlwh:
+            if col in col_names:
+                dd[col] = (self.mlwh[col], self.tolqc[col])
         return dd
 
     def _build_differing_columns(self):
@@ -98,18 +104,40 @@ class Mismatch:
             return patch
         return None
 
-    def pretty(self):
+    def pretty(self, show_columns=None):
         fmt = io.StringIO()
         fmt.write(f"\n{bold(self.data_id)}")
+        if sn := self.mlwh.get("sample_name"):
+            fmt.write(f"  {sn}")
         if self.reasons:
             fmt.write(f"  ({' & '.join(bold(x) for x in self.reasons)})")
         fmt.write("\n")
 
+        diff_set = set(self.differing_columns)
+
+        # Build a set of column names which will be shown
+        if show_columns:
+            col_names = []
+            if "ALL" in show_columns:
+                for col, mlwh_v in self.mlwh.items():
+                    # Skip columns where both values are None
+                    # Avoids showing all the empty PacBio columns for Illumina
+                    if mlwh_v is not None or self.tolqc[col] is not None:
+                        col_names.append(col)
+            else:
+                show_set = diff_set | show_columns
+                for col in self.mlwh:
+                    if col in show_set:
+                        col_names.append(col)
+        else:
+            col_names = self.differing_columns
+
+        # Calculate the layout of the output
         max_col_width = 0
         max_mlwh_val_width = 0
         mlwh_values = []
         tolqc_values = []
-        for col in self.differing_columns:
+        for col in col_names:
             if (x := len(col)) > max_col_width:
                 max_col_width = x
             mlwh_v, mlwh_style = field_style(col, self.mlwh[col])
@@ -118,18 +146,30 @@ class Mismatch:
             mlwh_values.append((mlwh_v, mlwh_style))
             tolqc_values.append(field_style(col, self.tolqc[col]))
 
+        # Create the pretty output
         fmt.write(f"  {'':{max_col_width}}  {'MLWH':{max_mlwh_val_width}}  ToLQC\n")
         for col, (mlwh_v, mlwh_style), (tolqc_v, tolqc_style) in zip(
-            self.differing_columns,
+            col_names,
             mlwh_values,
             tolqc_values,
             strict=True,
         ):
-            mlwh_fmt = f"{mlwh_v:{max_mlwh_val_width}}"
-            fmt.write(
-                f"  {col:>{max_col_width}}  {mlwh_style(mlwh_fmt)}"
-                f"  {tolqc_style(tolqc_v)}\n"
-            )
+            pad = " " * (max_mlwh_val_width - len(mlwh_v))
+            mlwh_fmt = mlwh_style(mlwh_v)
+            tolqc_fmt = tolqc_style(tolqc_v)
+            if show_columns:
+                # When extra columns have been requested, highlight matching
+                # and differing values.
+                if mlwh_v == tolqc_v:
+                    mlwh_fmt = bg_green(mlwh_fmt)
+                    tolqc_fmt = bg_green(tolqc_fmt)
+                else:
+                    if mlwh_v != "null":
+                        mlwh_fmt = bg_red(mlwh_fmt)
+                    if tolqc_v != "null":
+                        tolqc_fmt = bg_red(tolqc_fmt)
+
+            fmt.write(f"  {col:>{max_col_width}}  {mlwh_fmt}{pad}  {tolqc_fmt}\n")
 
         return fmt.getvalue()
 
@@ -243,6 +283,7 @@ class DiffStore:
 @click.option(
     "--reason",
     help="""Show the differences tagged with this reason.
+      The value "NONE" will show any differences not tagged with a reason.
       (See output from --show-reason-dict for the list of reasons)""",
 )
 @click.option(
@@ -267,6 +308,14 @@ class DiffStore:
       Defaults to 'PRETTY' if stdout is a terminal, else 'NDJSON'""",
 )
 @click.option(
+    "--show",
+    "show_columns",
+    multiple=True,
+    help="""Columns to show. Can be specified multiple time or as a comma
+      separated list. The value "ALL" will show all columns, except those
+      which are null in both MLWH and ToLQC.""",
+)
+@click.option(
     "--table",
     help="Name of table for which to print patching NDJSON",
 )
@@ -286,6 +335,7 @@ def cli(
     store_reason,
     data_id_list,
     output_format,
+    show_columns,
     since,
     table,
     update,
@@ -302,8 +352,20 @@ def cli(
         force=True,
     )
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+
     if column_class:
         column_class = column_class.split(",")
+
+    if show_columns:
+        sc = []
+        for spec in show_columns:
+            if spec.upper() == "ALL":
+                sc = ["ALL"]
+                break
+            sc.extend(spec.split(","))
+        show_columns = set(sc)
+    else:
+        show_columns = None
 
     if not output_format:
         output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
@@ -321,6 +383,7 @@ def cli(
         store_reason,
         data_id_list,
         output_format,
+        show_columns,
         since,
         table,
         update,
@@ -340,6 +403,7 @@ def run_mlwh_diff(
     store_reason=None,
     data_id_list=None,
     output_format="NDJSON",
+    show_columns=None,
     since=None,
     table=None,
     update=False,
@@ -390,16 +454,16 @@ def run_mlwh_diff(
     else:
         if output_format == "PRETTY":
             if sys.stdout.isatty():
-                colour_pager(pretty_diff_iterator(diffs))
+                colour_pager(pretty_diff_iterator(diffs, show_columns))
             else:
                 # Prevent empty emails being sent from cron jobs.
                 # echo_via_pager() prints a newline if there are no diffs to
                 # print, so avoid it if not attached to a TTY.
-                for txt in pretty_diff_iterator(diffs):
+                for txt in pretty_diff_iterator(diffs, show_columns):
                     click.echo(txt)
         else:
             for m in diffs:
-                sys.stdout.write(ndjson_row(m.differences_dict))
+                sys.stdout.write(ndjson_row(m.differences_dict(show_columns)))
 
 
 @contextmanager
@@ -435,11 +499,11 @@ def store_reasons(conn, reason, data_id_list):
     conn.execute(sql, (data_id_list, reason))
 
 
-def pretty_diff_iterator(itr):
+def pretty_diff_iterator(itr, show_columns=None):
     n = 0
     for m in itr:
         n += 1
-        yield m.pretty()
+        yield m.pretty(show_columns)
 
     if n:
         yield f"\n{bold(n)} mismatch{'es' if n > 1 else ''} between MLWH and ToLQC"
@@ -535,8 +599,11 @@ def fetch_stored_diffs(
         args.append(column_class)
 
     if reason:
-        where.append("list_has_all(drl.reasons, ?)")
-        args.append([reason])
+        if reason.upper() == "NONE":
+            where.append("drl.reasons IS NULL")
+        else:
+            where.append("list_contains(drl.reasons, ?)")
+            args.append(reason)
 
     if data_id_list:
         where.append("list_contains(?, ds.data_id)")
