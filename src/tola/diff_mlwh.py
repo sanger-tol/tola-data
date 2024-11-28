@@ -273,15 +273,14 @@ class DiffStore:
       ToLQC databases.""",
 )
 @click.option(
-    "--edit-reason-dict",
-    metavar="FILE",
-    help="""Add reasons to the dictionary of known reasons. Input is a file
-      (or STDIN if value given is "-") in ND-JSON format with keys
-      "reason" and "description" on each row. Changes in description fields
-      will replace the stored description for each reason.""",
+    "--add-reason-dict",
+    nargs=2,
+    metavar=("REASON", "DESCRIPTION"),
+    help="""Add a reason and its description to the dictionary of reasons""",
 )
 @click.option(
     "--reason",
+    metavar="REASON",
     help="""Show the differences tagged with this reason.
       The value "NONE" will show any differences not tagged with a reason.
       (See output from --show-reason-dict for the list of reasons)""",
@@ -290,6 +289,11 @@ class DiffStore:
     "--store-reason",
     metavar="REASON",
     help="Store the reason for the list of `data_id` supplied",
+)
+@click.option(
+    "--delete-reason",
+    metavar="REASON",
+    help="Delete the reason for the list of `data_id` supplied",
 )
 @click.argument(
     "data_id_list",
@@ -330,9 +334,10 @@ def cli(
     show_classes,
     column_class,
     show_reason_dict,
-    edit_reason_dict,
+    add_reason_dict,
     reason,
     store_reason,
+    delete_reason,
     data_id_list,
     output_format,
     show_columns,
@@ -367,6 +372,14 @@ def cli(
     else:
         show_columns = None
 
+    reason_action = None
+    if store_reason:
+        reason_action = "STORE"
+        reason = store_reason
+    elif delete_reason:
+        reason_action = "DELETE"
+        reason = delete_reason
+
     if not output_format:
         output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
 
@@ -378,9 +391,9 @@ def cli(
         show_classes,
         column_class,
         show_reason_dict,
-        edit_reason_dict,
+        add_reason_dict,
         reason,
-        store_reason,
+        reason_action,
         data_id_list,
         output_format,
         show_columns,
@@ -398,9 +411,9 @@ def run_mlwh_diff(
     show_classes=False,
     column_class=None,
     show_reason_dict=False,
-    edit_reason_dict=None,
+    add_reason_dict=None,
     reason=None,
-    store_reason=None,
+    reason_action=None,
     data_id_list=None,
     output_format="NDJSON",
     show_columns=None,
@@ -412,7 +425,7 @@ def run_mlwh_diff(
         update = True
     conn = duckdb.connect(
         database=str(diff_mlwh_duckdb),
-        read_only=not (update or edit_reason_dict or store_reason),
+        read_only=not (update or add_reason_dict or reason_action),
     )
 
     if update:
@@ -423,16 +436,21 @@ def run_mlwh_diff(
         show_diff_classes(conn)
         return
 
-    if edit_reason_dict:
+    if add_reason_dict:
         with transaction(conn) as crsr:
-            load_reason_dict_ndjson(crsr, edit_reason_dict)
+            load_reason_dict_entry(crsr, add_reason_dict)
 
-    if show_reason_dict or edit_reason_dict:
-        show_reason_dict(conn)
+    if show_reason_dict or add_reason_dict:
+        show_reason_dict_contents(conn)
         return
 
-    if store_reason and data_id_list:
-        store_reasons(conn, store_reason, data_id_list)
+    if reason_action and data_id_list:
+        if reason_action == "STORE":
+            store_reasons(conn, reason, data_id_list)
+        elif reason_action == "DELETE":
+            count = delete_reasons(conn, reason, data_id_list)
+            click.echo(f"Deleted {bold(count)} reason tags")
+            return
 
     diffs = fetch_stored_diffs(
         conn,
@@ -490,6 +508,15 @@ def load_reason_dict_ndjson(conn, edit_reason_dict):
     conn.execute(sql, (file,))
 
 
+def load_reason_dict_entry(conn, reason_dict_line):
+    sql = inspect.cleandoc("""
+        INSERT OR REPLACE INTO reason_dict
+        VALUES (?,?)
+    """)
+    debug_sql(sql)
+    conn.execute(sql, reason_dict_line)
+
+
 def store_reasons(conn, reason, data_id_list):
     sql = inspect.cleandoc("""
         INSERT OR IGNORE INTO diff_reason(data_id, reason)
@@ -497,6 +524,21 @@ def store_reasons(conn, reason, data_id_list):
     """)
     debug_sql(sql)
     conn.execute(sql, (data_id_list, reason))
+
+
+def delete_reasons(conn, reason, data_id_list):
+    template = inspect.cleandoc("""
+        {} FROM diff_reason
+        WHERE list_contains(?, data_id)
+          AND reason = ?
+    """)
+
+    # Count the number of rows which will be deleted, then delete them.
+    conn.execute(template.format("SELECT COUNT(*)"), (data_id_list, reason))
+    (row_count,) = conn.fetchone()
+    conn.execute(template.format("DELETE"), (data_id_list, reason))
+
+    return row_count
 
 
 def pretty_diff_iterator(itr, show_columns=None):
@@ -655,7 +697,7 @@ def show_diff_classes(conn):
         click.echo(f"{n:>7}  {','.join(cols)}")
 
 
-def show_reason_dict(conn):
+def show_reason_dict_contents(conn):
     sql = inspect.cleandoc("""
         SELECT reason_dict
         FROM reason_dict
