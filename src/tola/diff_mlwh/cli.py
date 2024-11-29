@@ -215,6 +215,9 @@ def cli(
     # Cleanup temporary file
     mlwh_tmp = None
 
+    if not diffs:
+        exit(0)
+
     if table:
         write_table_patch(diffs, table, sys.stdout)
     else:
