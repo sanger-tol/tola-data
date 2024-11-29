@@ -11,7 +11,9 @@ from tempfile import NamedTemporaryFile
 import click
 from tol.core import DataSourceFilter
 
-from tola import click_options, db_connection, diff_mlwh, tolqc_client
+from tola import click_options, db_connection, tolqc_client
+from tola.diff_mlwh.database import run_mlwh_diff
+from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 
@@ -92,14 +94,13 @@ def cli(
             mlwh_data.flush()
             os.fsync(mlwh_data.fileno())
 
-            diff_mlwh.run_mlwh_diff(
+            diffs = run_mlwh_diff(
                 client,
                 diff_mlwh_duckdb=diff_mlwh_duckdb,
                 mlwh_ndjson=Path(mlwh_data.name),
                 show_new_diffs=True,
-                output_format="PRETTY",
-                update=True,
             )
+            write_pretty_output(diffs)
 
         patch_species(client)
 
@@ -109,6 +110,13 @@ def write_mlwh_data_to_filehandle(mlwh, project_id_list, fh):
         for run_data_fetcher in (pacbio_fetcher, illumina_fetcher):
             for row in run_data_fetcher(mlwh, project_id):
                 fh.write(row)
+
+
+def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
+    mlwh = db_connection.mlwh_db()
+    write_mlwh_data_to_filehandle(
+        mlwh, tqc.list_project_study_ids(), mlwh_ndjson.open("w")
+    )
 
 
 def formatted_response(response, project_id, platform):

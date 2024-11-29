@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tola"
-version = "1.0.19"
+version = "1.0.20"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -31,7 +31,7 @@ devel = [
 [project.scripts]
 compare-pacbio-json="tola.compare_pacbio_json:cli"
 data-processed="tola.data_processed:cli"
-diff-mlwh="tola.diff_mlwh:cli"
+diff-mlwh="tola.diff_mlwh.cli:cli"
 duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
 goat-client="tola.goat_client:cli"
