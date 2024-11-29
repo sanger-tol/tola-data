@@ -8,7 +8,7 @@ build/
 dist/
 instance/
 __pycache__
-swagger_server.egg-info/
+*.egg-info/
 __init__.pyc
 launch.json
 .env.dev
