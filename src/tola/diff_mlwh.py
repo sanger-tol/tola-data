@@ -1,6 +1,7 @@
 import inspect
 import io
 import logging
+import os
 import pathlib
 import sys
 from contextlib import contextmanager
@@ -134,44 +135,64 @@ class Mismatch:
 
         # Calculate the layout of the output
         max_col_width = 0
-        max_mlwh_val_width = 0
+        max_val_width = 0
         mlwh_values = []
         tolqc_values = []
         for col in col_names:
-            if (x := len(col)) > max_col_width:
-                max_col_width = x
             mlwh_v, mlwh_style = field_style(col, self.mlwh[col])
-            if (y := len(mlwh_v)) > max_mlwh_val_width:
-                max_mlwh_val_width = y
             mlwh_values.append((mlwh_v, mlwh_style))
-            tolqc_values.append(field_style(col, self.tolqc[col]))
+
+            tolqc_v, tolqc_style = field_style(col, self.tolqc[col])
+            tolqc_values.append((tolqc_v, tolqc_style))
+
+            max_col_width = max(max_col_width, len(col))
+            max_val_width = max(max_val_width, len(mlwh_v), len(tolqc_v))
+
+        max_val_width = self.fit_max_data_width_to_terminal(
+            max_col_width, max_val_width
+        )
 
         # Create the pretty output
-        fmt.write(f"  {'':{max_col_width}}  {'MLWH':{max_mlwh_val_width}}  ToLQC\n")
-        for col, (mlwh_v, mlwh_style), (tolqc_v, tolqc_style) in zip(
+        fmt.write(f"  {'':{max_col_width}}  {'MLWH':{max_val_width}}  ToLQC\n")
+        for col, (mlwh_val, mlwh_style), (tolqc_val, tolqc_style) in zip(
             col_names,
             mlwh_values,
             tolqc_values,
             strict=True,
         ):
-            pad = " " * (max_mlwh_val_width - len(mlwh_v))
-            mlwh_fmt = mlwh_style(mlwh_v)
-            tolqc_fmt = tolqc_style(tolqc_v)
-            if show_columns:
-                # When extra columns have been requested, highlight matching
-                # and differing values.
-                if mlwh_v == tolqc_v:
-                    mlwh_fmt = bg_green(mlwh_fmt)
-                    tolqc_fmt = bg_green(tolqc_fmt)
-                else:
-                    if mlwh_v != "null":
-                        mlwh_fmt = bg_red(mlwh_fmt)
-                    if tolqc_v != "null":
-                        tolqc_fmt = bg_red(tolqc_fmt)
+            for mlwh_v, tolqc_v in self.wrap_values(max_val_width, mlwh_val, tolqc_val):
+                pad = " " * (max_val_width - len(mlwh_v))
+                mlwh_fmt = mlwh_style(mlwh_v)
+                tolqc_fmt = tolqc_style(tolqc_v)
+                if show_columns:
+                    # When extra columns have been requested, highlight matching
+                    # and differing values.
+                    if mlwh_v == tolqc_v:
+                        mlwh_fmt = bg_green(mlwh_fmt)
+                        tolqc_fmt = bg_green(tolqc_fmt)
+                    else:
+                        if mlwh_v != "null":
+                            mlwh_fmt = bg_red(mlwh_fmt)
+                        if tolqc_v != "null":
+                            tolqc_fmt = bg_red(tolqc_fmt)
 
-            fmt.write(f"  {col:>{max_col_width}}  {mlwh_fmt}{pad}  {tolqc_fmt}\n")
+                fmt.write(f"  {col:>{max_col_width}}  {mlwh_fmt}{pad}  {tolqc_fmt}\n")
+                col = "..."
 
         return fmt.getvalue()
+
+    def fit_max_data_width_to_terminal(self, max_col_width, max_data_width):
+        if sys.stdout.isatty():
+            term_width, _ = os.get_terminal_size()
+        else:
+            term_width = 132
+        return min(max_data_width, (term_width - max_col_width - 6) // 2)
+
+    def wrap_values(self, max_width, frst, scnd):
+        max_v_len = max(len(frst), len(scnd))
+        for i in range(0, max_v_len, max_width):
+            end = i + max_width
+            yield frst[i:end], scnd[i:end]
 
 
 class DiffStore:
