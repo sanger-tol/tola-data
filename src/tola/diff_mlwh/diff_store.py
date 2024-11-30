@@ -50,6 +50,7 @@ class Mismatch:
     def differences_dict(self, show_columns):
         dd = {
             "data_id": self.data_id,
+            "sample_name": self.mlwh["sample_name"],
             "reasons": rsns if (rsns := self.reasons) else [],
         }
         col_names = set(self.differing_columns)
