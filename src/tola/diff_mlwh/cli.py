@@ -33,6 +33,7 @@ from tola.ndjson import ndjson_row
     envvar="MLWH_NDJSON",
     help="""Name of NDJSON file from fetch-mlwh-seq-data.
       Taken from the MLWH_NDJSON environment variable if set""",
+    hidden=True,
 )
 @click.option(
     "--new/--all",
