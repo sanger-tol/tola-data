@@ -205,7 +205,6 @@ class DiffStore:
         self.differing_columns.append(m.differing_columns)
 
     def arrow_table(self):
-        click.echo("Found:\n" + "".join(f"  {x}\n" for x in self.data_id))
         return pyarrow.Table.from_pydict(
             {
                 "data_id": pyarrow.array(self.data_id),
