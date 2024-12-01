@@ -12,8 +12,8 @@ import click
 from tol.core import DataSourceFilter
 
 from tola import click_options, db_connection, tolqc_client
-from tola.diff_mlwh.database import run_mlwh_diff
-from tola.diff_mlwh.diff_store import write_pretty_output
+from tola.diff_mlwh.database import MLWHDiffDB
+from tola.diff_mlwh.diff_store import pretty_diff_iterator
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 
@@ -76,9 +76,11 @@ def cli(
     if write_to_stdout:
         write_mlwh_data_to_filehandle(mlwh, project_id_list, sys.stdout)
     else:
-        mlwh_data = None
-        if run_diff_mlwh:
-            mlwh_data = NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")
+        mlwh_data = (
+            NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")
+            if run_diff_mlwh
+            else None
+        )
 
         for project_id in project_id_list:
             for platform, run_data_fetcher in (
@@ -87,20 +89,18 @@ def cli(
             ):
                 row_itr = run_data_fetcher(mlwh, project_id, mlwh_data)
                 rspns = client.ndjson_post("loader/seq-data", row_itr)
-                print(formatted_response(rspns, project_id, platform), end="")
+                click.echo(formatted_response(rspns, project_id, platform), nl=False)
 
         if run_diff_mlwh:
             # Ensure data is flushed to storage
             mlwh_data.flush()
             os.fsync(mlwh_data.fileno())
 
-            diffs = run_mlwh_diff(
-                client,
-                diff_mlwh_duckdb=diff_mlwh_duckdb,
-                mlwh_ndjson=Path(mlwh_data.name),
-                show_new_diffs=True,
-            )
-            write_pretty_output(diffs)
+            diff_db = MLWHDiffDB(diff_mlwh_duckdb, write_flag=True)
+            diff_db.update(client, Path(mlwh_data.name))
+            diffs = diff_db.fetch_stored_diffs(show_new_diffs=True)
+            for out in pretty_diff_iterator(diffs):
+                click.echo(out)
 
         patch_species(client)
 
