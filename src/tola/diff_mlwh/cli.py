@@ -7,10 +7,11 @@ import click
 
 from tola import click_options, tolqc_client
 from tola.diff_mlwh.column_definitions import table_map
-from tola.diff_mlwh.database import run_mlwh_diff
+from tola.diff_mlwh.database import MLWHDiffDB
 from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.fetch_mlwh_seq_data import fetch_mlwh_seq_data_to_file
 from tola.ndjson import ndjson_row
+from tola.pretty import bold
 
 
 @click.command
@@ -159,11 +160,12 @@ def cli(
         format="%(message)s",
         force=True,
     )
-    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
 
+    # Turn column_class command line argument into an array
     if column_class:
         column_class = column_class.split(",")
 
+    # Build a set object of columns to show
     if show_columns:
         sc = []
         for spec in show_columns:
@@ -175,6 +177,7 @@ def cli(
     else:
         show_columns = None
 
+    # Process reason options
     reason_action = None
     if store_reason:
         reason_action = "STORE"
@@ -183,50 +186,75 @@ def cli(
         reason_action = "DELETE"
         reason = delete_reason
 
+    # Choose output format
     if not output_format:
         output_format = "PRETTY" if sys.stdout.isatty() else "NDJSON"
 
-    mlwh_tmp = None
-    if update:
-        if mlwh_ndjson and mlwh_ndjson.exists():
-            logging.info(f"Loading MLWH data from {mlwh_ndjson}")
-        else:
-            mlwh_tmp = NamedTemporaryFile("r", prefix="mlwh_", suffix=".ndjson")
-            logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
-            mlwh_ndjson = pathlib.Path(mlwh_tmp.name)
-            fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
-    else:
-        mlwh_ndjson = None
-
-    diffs = run_mlwh_diff(
-        tqc,
-        diff_mlwh_duckdb=diff_mlwh_duckdb,
-        mlwh_ndjson=mlwh_ndjson,
-        show_new_diffs=show_new_diffs,
-        show_classes=show_classes,
-        column_class=column_class,
-        show_reason_dict=show_reason_dict,
-        add_reason_dict=add_reason_dict,
-        reason=reason,
-        reason_action=reason_action,
-        data_id_list=data_id_list,
-        since=since,
+    # Create ToLQC client and MLWH diff database
+    tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+    diff_db = MLWHDiffDB(
+        diff_mlwh_duckdb,
+        write_flag=update or add_reason_dict or reason_action,
     )
 
-    # Cleanup temporary file
-    mlwh_tmp = None
+    # Update the DuckDB database which caches diffs between MLWH and ToLQC
+    if update:
+        update_diff_database(tqc, diff_db, mlwh_ndjson)
+
+    if show_classes:
+        diff_db.show_diff_classes()
+        return
+
+    # Store entries in the dictionary of diff reasons and display contents
+    if add_reason_dict:
+        diff_db.load_reason_dict_entry(add_reason_dict)
+    if show_reason_dict or add_reason_dict:
+        diff_db.show_reason_dict_contents()
+        return
+
+    # Store or delete reasons for a list of data_id
+    if reason_action and data_id_list:
+        if reason_action == "STORE":
+            diff_db.store_reasons(reason, data_id_list)
+        elif reason_action == "DELETE":
+            count = diff_db.delete_reasons(reason, data_id_list)
+            click.echo(f"Deleted {bold(count)} reason tags")
+            return
+
+    # Fetch diffs from the database using the requested filters
+    diffs = diff_db.fetch_stored_diffs(
+        since=since,
+        show_new_diffs=show_new_diffs,
+        column_class=column_class,
+        reason=reason,
+        data_id_list=data_id_list,
+    )
+    diff_db.conn.close()
 
     if not diffs:
         exit(0)
 
     if table:
+        # Write patches suitable for feeding into the `tqc` command
         write_table_patch(diffs, table, sys.stdout)
     else:
+        # Display the diffs found
         if output_format == "PRETTY":
             write_pretty_output(diffs, show_columns, sys.stdout)
         else:
             for m in diffs:
                 sys.stdout.write(ndjson_row(m.differences_dict(show_columns)))
+
+
+def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
+    if mlwh_ndjson and mlwh_ndjson.exists():
+        logging.info(f"Loading MLWH data from {mlwh_ndjson}")
+    else:
+        mlwh_tmp = NamedTemporaryFile("r", prefix="mlwh_", suffix=".ndjson")
+        logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
+        mlwh_ndjson = pathlib.Path(mlwh_tmp.name)
+        fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
+    diff_db.update(tqc, mlwh_ndjson)
 
 
 def write_table_patch(diffs, table, filehandle):

@@ -7,66 +7,10 @@ import duckdb
 
 from tola.diff_mlwh.column_definitions import json_cols, table_cols
 from tola.diff_mlwh.diff_store import DiffStore, Mismatch
-from tola.pretty import bold, dim
+from tola.pretty import dim
 
 
-def run_mlwh_diff(
-    tqc,
-    diff_mlwh_duckdb=None,
-    mlwh_ndjson=None,
-    show_new_diffs=False,
-    show_classes=False,
-    column_class=None,
-    show_reason_dict=False,
-    add_reason_dict=None,
-    reason=None,
-    reason_action=None,
-    data_id_list=None,
-    since=None,
-):
-    update = mlwh_ndjson or add_reason_dict or reason_action
-    diff_db = DiffDB(
-        diff_mlwh_duckdb,
-        write_flag=update,
-    )
-
-    if mlwh_ndjson:
-        diff_db.create_diff_db_tables()
-        diff_db.load_new_data(tqc, mlwh_ndjson)
-        diff_db.find_diffs()
-
-    if show_classes:
-        diff_db.show_diff_classes()
-        return
-
-    if add_reason_dict:
-        diff_db.load_reason_dict_entry(add_reason_dict)
-
-    if show_reason_dict or add_reason_dict:
-        diff_db.show_reason_dict_contents()
-        return
-
-    if reason_action and data_id_list:
-        if reason_action == "STORE":
-            diff_db.store_reasons(reason, data_id_list)
-        elif reason_action == "DELETE":
-            count = diff_db.delete_reasons(reason, data_id_list)
-            click.echo(f"Deleted {bold(count)} reason tags")
-            return
-
-    diffs = diff_db.fetch_stored_diffs(
-        since=since,
-        show_new_diffs=show_new_diffs,
-        column_class=column_class,
-        reason=reason,
-        data_id_list=data_id_list,
-    )
-    diff_db.conn.close()
-
-    return diffs
-
-
-class DiffDB:
+class MLWHDiffDB:
     def __init__(self, path, write_flag=True):
         if not path.exists():
             write_flag = True
@@ -79,8 +23,20 @@ class DiffDB:
         )
         return self.conn.execute(sql, params)
 
-    def load_reason_dict_ndjson(self, edit_reason_dict):
-        file = "/dev/stdin" if edit_reason_dict == "-" else edit_reason_dict
+    def update(self, tqc, mlwh_ndjson):
+        self.create_diff_db_tables()
+        self.load_new_data(tqc, mlwh_ndjson)
+        self.find_diffs()
+
+    def load_reason_dict_entry(self, reason_dict_row: tuple[str, str]):
+        sql = inspect.cleandoc("""
+            INSERT OR REPLACE INTO reason_dict
+            VALUES (?,?)
+        """)
+        self.execute(sql, reason_dict_row)
+
+    def load_reason_dict_ndjson(self, reason_dict_ndjson):
+        file = "/dev/stdin" if reason_dict_ndjson == "-" else reason_dict_ndjson
         sql = inspect.cleandoc("""
             INSERT OR REPLACE INTO reason_dict
             FROM read_json(?, columns = {
@@ -88,13 +44,6 @@ class DiffDB:
             })
         """)
         self.execute(sql, (file,))
-
-    def load_reason_dict_entry(self, reason_dict_line):
-        sql = inspect.cleandoc("""
-            INSERT OR REPLACE INTO reason_dict
-            VALUES (?,?)
-        """)
-        self.execute(sql, reason_dict_line)
 
     def store_reasons(self, reason, data_id_list):
         sql = inspect.cleandoc("""
@@ -131,7 +80,7 @@ class DiffDB:
 
         self.create_or_update_macros_and_views()
 
-    def load_new_data(self, tqc, mlwh_ndjson=None):
+    def load_new_data(self, tqc, mlwh_ndjson):
         # Fetch the current MLWH data from ToLQC
         tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
         logging.info(
@@ -155,10 +104,10 @@ class DiffDB:
             logging.info("No new differences found")
             return
         logging.info(f"Found {count} new differences")
-        arrow_table__ = ds.arrow_table()  # noqa: F841
-        self.execute(
-            "INSERT INTO diff_store SELECT *, current_timestamp FROM arrow_table__"
-        )
+        arrow_table = ds.arrow_table()  # noqa: F841
+        sql = "INSERT INTO diff_store SELECT *, current_timestamp FROM arrow_table"
+        logging.debug(sql)
+        self.conn.execute(sql)
 
     def load_table_from_json(self, name, file):
         logging.info(f"Loading {file} into {name} table")
