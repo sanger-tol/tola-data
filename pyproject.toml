@@ -31,7 +31,7 @@ devel = [
 [project.scripts]
 compare-pacbio-json="tola.compare_pacbio_json:cli"
 data-processed="tola.data_processed:cli"
-diff-mlwh="tola.diff_mlwh.cli:cli"
+diff-mlwh="tola.diff_mlwh.diff_mlwh_cmd:cli"
 duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
 goat-client="tola.goat_client:cli"
@@ -39,7 +39,7 @@ load-illumina="tola.load_illumina:cli"
 load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
-tqc="tola.tqc_command:cli"
+tqc="tola.tqc.tqc_cmd:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
