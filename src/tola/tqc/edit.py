@@ -153,4 +153,4 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
             for chng in changes:
                 sys.stdout.write(ndjson_row(chng))
             if not apply_flag:
-                dry_warning(len(updates))
+                click.echo(dry_warning(len(updates)), err=True)

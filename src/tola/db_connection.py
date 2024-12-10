@@ -2,41 +2,13 @@ import json
 import urllib.parse
 from pathlib import Path
 
-import click
 import mysql.connector
 import psycopg2
 from psycopg2.extras import DictCursor
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 
-class ConnectionParamsException(Exception):
+class ConnectionParamsError(Exception):
     """Error in the ~/.connection_params.json config file"""
-
-
-class TolQCDBEngineParamType(click.ParamType):
-    name = "tolqc-db-engine"
-
-    def convert(self, value, param, ctx):
-        try:
-            return tola_db_engine(value)
-        except ValueError as ve:
-            self.fail(ve)
-
-
-tolqc_db = click.option(
-    "--tolqc-db",
-    type=TolQCDBEngineParamType(),
-    envvar="TOLQC_DB",
-    default="tolqc-staging",
-    show_default=True,
-    help="Alias of database in ~/.connection_params.json to connect to",
-)
-
-
-def tola_db_engine(db_alias="tolqc-staging", **kwargs):
-    engine = create_engine(get_connection_url(db_alias), **kwargs)
-    return engine, sessionmaker(bind=engine, future=True)
 
 
 def mlwh_db():
@@ -88,20 +60,20 @@ def get_connection_params_entry(alias, no_params_file_ok=False):
         mode = params_file.stat().st_mode & 0o777
     except FileNotFoundError:
         msg = f"Missing ~/{params_name} file"
-        raise ConnectionParamsException(msg) from None
+        raise ConnectionParamsError(msg) from None
 
     # Check permissions are 0600
     if mode != 0o600:
         msg = f"~/{params_name} must be mode 0600 but is mode 0{mode:o}"
-        raise ConnectionParamsException(msg)
+        raise ConnectionParamsError(msg)
 
     try:
         if db_params := json.loads(params_file.read_text()).get(alias):
             return db_params
         else:
             msg = f"Alias '{alias}' not found in ~/{params_name} file"
-            raise ConnectionParamsException(msg)
+            raise ConnectionParamsError(msg)
     except json.decoder.JSONDecodeError as jde:
         detail = "\n".join(jde.args)
         msg = f"Syntax error in ~/{params_name} - {detail}"
-        raise ConnectionParamsException(msg) from None
+        raise ConnectionParamsError(msg) from None
