@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 
 import click
 
@@ -44,6 +45,12 @@ def bg_red(txt):
     return click.style(txt, bg=224)
 
 
+def s(x):
+    """Formatting plurals. Argument can be an `int` or an iterable"""
+    n = x if isinstance(x, int) else len(x)
+    return "" if n == 1 else "s"
+
+
 def colour_pager(itr):
     """
     click fails to detect that output can be coloured when the script is at
@@ -51,3 +58,17 @@ def colour_pager(itr):
     parmameter here to `True` which overrides its autodetection.
     """
     click.echo_via_pager(itr, color=True)
+
+
+def setup_pager():
+    os.environ.setdefault(
+        "LESS",
+        " ".join(
+            (
+                "--no-init",
+                "--quit-if-one-screen",
+                "--ignore-case",
+                "--RAW-CONTROL-CHARS",
+            )
+        ),
+    )

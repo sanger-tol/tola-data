@@ -81,3 +81,45 @@ diff_mlwh_duckdb = click.option(
     envvar="DIFF_MLWH_DUCKDB",
     show_default=True,
 )
+
+table = click.option(
+    "--table",
+    required=True,
+    help="Name of table in ToLQC database",
+)
+
+key = click.option(
+    "--key",
+    default="id",
+    show_default=True,
+    help=(
+        "Column name use to uniquely identify rows."
+        " Defaults to the table's `.id` column"
+    ),
+)
+
+file = click.option(
+    "--file",
+    "file_list",
+    type=click.Path(
+        path_type=pathlib.Path,
+        exists=True,
+        readable=True,
+    ),
+    multiple=True,
+    help="Input file names.",
+)
+
+id_list = click.argument(
+    "id_list",
+    nargs=-1,
+    required=False,
+)
+
+apply_flag = click.option(
+    "--apply/--dry",
+    "apply_flag",
+    default=False,
+    show_default=True,
+    help="Apply changes or perform a dry run and show changes which would be made.",
+)
