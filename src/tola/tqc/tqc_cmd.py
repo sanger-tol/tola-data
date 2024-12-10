@@ -4,7 +4,7 @@ import sys
 import click
 
 from tola import click_options, tolqc_client
-from tola.db_connection import ConnectionParamsException
+from tola.db_connection import ConnectionParamsError
 from tola.pretty import bold, setup_pager
 from tola.tqc.add import add
 from tola.tqc.dataset import dataset
@@ -28,7 +28,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
         ctx.obj = tolqc_client.TolClient(
             tolqc_url, api_token, tolqc_alias, page_size=100
         )
-    except ConnectionParamsException as cpe:
+    except ConnectionParamsError as cpe:
         if sys.stdout.isatty():
             # Show help if we're on a TTY
             err = "Error: " + bold("\n".join(cpe.args))
