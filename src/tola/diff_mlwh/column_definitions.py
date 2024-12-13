@@ -57,7 +57,6 @@ def table_map():
         "data": {
             "data_id": "data.id",
             "study_id": "study_id",
-            "tag_index": "tag_index",
             "lims_qc": "lims_qc",
             "qc_date": "date",
             "tag1_id": "tag1_id",
@@ -108,7 +107,6 @@ COL_DEFS = {
     "instrument_name": "VARCHAR",
     "pipeline_id_lims": "VARCHAR",
     "run_id": "VARCHAR",
-    "tag_index": "VARCHAR",
     "lims_run_id": "VARCHAR",
     "element": "VARCHAR",
     "run_start": "TIMESTAMPTZ",
