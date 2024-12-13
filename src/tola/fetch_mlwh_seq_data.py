@@ -270,7 +270,6 @@ def illumina_sql():
               -- Fallback if pattern match fails
               , CONVERT(product_metrics.id_run, CHAR)
             ) AS run_id
-          , CONVERT(product_metrics.tag_index, CHAR) AS tag_index
           , run_lane_metrics.run_complete AS run_complete
           , IF(product_metrics.qc IS NULL, NULL
             , IF(product_metrics.qc = 1, 'pass', 'fail')) AS lims_qc
