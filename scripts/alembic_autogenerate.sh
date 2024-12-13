@@ -11,7 +11,12 @@ else
 fi
 
 export DB_URI="postgresql://tolqc-dev@127.0.0.1:5435/tolqc"
-cd ~/git/tolqc/tolqc-api/migrations
+
+# We assume that the `tolqc` git repository is checked out in
+# the same directory as `tola-data`
+migrations_folder="$(dirname "$0")/../../tolqc/tolqc-api/migrations"
+cd "$migrations_folder"
+
 conf_file="alembic.ini"
 conf_file_bak="$conf_file.bak"
 if [ ! -e "$conf_file_bak" ]
