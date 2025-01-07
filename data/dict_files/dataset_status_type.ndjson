@@ -1,0 +1,5 @@
+{"dataset_status_type.id":"Barcode Check Pass","description":"Matches species in barcode database","assign_order":30}
+{"dataset_status_type.id":"Failed","description":"Not suitable for assembly","assign_order":50}
+{"dataset_status_type.id":"GenomeScope Pass","description":"Has passed GenomeScope QC checks","assign_order":20}
+{"dataset_status_type.id":"Pending","description":"New dataset awaiting QC","assign_order":10}
+{"dataset_status_type.id":"QC Pass","description":"Cleared for assembly","assign_order":40}

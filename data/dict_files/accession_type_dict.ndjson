@@ -1,0 +1,9 @@
+{"accession_type_dict.id":"Analysis","regexp":"^ERZ\\d+$","url":"https://www.ebi.ac.uk/ena/browser/view/{}"}
+{"accession_type_dict.id":"BioProject","regexp":"^PRJ[A-Z]{2}\\d+$","url":"https://www.ebi.ac.uk/ena/browser/view/{}"}
+{"accession_type_dict.id":"BioSample","regexp":"^SAM[A-Z]{2}\\d+$","url":"https://www.ebi.ac.uk/biosamples/samples/{}"}
+{"accession_type_dict.id":"Experiment","regexp":"^[ES]RX\\d+$","url":"https://www.ebi.ac.uk/ena/browser/view/{}"}
+{"accession_type_dict.id":"GenBank Genome Assembly","regexp":"^GCA_\\d+\\.\\d+$","url":"https://www.ncbi.nlm.nih.gov/datasets/genome/{}/"}
+{"accession_type_dict.id":"Placeholder","regexp":"^(Request|Pending)$","url":null}
+{"accession_type_dict.id":"RefSeq Genome Assembly","regexp":"^GCF_\\d+\\.\\d+$","url":"https://www.ncbi.nlm.nih.gov/datasets/genome/{}/"}
+{"accession_type_dict.id":"Run","regexp":"^[ES]RR\\d+$","url":"https://www.ebi.ac.uk/ena/browser/view/{}"}
+{"accession_type_dict.id":"ToLID","regexp":"^[a-z]{1,2}[A-Z][a-z]{2}[A-Z][a-z]{2,3}\\d+$","url":"https://id.tol.sanger.ac.uk/api/v2/tol-ids/{}"}

@@ -15,16 +15,15 @@ ToL Specimen ID         | `^[a-z]{1,2}[A-Z][a-z]{2}[A-Z][a-z]{2,3}\d+$` |
 
 #### `sex`
 
-sex_id                 | description
------------------------|------------
-M                      | Male
-F                      | Female
-M?                     | Male (uncertain)
-F?                     | Female (uncertain)
-H                      | Hermaphrodite
-H/M                    | Hermaphrodite, monoecious
-NA                     | Not applicable
-U                      | Unknown
+sex.id,description
+M,Male
+F,Female
+M?,Male (uncertain)
+F?,Female (uncertain)
+H,Hermaphrodite
+H/M,"Hermaphrodite, monoecious"
+NA,Not applicable
+U,Unknown
 
 #### `specimen_status_type`
 

@@ -1,0 +1,30 @@
+{"library_type.id":"ATAC-seq","hierarchy_name":"atac-seq","category":"genomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Chromium genome","hierarchy_name":"10x","category":"genomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Custom","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Haplotagging","hierarchy_name":"htag","category":"genomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C","hierarchy_name":"hic","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C - Arima v1","hierarchy_name":"hic-arima","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C - Arima v2","hierarchy_name":"hic-arima2","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C - Dovetail","hierarchy_name":"hic-dovetail","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C - OmniC","hierarchy_name":"hic-omic","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Hi-C - Qiagen","hierarchy_name":"hic-qiagen","category":"genomic_data","reporting_category":"hic","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"HiSeqX PCR free","hierarchy_name":"illumina","category":"genomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Long range","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Manual Standard WGS (Plate)","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Nextera dual index pre quality controlled","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"No PCR (Plate)","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Pacbio_Amplicon","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - CLR","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - HiFi","hierarchy_name":"pacbio","category":"genomic_data","reporting_category":"pacbio","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - HiFi (Microbial)","hierarchy_name":"pacbio","category":"genomic_data","reporting_category":"pacbio","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - HiFi (PiMmS)","hierarchy_name":"pacbio","category":"genomic_data","reporting_category":"pacbio","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - HiFi (ULI)","hierarchy_name":"pacbio","category":"genomic_data","reporting_category":"pacbio","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"PacBio - IsoSeq","hierarchy_name":"pacbio","category":"transcriptomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Pre-quality controlled","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"qPCR only","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"RNA PolyA","hierarchy_name":"rna-seq","category":"transcriptomic_data","reporting_category":"rnaseq","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"RNA Ribo","hierarchy_name":null,"category":null,"reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"RNA-seq dUTP eukaryotic","hierarchy_name":"rna-seq","category":"transcriptomic_data","reporting_category":"rnaseq","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"RNA-seq dUTP prokaryotic","hierarchy_name":"rna-seq","category":"transcriptomic_data","reporting_category":"rnaseq","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Small RNA (miRNA)","hierarchy_name":"rna-seq","category":"transcriptomic_data","reporting_category":"rnaseq","kit":null,"enzymes":null,"cut_sites":null}
+{"library_type.id":"Standard","hierarchy_name":"illumina","category":"genomic_data","reporting_category":null,"kit":null,"enzymes":null,"cut_sites":null}

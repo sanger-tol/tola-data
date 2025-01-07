@@ -1,6 +1,0 @@
-dataset_status_type.id	description	assign_order
-Pending	New dataset awaiting QC	10
-GenomeScope Pass	Has passed GenomeScope QC checks	20
-Barcode Check Pass	Matches species in barcode database	30
-QC Pass	Cleared for assembly	40
-Failed	Not suitable for assembly	50

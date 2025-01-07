@@ -1,0 +1,5 @@
+{"visibility_dict.id":"Always","description":"Shown in standard reporting"}
+{"visibility_dict.id":"MetadataIssue","description":"Metadata has issues"}
+{"visibility_dict.id":"SampleSwap","description":"Data involved in a possible sample swap"}
+{"visibility_dict.id":"Testing","description":"Sequencing development data"}
+{"visibility_dict.id":"Withdrawn","description":"Data has been deleted"}
