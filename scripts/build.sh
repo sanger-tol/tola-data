@@ -3,7 +3,8 @@
 set -euxo pipefail
 
 # Load a python and create virtualenv
-module load "ISG/python"
+module unload tola-data
+module load "ISG/python/3.12.3"
 cd -- "$( dirname -- "${BASH_SOURCE[0]}" )"
 VERSION=$(basename -- "$(pwd)")
 VENV_DIR="venv"
@@ -19,26 +20,22 @@ pip install --upgrade pip
 GITLAB="gitlab.internal.sanger.ac.uk"
 GIT_CLONE="git -c advice.detachedHead=false clone --depth 1"
 
-$GIT_CLONE "git@$GITLAB:tol/platforms/tolqc.git" --branch "tola-1.0.7"
-pip install --requirement ./tolqc/tolqc-api/app/requirements.txt
-pip install ./tolqc/tolqc-api/app
-rm -rf tolqc
+local_pypi="https://gitlab.internal.sanger.ac.uk/api/v4/projects/3429/packages/pypi/simple"
+pip install --extra-index-url="$local_pypi" "tol-sdk[api_base2,postgresql] == 1.2.4"
 $GIT_CLONE "git@$GITLAB:jgrg/tola-data.git" --branch "$VERSION"
 pip install ./tola-data
 rm -rf tola-data
 
 # Copy the venv wrapper scripts for our commands to bin/
 mkdir "bin"
-commands="diff-mlwh fetch-mlwh-seq-data status-duckdb tqc"
+commands="data-processed diff-mlwh fetch-mlwh-seq-data goat-client status-duckdb tqc"
 for file in $commands
 do
     cp "$VENV_DIR/bin/$file" "bin/$file"
 done
 
-# Download duckdb command line binary and move to bin/
-duckdb_url="https://github.com/duckdb/duckdb/releases/download/v1.0.0/duckdb_cli-linux-amd64.zip"
-duckdb_zip="duckdb_cli.zip"
-curl -L "$duckdb_url" > "$duckdb_zip"
-unzip "$duckdb_zip"
-mv "duckdb" "bin/duckdb"
-rm "$duckdb_zip"
+# Download patched version of plot-bamstats until it is available in a samtools release
+plot_bmsts="bin/plot-bamstats"
+curl -s "https://raw.githubusercontent.com/jgrg/samtools/develop/misc/plot-bamstats" > "$plot_bmsts"
+chmod +x "$plot_bmsts"
+
