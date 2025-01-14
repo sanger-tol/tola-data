@@ -78,6 +78,10 @@ class MLWHDiffDB:
         if "diff_reason" not in tables:
             self.create_reasons_tables()
 
+        for name in ('tolqc', 'mlwh'):
+            if name not in tables:
+                self.create_data_table(name)
+
         self.create_or_update_macros_and_views()
 
     def load_new_data(self, tqc, mlwh_ndjson):
@@ -109,13 +113,15 @@ class MLWHDiffDB:
         logging.debug(sql)
         self.conn.execute(sql)
 
+    def create_data_table(self, name):
+        self.execute(f"CREATE OR REPLACE TABLE {name}({table_cols()})")
+
     def load_table_from_json(self, name, file):
         logging.info(f"Loading {file} into {name} table")
 
         # NDJSON from MLWH has different number of columns for Illumina and PacBio
         # data.  To create the same table structure for the `mlwh` and `tolqc`
         # tables we provide the column mapping.
-        self.execute(f"CREATE OR REPLACE TABLE {name}({table_cols()})")
         self.execute(
             f"INSERT INTO {name} FROM read_json(?, columns = {{{json_cols()}}})",
             (file,),
