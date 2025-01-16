@@ -17,6 +17,8 @@ from tola.tqc.engine import input_objects_or_exit
     "-o",
     type=click.Path(
         path_type=pathlib.Path,
+        exists=True,
+        allow_dash=True,
     ),
     default=pathlib.Path(),
     show_default=True,
@@ -41,6 +43,8 @@ from tola.tqc.engine import input_objects_or_exit
     "fofn_paths",
     type=click.Path(
         path_type=pathlib.Path,
+        exists=True,
+        allow_dash=True,
     ),
     multiple=True,
     help=(
@@ -95,7 +99,7 @@ def dataset(ctx, output, fofn_paths, noisy, input_files):
 
     stored_datasets = {}
     input_obj = (
-        input_objects_from_fofn(fofn_paths)
+        input_objects_from_fofn_or_exit(fofn_paths)
         if fofn_paths
         else input_objects_or_exit(ctx, input_files)
     )
@@ -119,6 +123,13 @@ def dataset(ctx, output, fofn_paths, noisy, input_files):
         echo_datasets(stored_datasets)
 
 
+def input_objects_from_fofn_or_exit(fofn_paths):
+    input_obj = input_objects_from_fofn(fofn_paths)
+    if not input_obj:
+        sys.exit("Error: No remote paths from --fofn input")
+    return input_obj
+
+
 def input_objects_from_fofn(fofn_paths):
     remote_paths = []
     for fofn in fofn_paths:
@@ -131,7 +142,11 @@ def input_objects_from_fofn(fofn_paths):
         else:
             remote_paths.extend(remote_paths_from_file(fofn))
 
-    return [{"elements": [{"remote_path": r} for r in remote_paths]}]
+    return (
+        [{"elements": [{"remote_path": r} for r in remote_paths]}]
+        if remote_paths
+        else None
+    )
 
 
 def remote_paths_from_file(path):
