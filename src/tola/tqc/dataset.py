@@ -36,13 +36,37 @@ from tola.tqc.engine import input_objects_or_exit
     ),
 )
 @click.option(
+    "--fofn",
+    "-f",
+    "fofn_paths",
+    type=click.Path(
+        path_type=pathlib.Path,
+    ),
+    multiple=True,
+    help=(
+        """
+        File Of File Names input from which to create a single dataset. Can be
+        specified multiple times. Each line within the files becomes
+        a "remote_path" in the list of elements of the dataset.
+
+        PATH can be a file or a directory.
+
+        If the PATH is a directory, it will be recursively searched for files
+        matching the pattern "IRODS.*.fofn", all of which will be used to
+        build the list of "remote_path" elements for the dataset.
+
+        If PATH is a dash character, STDIN will be used.
+        """
+    ),
+)
+@click.option(
     "--noisy/--quiet",
     default=True,
     show_default=True,
     help="List new and existing datasets to STDERR",
 )
 @click_options.input_files
-def dataset(ctx, output, noisy, input_files):
+def dataset(ctx, output, fofn_paths, noisy, input_files):
     """
     Store new datasets, populating the `dataset` and `dataset_element` tables
     in the ToLQC database, and giving each newly created dataset a current
@@ -70,7 +94,11 @@ def dataset(ctx, output, noisy, input_files):
     client = ctx.obj
 
     stored_datasets = {}
-    input_obj = input_objects_or_exit(ctx, input_files)
+    input_obj = (
+        input_objects_from_fofn(fofn_paths)
+        if fofn_paths
+        else input_objects_or_exit(ctx, input_files)
+    )
     if out_count := count_output_field(input_obj):
         # Check that all the input rows have "output" set
         if out_count != len(input_obj):
@@ -89,6 +117,28 @@ def dataset(ctx, output, noisy, input_files):
 
     if noisy:
         echo_datasets(stored_datasets)
+
+
+def input_objects_from_fofn(fofn_paths):
+    remote_paths = []
+    for fofn in fofn_paths:
+        if str(fofn) == "-":
+            for line in sys.stdin:
+                remote_paths.append(line.strip())
+        elif fofn.is_dir():
+            for fofn_file in fofn.rglob("IRODS.*.fofn"):
+                remote_paths.extend(remote_paths_from_file(fofn_file))
+        else:
+            remote_paths.extend(remote_paths_from_file(fofn))
+
+    return [{"elements": [{"remote_path": r} for r in remote_paths]}]
+
+
+def remote_paths_from_file(path):
+    remote_paths = []
+    for line in path.open():
+        remote_paths.append(line.strip())
+    return remote_paths
 
 
 def store_dataset_rows(client, output, rows, stored_datasets):
