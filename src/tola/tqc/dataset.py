@@ -1,26 +1,40 @@
-import pathlib
 import sys
+from pathlib import Path
 
 import click
 from ulid import ULID
 
 from tola import click_options
-from tola.ndjson import ndjson_row
-from tola.pretty import bold, s
-from tola.tqc.engine import input_objects_or_exit
+from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.pretty import bold, colour_pager, natural, s
+from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit, pretty_dict_itr
 
 
 @click.command()
 @click.pass_context
 @click.option(
+    "--info/--no-info",
+    "-i",
+    "info_flag",
+    default=False,
+    show_default=True,
+    help=(
+        """
+        Show information about the current (last, latest) dataset for any of
+        the files or directories in the INPUT_FILES arguments, or the current
+        directory if none are given.
+        """
+    ),
+)
+@click.option(
     "--output",
     "-o",
     type=click.Path(
-        path_type=pathlib.Path,
+        path_type=Path,
         exists=True,
         allow_dash=True,
     ),
-    default=pathlib.Path(),
+    default=Path(),
     show_default=True,
     help=(
         """
@@ -42,7 +56,7 @@ from tola.tqc.engine import input_objects_or_exit
     "-f",
     "fofn_paths",
     type=click.Path(
-        path_type=pathlib.Path,
+        path_type=Path,
         exists=True,
         allow_dash=True,
     ),
@@ -70,7 +84,7 @@ from tola.tqc.engine import input_objects_or_exit
     help="List new and existing datasets to STDERR",
 )
 @click_options.input_files
-def dataset(ctx, output, fofn_paths, noisy, input_files):
+def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
     """
     Store new datasets, populating the `dataset` and `dataset_element` tables
     in the ToLQC database, and giving each newly created dataset a current
@@ -97,30 +111,58 @@ def dataset(ctx, output, fofn_paths, noisy, input_files):
 
     client = ctx.obj
 
-    stored_datasets = {}
-    input_obj = (
-        input_objects_from_fofn_or_exit(fofn_paths)
-        if fofn_paths
-        else input_objects_or_exit(ctx, input_files)
-    )
-    if out_count := count_output_field(input_obj):
-        # Check that all the input rows have "output" set
-        if out_count != len(input_obj):
-            sys.exit(
-                f"Only {out_count} of {len(input_obj)}"
-                ' input rows have the "output" field set'
-            )
-
-        # Store datasets one-by-one to the server, since the output file for
-        # any row might be unwriteable.
-        for obj in input_obj:
-            row_output = obj.pop("output")
-            store_dataset_rows(client, row_output, (obj,), stored_datasets)
+    if info_flag:
+        if not input_files:
+            input_files = [Path()]
+        found_datasets = []
+        for info in input_files:
+            ds_file = info if info.is_file() else find_dataset_file(info)
+            latest = None
+            for ds in parse_ndjson_stream(ds_file.open()):
+                latest = ds
+            if latest:
+                found_datasets.append(latest)
+        print_dataset_info(client, found_datasets)
     else:
-        store_dataset_rows(client, output, input_obj, stored_datasets)
+        stored_datasets = {}
+        input_obj = (
+            input_objects_from_fofn_or_exit(fofn_paths)
+            if fofn_paths
+            else input_objects_or_exit(ctx, input_files)
+        )
+        if out_count := count_output_field(input_obj):
+            # Check that all the input rows have "output" set
+            if out_count != len(input_obj):
+                sys.exit(
+                    f"Only {out_count} of {len(input_obj)}"
+                    ' input rows have the "output" field set'
+                )
 
-    if noisy:
-        echo_datasets(stored_datasets)
+            # Store datasets one-by-one to the server, since the output file for
+            # any row might be unwriteable.
+            for obj in input_obj:
+                row_output = obj.pop("output")
+                store_dataset_rows(client, row_output, (obj,), stored_datasets)
+        else:
+            store_dataset_rows(client, output, input_obj, stored_datasets)
+
+        if noisy:
+            echo_datasets(stored_datasets)
+
+
+def find_dataset_file(directory: Path):
+    """Searches up the directory path for file named `datasets.ndjson`"""
+    look = directory.absolute()
+    found = None
+    while not found:
+        dsf = look / "datasets.ndjson"
+        if dsf.exists():
+            found = dsf
+        elif str(look) == look.root:
+            break
+        else:
+            look = look.parent
+    return found
 
 
 def input_objects_from_fofn_or_exit(fofn_paths):
@@ -134,13 +176,12 @@ def input_objects_from_fofn(fofn_paths):
     remote_paths = []
     for fofn in fofn_paths:
         if str(fofn) == "-":
-            for line in sys.stdin:
-                remote_paths.append(line.strip())
+            remote_paths.extend(lines_from_filehandle(sys.stdin))
         elif fofn.is_dir():
             for fofn_file in fofn.rglob("IRODS.*.fofn"):
-                remote_paths.extend(remote_paths_from_file(fofn_file))
+                remote_paths.extend(lines_from_filehandle(fofn_file.open()))
         else:
-            remote_paths.extend(remote_paths_from_file(fofn))
+            remote_paths.extend(lines_from_filehandle(fofn.open()))
 
     return (
         [{"elements": [{"remote_path": r} for r in remote_paths]}]
@@ -149,11 +190,8 @@ def input_objects_from_fofn(fofn_paths):
     )
 
 
-def remote_paths_from_file(path):
-    remote_paths = []
-    for line in path.open():
-        remote_paths.append(line.strip())
-    return remote_paths
+def lines_from_filehandle(fh):
+    return [line.strip() for line in fh]
 
 
 def store_dataset_rows(client, output, rows, stored_datasets):
@@ -187,6 +225,44 @@ def echo_datasets(stored_datasets):
             click.echo(f"  {bold(ds['dataset.id'])}", err=True)
             for ele in ds["elements"]:
                 click.echo(f"    {ele['data.id']}", err=True)
+
+
+def print_dataset_info(client, found_datasets):
+    key = "dataset.id"
+    db_datasets = fetch_list_or_exit(
+        client, "dataset", key, [x[key] for x in found_datasets]
+    )
+    display = []
+    for fnd, db_obj in zip(found_datasets, db_datasets, strict=True):
+        status = db_obj.status
+        elements = fnd["elements"]
+        db_elements = fetch_list_or_exit(
+            client, "data", "data.id", [x["data.id"] for x in elements]
+        )
+        specimens = sorted({x.sample.specimen.id for x in db_elements}, key=natural)
+        display.append(
+            {
+                "dataset.id": fnd[key],
+                "status": status.status_type.id,
+                "status_time": status.status_time,
+                "specimens": specimens,
+                "elements": [
+                    {
+                        "library_type": x.library.library_type.id,
+                        "data.id": x.id,
+                    }
+                    for x in db_elements
+                ],
+            }
+        )
+
+    if sys.stdout.isatty():
+        colour_pager(
+            pretty_dict_itr(display, key, head="Information for {} dataset{}:")
+        )
+    else:
+        for row in display:
+            sys.stdout.write(ndjson_row(row))
 
 
 def count_output_field(input_obj):

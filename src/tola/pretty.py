@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 
 import click
 
@@ -17,7 +18,14 @@ def field_style(column_name, val):
     if isinstance(val, int) and val >= 10_000 and not column_name.endswith("_id"):
         return f"{val:_}", bold
     if isinstance(val, dict | list):
-        return json.dumps(val, indent=2), bold
+        if len(val) == 0 or (
+            len(val) == 1
+            and isinstance(val, list)
+            and not isinstance(val[0], dict | list)
+        ):
+            return json.dumps(val), bold
+        else:
+            return json.dumps(val, indent=2), bold
     return repr(val), bold
 
 
@@ -71,4 +79,14 @@ def setup_pager():
                 "--RAW-CONTROL-CHARS",
             )
         ),
+    )
+
+
+def natural(string):
+    """
+    Separates strings into runs of integers and strings so that they
+    sort "naturally".
+    """
+    return tuple(
+        int(x) if i % 2 else x for i, x in enumerate(re.split(r"(\d+)", string))
     )
