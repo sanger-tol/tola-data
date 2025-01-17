@@ -117,8 +117,11 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
         found_datasets = []
         for info in input_files:
             ds_file = info if info.is_file() else find_dataset_file(info)
+            if not ds_file:
+                continue
             latest = None
             for ds in parse_ndjson_stream(ds_file.open()):
+                # `latest` will be set to last dataset in file
                 latest = ds
             if latest:
                 found_datasets.append(latest)
@@ -258,7 +261,7 @@ def print_dataset_info(client, found_datasets):
 
     if sys.stdout.isatty():
         colour_pager(
-            pretty_dict_itr(display, key, head="Information for {} dataset{}:")
+            pretty_dict_itr(display, None, head="Information for {} dataset{}:")
         )
     else:
         for row in display:
