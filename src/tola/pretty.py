@@ -13,7 +13,9 @@ def field_style(column_name, val):
         return "<empty_string>", bold_red
     if val is None:
         return "null", dim
-    if isinstance(val, datetime.date):
+    if isinstance(val, datetime.datetime):
+        return val.isoformat(sep=" ", timespec="seconds"), bold
+    if isinstance(val, datetime.date | datetime.time):
         return val.isoformat(), bold
     if isinstance(val, int) and val >= 10_000 and not column_name.endswith("_id"):
         return f"{val:_}", bold
