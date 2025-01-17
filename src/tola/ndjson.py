@@ -21,7 +21,7 @@ class DateTimeZoneEncoder(json.JSONEncoder):
         if isinstance(obj, datetime.datetime):
             obj = set_timezone_if_naive(obj)
             return obj.isoformat()
-        if isinstance(obj, datetime.date):
+        if isinstance(obj, datetime.date | datetime.time):
             return obj.isoformat()
 
         # This line means any exceptions raised will come from the base class
