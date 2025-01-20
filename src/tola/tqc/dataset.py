@@ -113,6 +113,7 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
 
     if info_flag:
         if not input_files:
+            # Default to the current directory
             input_files = [Path()]
         found_datasets = []
         for info in input_files:
@@ -121,7 +122,7 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
                 continue
             latest = None
             for ds in parse_ndjson_stream(ds_file.open()):
-                # `latest` will be set to last dataset in file
+                # `latest` will be set to the last dataset in the file
                 latest = ds
             if latest:
                 found_datasets.append(latest)
