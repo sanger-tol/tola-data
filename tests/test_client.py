@@ -1,19 +1,6 @@
 import logging
 
-import pytest
 from tol.core import DataSourceFilter
-
-from tola.tolqc_client import TolClient
-
-
-@pytest.fixture
-def client():
-    return TolClient(tolqc_alias="tolqc-flask")
-
-
-@pytest.fixture
-def ads(client):
-    return client.ads
 
 
 def test_fetch(client):
@@ -29,14 +16,13 @@ def test_fetch(client):
 def test_fetch_ads(ads):
     filt = DataSourceFilter()
     filt.exact = {"study_id": 5901}
-    (darwin,) = tuple(ads.get_list("project", object_filters=filt))
+    (darwin,) = ads.get_list("project", object_filters=filt)
     assert darwin is not None
     assert darwin.study_id == 5901
 
 
 def test_upsert(ads):
-    Obj = ads.data_object_factory
-    species = Obj(
+    species = ads.data_object_factory(
         "species",
         id_="Andrena fulva",
         attributes={"common_name": "tawny mining bee"},
