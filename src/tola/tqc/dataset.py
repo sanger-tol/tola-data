@@ -43,8 +43,10 @@ from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit, pretty_di
         to.
 
         If it is a file, a file of that name will be created or appended to.
+        Only newly created datasets will be written.
 
-        If it is a dash character, ND-JSON will be printed to STDOUT.
+        If it is a dash character, ND-JSON will be printed to STDOUT. This
+        will write both newly created and existing dataset to STDOUT.
 
         Alternatively an "output" location can be specified in each line of
         the ND-JSON input.
@@ -150,7 +152,7 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
         else:
             store_dataset_rows(client, output, input_obj, stored_datasets)
 
-        if noisy:
+        if noisy and str(output) != "-":
             echo_datasets(stored_datasets)
 
 
@@ -214,8 +216,9 @@ def store_dataset_rows(client, output, rows, stored_datasets):
     rspns = client.ndjson_post("loader/dataset", (ndjson_row(x) for x in rows))
 
     for label, ds_rows in rspns.items():
-        # Write dataset info to file
-        if label == "new":
+        # If writing to STDOUT, print all new or existing dastasets.
+        # Otherwise only append new datasets to file.
+        if file == sys.stdout or label == "new":
             for dsr in ds_rows:
                 file.write(ndjson_row(dsr))
         stored_datasets.setdefault(label, []).extend(ds_rows)
