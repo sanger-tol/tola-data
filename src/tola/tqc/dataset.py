@@ -122,11 +122,7 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
             ds_file = info if info.is_file() else find_dataset_file(info)
             if not ds_file:
                 continue
-            latest = None
-            for ds in parse_ndjson_stream(ds_file.open()):
-                # `latest` will be set to the last dataset in the file
-                latest = ds
-            if latest:
+            if latest := latest_dataset(ds_file):
                 found_datasets.append(latest)
         print_dataset_info(client, found_datasets)
     else:
@@ -154,6 +150,21 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
 
         if noisy and str(output) != "-":
             echo_datasets(stored_datasets)
+
+
+def latest_dataset_id(path: Path):
+    ds_dir = path if path.is_dir() else path.parent
+    if (ds_file := find_dataset_file(ds_dir)) and (latest := latest_dataset(ds_file)):
+        return latest["dataset.id"]
+    return None
+
+
+def latest_dataset(ds_file):
+    latest = None
+    for ds in parse_ndjson_stream(ds_file.open()):
+        # `latest` will be set to the last dataset in the file
+        latest = ds
+    return latest
 
 
 def find_dataset_file(directory: Path):
@@ -225,13 +236,16 @@ def store_dataset_rows(client, output, rows, stored_datasets):
 
 
 def echo_datasets(stored_datasets):
+    def ce(msg):
+        click.echo(msg, err=True)
+
     for label in sorted(stored_datasets):
         stored = stored_datasets[label]
-        click.echo(f"\n{bold(len(stored))} {label} dataset{s(stored)}:", err=True)
+        ce(f"\n{bold(len(stored))} {label} dataset{s(stored)}:")
         for ds in stored:
-            click.echo(f"  {bold(ds['dataset.id'])}", err=True)
+            ce(f"\n  {bold(ds['dataset.id'])}")
             for ele in ds["elements"]:
-                click.echo(f"    {ele['data.id']}", err=True)
+                ce(f"    {ele['data.id']}")
 
 
 def print_dataset_info(client, found_datasets):

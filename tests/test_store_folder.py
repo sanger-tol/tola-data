@@ -1,15 +1,9 @@
 import json
 import logging
-import pathlib
 
 import pytest
 
 from tola.store_folder import FilePatternSet, FolderLocation, upload_files
-
-
-@pytest.fixture(scope="session")
-def data_dir():
-    return pathlib.Path(__file__).parent / "data"
 
 
 @pytest.fixture(scope="session")
