@@ -15,6 +15,8 @@ class MLWHDiffDB:
         if not path.exists():
             write_flag = True
         self.conn = duckdb.connect(str(path), read_only=not write_flag)
+        if write_flag:
+            self.create_diff_db_tables()
 
     def execute(self, sql, params=None):
         logging.debug(
@@ -24,7 +26,6 @@ class MLWHDiffDB:
         return self.conn.execute(sql, params)
 
     def update(self, tqc, mlwh_ndjson):
-        self.create_diff_db_tables()
         self.load_new_data(tqc, mlwh_ndjson)
         self.find_diffs()
 
@@ -86,7 +87,7 @@ class MLWHDiffDB:
 
     def load_new_data(self, tqc, mlwh_ndjson):
         # Fetch the current MLWH data from ToLQC
-        tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")
+        tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")  # noqa: SIM115
         logging.info(
             f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
         )
@@ -118,6 +119,7 @@ class MLWHDiffDB:
 
     def load_table_from_json(self, name, file):
         logging.info(f"Loading {file} into {name} table")
+        self.create_data_table(name)
 
         # NDJSON from MLWH has different number of columns for Illumina and PacBio
         # data.  To create the same table structure for the `mlwh` and `tolqc`
