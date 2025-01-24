@@ -250,7 +250,7 @@ def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
     if mlwh_ndjson and mlwh_ndjson.exists():
         logging.info(f"Loading MLWH data from {mlwh_ndjson}")
     else:
-        mlwh_tmp = NamedTemporaryFile("r", prefix="mlwh_", suffix=".ndjson")
+        mlwh_tmp = NamedTemporaryFile("r", prefix="mlwh_", suffix=".ndjson")  # noqa: SIM115
         logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
         mlwh_ndjson = pathlib.Path(mlwh_tmp.name)
         fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
