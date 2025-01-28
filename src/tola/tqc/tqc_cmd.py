@@ -10,6 +10,7 @@ from tola.tqc.add import add
 from tola.tqc.dataset import dataset
 from tola.tqc.delete import delete
 from tola.tqc.edit import edit_col, edit_rows
+from tola.tqc.genomescope import genomescope
 from tola.tqc.show import show
 from tola.tqc.status import status
 
@@ -42,5 +43,6 @@ cli.add_command(dataset)
 cli.add_command(delete)
 cli.add_command(edit_col)
 cli.add_command(edit_rows)
+cli.add_command(genomescope)
 cli.add_command(show)
 cli.add_command(status)
