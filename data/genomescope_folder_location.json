@@ -1,0 +1,30 @@
+{
+  "folder_location.id": "genomescope_s3",
+  "uri_prefix": "s3://tolqc-dev/genomescope",
+  "files_template": {
+    "image_file_patterns": [
+      {
+        "caption": "Genomescope 2.0 linear plot",
+        "pattern": ".*linear_plot\\.png"
+      },
+      {
+        "caption": "Genomescope 2.0 log plot",
+        "pattern": ".*log_plot\\.png"
+      },
+      {
+        "caption": "Genomescope 2.0 transformed linear plot",
+        "pattern": ".*transformed_linear_plot\\.png"
+      },
+      {
+        "caption": "Genomescope 2.0 transformed log plot",
+        "pattern": ".*transformed_log_plot\\.png"
+      }
+    ],
+    "other_file_patterns": [
+      {
+        "caption": "Kmer counts histogram data",
+        "pattern": ".*\\.hist\\.txt"
+      }
+    ]
+  }
+}
