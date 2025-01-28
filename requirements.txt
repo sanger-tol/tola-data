@@ -1,8 +1,0 @@
-click
-duckdb
-sqlalchemy
-flask
-Flask-SQLAlchemy
-flask-restx
-marshmallow-jsonapi
-marshmallow-sqlalchemy

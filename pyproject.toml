@@ -14,7 +14,6 @@ dependencies = [
     "boto3 ~= 1.35.0",
     "click",
     "duckdb ~= 1.1.0",
-    "flask",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "pyarrow",
@@ -26,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 devel = [
+    "flask",
     "pytest",
     "ruff",
 ]
