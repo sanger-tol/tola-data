@@ -1,0 +1,14 @@
+GenomeScope version 2.0
+input file = tests/hugegenome.hist
+output directory = test_out
+p = 2
+k = 31
+
+property                      min               max
+Homozygous (aa)               99.8319%          99.8809%
+Heterozygous (ab)             0.119054%         0.168137%
+Genome Haploid Length         5,863,710,795 bp  5,893,406,274 bp
+Genome Repeat Length          1,892,504,667 bp  1,902,088,842 bp
+Genome Unique Length          3,971,206,128 bp  3,991,317,432 bp
+Model Fit                     74.0156%          99.2058%
+Read Error Rate               0.269857%         0.269857%

@@ -1,0 +1,95 @@
+{
+  "version": "2.0",
+  "input_parameters": {
+    "ploidy": 2,
+    "kmer_length": 31,
+    "est_kmer_coverage": null,
+    "max_kmer_coverage": null,
+    "advanced": {
+      "topology": 0,
+      "initial_repetitiveness": null,
+      "initial_heterozygosities": null,
+      "transform_exponent": 1,
+      "num_rounds": 4,
+      "start_shift": 5,
+      "typical_error": 15
+    }
+  },
+  "kcov": 6.56564770932383,
+  "dup": 0.267378881890947,
+  "homozygous": {
+    "avg": 0.998564047901143,
+    "min": 0.998318634919461,
+    "max": 0.998809460882824
+  },
+  "heterozygous": {
+    "avg": 0.00143595209885725,
+    "min": 0.00119053911717593,
+    "max": 0.00168136508053858
+  },
+  "repetitiveness": {
+    "avg": 0.0360214644973573,
+    "min": 0.0343996754849362,
+    "max": 0.0376432535097784
+  },
+  "genome_haploid_length": {
+    "avg": 5878521033,
+    "min": 5863710795,
+    "max": 5893406274
+  },
+  "genome_repeat_length": {
+    "avg": 1897284651,
+    "min": 1892504667,
+    "max": 1902088842
+  },
+  "genome_unique_length": {
+    "avg": 3981236382,
+    "min": 3971206128,
+    "max": 3991317432
+  },
+  "model_fit": {
+    "all": 0.740156485175226,
+    "full": 0.992057997138315,
+    "unique": 0.995065445128859
+  },
+  "read_error_rate": 0.00269857308904897,
+  "model_summary": {
+    "formula": "y_transform ~ x^transform_exp * length * predict2_0(r1, k, d, kmercov, bias, x)",
+    "parameters": {
+      "d": {
+        "estimate": 0.0360214644973573,
+        "std_error": 0.000810894506210558,
+        "t_value": 44.4218874606655,
+        "p_value": 3.07617519256022e-300
+      },
+      "r1": {
+        "estimate": 0.00143595209885725,
+        "std_error": 0.000122706490840661,
+        "t_value": 11.7023320365497,
+        "p_value": 1.21336056712848e-30
+      },
+      "kmercov": {
+        "estimate": 6.56564770932383,
+        "std_error": 0.00829157581374233,
+        "t_value": 791.84558602745,
+        "p_value": 0
+      },
+      "bias": {
+        "estimate": 0.267378881890947,
+        "std_error": 0.0083359340809282,
+        "t_value": 32.075455407293,
+        "p_value": 2.0988003483351e-182
+      },
+      "length": {
+        "estimate": 4130005218.62354,
+        "std_error": 5780935.70198816,
+        "t_value": 714.418120444266,
+        "p_value": 0
+      }
+    },
+    "residual_std_error": 13703196.6789651,
+    "degrees_of_freedom": 1995,
+    "iter_to_convergence": 5,
+    "convergence_tolerance": 1.49011611938477e-08
+  }
+}
