@@ -134,11 +134,11 @@ def upload_files(
     table: str = None,
     spec: dict = None,
 ):
-    dir_str = spec.get("directory")
-    if not dir_str:
+    if dir_str := spec.get("directory"):
+        directory = Path(dir_str)
+    else:
         msg = "Missing 'directory' field"
         raise ValueError(msg)
-    directory = Path(dir_str)
     if not directory.is_dir():
         msg = f"Not a directory: '{directory}'"
         raise ValueError(msg)

@@ -1,7 +1,10 @@
 import pathlib
 import re
+from pathlib import Path
+from shutil import copytree
 
 import pytest
+from click.testing import CliRunner
 
 from tola.db_connection import ConnectionParamsError
 from tola.tolqc_client import TolClient
@@ -54,3 +57,12 @@ def test_alias(client):
 @pytest.fixture(scope="session")
 def ads(client):
     return client.ads
+
+
+@pytest.fixture
+def fofn_runner(fofn_dir):
+    runner = CliRunner(mix_stderr=False)
+    with runner.isolated_filesystem() as tmp_str:
+        tmp_path = Path(tmp_str) / "fofn"
+        copytree(fofn_dir, tmp_path)
+        yield runner, tmp_path

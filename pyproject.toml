@@ -48,6 +48,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning:botocore"]
 
 [tool.ruff.lint]
 select = [
@@ -77,4 +78,3 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "{test_*,*_test,conftest}.py" = ["E501", "S101"]
-
