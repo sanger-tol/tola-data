@@ -10,15 +10,14 @@ def test_latest_dataset_id(fofn_dir):
 
 
 def test_fofn_dir(fofn_runner, test_alias):
-    runner, tmp_path = fofn_runner
     args = (
         "--tolqc-alias",
         test_alias,
         "dataset",
         "--fofn",
-        str(tmp_path),
+        "fofn",
     )
-    result = runner.invoke(cli, args)
+    result = fofn_runner.invoke(cli, args)
     assert result.exit_code == 0
     assert re.match(
         dedent(

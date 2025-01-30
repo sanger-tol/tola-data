@@ -1,4 +1,6 @@
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,7 +46,18 @@ class StoreGenomescopeError(Exception):
     "folder_location_id",
     default="genomescope_s3",
     show_default=True,
-    help="Folder location to save image and histogram data files to",
+    help="Folder location to save image and histogram data files to.",
+)
+@click.option(
+    "--genomescope-cmd",
+    default="genomescope.R",
+    show_default=True,
+    help=(
+        """
+        Genomescope command for rerunning genomescope when there is no
+        `results.json` file.
+        """
+    ),
 )
 @click.argument(
     "input_dirs",
@@ -56,7 +69,14 @@ class StoreGenomescopeError(Exception):
         readable=True,
     ),
 )
-def genomescope(ctx, dataset_id, rerun_if_no_json, folder_location_id, input_dirs):
+def genomescope(
+    ctx,
+    dataset_id,
+    rerun_if_no_json,
+    folder_location_id,
+    genomescope_cmd,
+    input_dirs,
+):
     """
     Load genomescope2.0 results into TolQC.
 
@@ -84,6 +104,7 @@ def genomescope(ctx, dataset_id, rerun_if_no_json, folder_location_id, input_dir
                 dataset_id,
                 rerun_if_no_json,
                 folder_location_id,
+                genomescope_cmd,
             )
         except StoreGenomescopeError as gsf:
             (msg,) = gsf.args
@@ -125,6 +146,7 @@ def store_genomescope_results(
     dataset_id=None,
     rerun_if_no_json=False,
     folder_location_id="genomescope_s3",
+    genomescope_cmd=None,
 ):
     tbl_name = "genomescope_metrics"
 
@@ -137,7 +159,7 @@ def store_genomescope_results(
             )
             raise StoreGenomescopeError(msg)
 
-    report = report_json_contents(rdir, rerun_if_no_json)
+    report = report_json_contents(rdir, rerun_if_no_json, genomescope_cmd)
     attr = attr_from_report(report)
     attr["dataset_id"] = dataset_id
 
@@ -190,19 +212,91 @@ def attr_from_report(report):
     }
 
 
-def report_json_contents(rdir: Path, rerun_if_no_json=False):
+def report_json_contents(rdir: Path, rerun_if_no_json=False, genomescope_cmd=None):
     # Find report.json file
-    report_file = None
-    for rf in rdir.glob("*report.json"):
-        if report_file:
-            msg = f"More than one 'report.json' in '{rdir}': '{report_file}' and '{rf}'"
-            raise StoreGenomescopeError(msg)
-        report_file = rf
+    report_file = find_file(rdir, "*report.json")
+    if not report_file and rerun_if_no_json:
+        rerun_genomescope(rdir, genomescope_cmd)
     if not report_file:
-        if rerun_if_no_json:
-            pass
-        else:
-            msg = f"Missing report.json file in directory '{rdir}'"
-            raise StoreGenomescopeError(msg)
+        msg = f"Missing report.json file in directory '{rdir}'"
+        raise StoreGenomescopeError(msg)
 
     return json.loads(report_file.read_text())
+
+
+def rerun_genomescope(rdir, genomescope_cmd):
+    cmd_line = build_genomescope_cmd_line(rdir, genomescope_cmd)
+    try:
+        subprocess.run(cmd_line, check=True, capture_output=True)  # noqa: S603
+    except subprocess.CalledProcessError as cpe:
+        msg = f"Error running {cmd_line} exit({cpe.returncode}):\n{cpe.output}"
+        raise StoreGenomescopeError(msg) from None
+
+
+def build_genomescope_cmd_line(rdir, genomescope_cmd="genomescope.R"):
+    params = get_genomescope_params(rdir)
+    params["--input"] = str(find_file(rdir, "*.hist.txt"))
+    params["--output"] = str(rdir)
+    params["--json-report"] = True
+
+    cmd_line = genomescope_cmd.split()
+    for prm, val in params.items():
+        cmd_line.append(prm)
+        if val is not True:
+            cmd_line.append(val)
+
+    return cmd_line
+
+
+def get_genomescope_params(rdir):
+    pattern = "*summary.txt"
+    summary_file = find_file(rdir, pattern)
+    if not summary_file:
+        msg = f"No '{pattern}' file in directory '{rdir}'"
+        raise StoreGenomescopeError(msg)
+    return parse_summary_txt(summary_file.read_text())
+
+
+def parse_summary_txt(summary):
+    cli_patterns = {
+        "--input": r"^input file = (.+)",
+        "--output": r"^output directory = (.+)",
+        "--ploidy": r"^p = (\d+)",
+        "--kmer_length": r"^k = (\d+)",
+        "--name_prefix": r"^name prefix = (.+)",
+        "--lambda": r"^initial kmercov estimate = (\d+)",
+        "--max_kmercov": r"^max_kmercov = (\d+)",
+        "--verbose": r"^VERBOSE set to (TRUE)",
+        "--no_unique_sequence": r"^NO_UNIQUE_SEQUENCE set to (TRUE)",
+        "--topology": r"^topology = (\d+)",
+        "--initial_repetitiveness": r"^initial repetitiveness = (\S+)",
+        "--initial_heterozygosities": r"^initial heterozygosities = (\S+)",
+        "--transform_exp": r"^TRANSFORM_EXP = (\d+)",
+        "--testing": r"^TESTING set to (TRUE)",
+        "--true_params": r"^TRUE_PARAMS = (\d+)",
+        "--trace_flag": r"^TRACE_FLAG set to (TRUE)",
+        "--num_rounds": r"^NUM_ROUNDS = (\d+)",
+        "--typical_error": r"^TYPICAL_ERROR = (\d+)",
+        # Not reported in summary.txt:
+        #   --json_report
+        #   --fitted_hist
+        #   --start_shift
+    }
+    params = {}
+    for cli, pattern in cli_patterns.items():
+        if m := re.search(pattern, summary, re.MULTILINE):
+            val = m.group(1)
+            params[cli] = True if val == "TRUE" else val
+
+    return params
+
+
+def find_file(rdir, pattern):
+    found = None
+    for fn in rdir.glob(pattern):
+        if found:
+            msg = f"More than one '{pattern}' in '{rdir}': '{found}' and '{fn}'"
+            raise StoreGenomescopeError(msg)
+        else:
+            found = fn
+    return found

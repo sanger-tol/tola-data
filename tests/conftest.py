@@ -1,6 +1,5 @@
 import pathlib
 import re
-from pathlib import Path
 from shutil import copytree
 
 import pytest
@@ -61,8 +60,19 @@ def ads(client):
 
 @pytest.fixture
 def fofn_runner(fofn_dir):
+    """
+    Creates a tempoary directory with the a copy of the fofn/ data directory
+    tree.
+
+    Tests will fail with "ValueError: I/O operation on closed file" if running
+    pytest with *e.g.* `--log-cli-level=INFO` but adding `-s` /
+    `--capture=no` fixes this by telling pytest not to caputure STDOUT
+    required by `CliRunner`.
+    """
+
     runner = CliRunner(mix_stderr=False)
-    with runner.isolated_filesystem() as tmp_str:
-        tmp_path = Path(tmp_str) / "fofn"
-        copytree(fofn_dir, tmp_path)
-        yield runner, tmp_path
+    with runner.isolated_filesystem():
+        # The `isolated_filesystem()` call does a `chdir()` to the temporary
+        # directory, so we can use local paths within this context manager.
+        copytree(fofn_dir, "fofn")
+        yield runner

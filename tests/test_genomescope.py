@@ -1,11 +1,19 @@
 import json
 import logging
+from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
 from tola.ndjson import ndjson_row
 from tola.tqc.dataset import find_dataset_file, latest_dataset
-from tola.tqc.genomescope import attr_from_report, report_json_contents
+from tola.tqc.genomescope import (
+    attr_from_report,
+    build_genomescope_cmd_line,
+    get_genomescope_params,
+    parse_summary_txt,
+    report_json_contents,
+)
 from tola.tqc.tqc_cmd import cli
 
 
@@ -53,6 +61,68 @@ def gscope_fldr_loc(ads):
     return fldr_loc
 
 
+def test_get_params(fofn_dir):
+    rdir = gs_results_dir(fofn_dir)
+    params = get_genomescope_params(rdir)
+    assert params == {
+        "--input": "tests/hugegenome.hist",
+        "--kmer_length": "31",
+        "--output": "test_out",
+        "--ploidy": "2",
+    }
+
+
+def test_build_genomescope_cmd_line(fofn_runner):  # noqa: ARG001
+    rdir = gs_results_dir(Path("./fofn"))
+    files = list(rdir.iterdir())
+    logging.info(files)
+    cmd_line = build_genomescope_cmd_line(rdir)
+    assert cmd_line == [
+        "genomescope.R",
+        "--input",
+        "fofn/pacbio/kmer/k31/test.hist.txt",
+        "--output",
+        "fofn/pacbio/kmer/k31",
+        "--ploidy",
+        "2",
+        "--kmer_length",
+        "31",
+        "--json-report",
+    ]
+
+
+def test_parse_summary_txt():
+    txt = dedent(
+        """
+        GenomeScope version 2.0
+        input file = A file name with spaces
+        output directory = .
+        p = 2
+        k = 31
+        name prefix = mVulVul1.k31
+        NO_UNIQUE_SEQUENCE set to TRUE
+
+        property                      min               max
+        Homozygous (aa)               99.6559%          99.6636%
+        Heterozygous (ab)             0.336356%         0.344076%
+        Genome Haploid Length         NA bp             2,380,675,076 bp
+        Genome Repeat Length          277,203,861 bp    277,376,549 bp
+        Genome Unique Length          2,102,730,139 bp  2,104,040,065 bp
+        Model Fit                     93.8892%          99.0823%
+        Read Error Rate               0.0899951%        0.0899951%
+        """
+    )
+    params = parse_summary_txt(txt)
+    assert params == {
+        "--input": "A file name with spaces",
+        "--kmer_length": "31",
+        "--name_prefix": "mVulVul1.k31",
+        "--no_unique_sequence": True,
+        "--output": ".",
+        "--ploidy": "2",
+    }
+
+
 def test_process_report(fofn_dir):
     assert (rprt := report_json_contents(gs_results_dir(fofn_dir)))
     flat = attr_from_report(rprt)
@@ -73,8 +143,8 @@ def test_process_report(fofn_dir):
 
 
 def test_load_genomescope(client, fofn_runner, test_alias, gscope_fldr_loc):
-    runner, tmp_path = fofn_runner
-    ds_file = find_dataset_file(tmp_path)
+    here = Path("./fofn")
+    ds_file = find_dataset_file(here)
     dataset = latest_dataset(ds_file)
 
     # Ensure dataset is loaded
@@ -88,11 +158,12 @@ def test_load_genomescope(client, fofn_runner, test_alias, gscope_fldr_loc):
         "genomescope",
         "--folder-location",
         gscope_fldr_loc.id,
-        str(gs_results_dir(tmp_path)),
+        str(gs_results_dir(here)),
     )
-    result = runner.invoke(cli, args)
+    result = fofn_runner.invoke(cli, args)
     assert result.exit_code == 0
-    logging.info(result.stdout)
     out = json.loads(result.stdout)
+    logging.info("\n" + json.dumps(out, indent=2))
+    assert dataset["dataset.id"] == out["dataset.id"]
     assert len(out["image_file_list"]) == 4
     assert len(out["other_file_list"]) == 1
