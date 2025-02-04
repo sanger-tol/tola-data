@@ -237,7 +237,7 @@ def build_genomescope_cmd_line(rdir, genomescope_cmd="genomescope.R"):
     params = get_genomescope_params(rdir)
     params["--input"] = str(find_file(rdir, "*.hist.txt"))
     params["--output"] = str(rdir)
-    params["--json-report"] = True
+    params["--json_report"] = True
 
     cmd_line = genomescope_cmd.split()
     for prm, val in params.items():
