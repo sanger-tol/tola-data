@@ -216,7 +216,7 @@ def report_json_contents(rdir: Path, rerun_if_no_json=False, genomescope_cmd=Non
     # Find report.json file
     report_file = find_file(rdir, "*report.json")
     if not report_file and rerun_if_no_json:
-        rerun_genomescope(rdir, genomescope_cmd)
+        report_file = rerun_genomescope(rdir, genomescope_cmd)
     if not report_file:
         msg = f"Missing report.json file in directory '{rdir}'"
         raise StoreGenomescopeError(msg)
@@ -229,8 +229,11 @@ def rerun_genomescope(rdir, genomescope_cmd):
     try:
         subprocess.run(cmd_line, check=True, capture_output=True)  # noqa: S603
     except subprocess.CalledProcessError as cpe:
-        msg = f"Error running {cmd_line} exit({cpe.returncode}):\n{cpe.output}"
+        msg = (
+            f"Error running {cmd_line} exit({cpe.returncode}):\n" + cpe.stderr.decode()
+        )
         raise StoreGenomescopeError(msg) from None
+    return find_file(rdir, "*report.json")
 
 
 def build_genomescope_cmd_line(rdir, genomescope_cmd="genomescope.R"):
