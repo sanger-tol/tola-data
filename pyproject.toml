@@ -9,11 +9,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "SQLAlchemy ~= 2.0",
-    # boto3 v1.36 produces the error on S3 storage which isn't Amazon AWS:
-    # botocore.exceptions.ClientError: An error occurred (MissingContentLength) when calling the PutObject operation: None
-    "boto3 ~= 1.35.0",
+    # boto3 v1.36 produces an error on S3 storage which isn't Amazon AWS
+    # If upgrading boto3 check that fix in `src/tola/s3client.py` is still
+    # required.
+    "boto3 ~= 1.36.0",
     "click",
-    "duckdb ~= 1.1.0",
+    "duckdb ~= 1.2.0",
     "mysql-connector-python",
     "psycopg2", # PostgreSQL connector
     "pyarrow",

@@ -5,6 +5,7 @@ from functools import cached_property
 from pathlib import Path
 
 import boto3
+from botocore.config import Config
 
 
 class S3ConfigError(Exception):
@@ -50,6 +51,14 @@ class S3Client:
             endpoint_url="https://" + self.host_base,
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
+            # boto3 v1.36 produces the error on S3 storage which isn't Amazon AWS:
+            #   botocore.exceptions.ClientError: An error occurred
+            #   (MissingContentLength) when calling the PutObject operation: None
+            # Setting these two config options to "when_required" fixes this:
+            config=Config(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
         )
 
     def list_buckets(self):
