@@ -216,11 +216,6 @@ def full_report_grouped_by_idx(con, csv_file):
 def report_multi_specimen_idx(con, csv_file):
     """
     Report where there is more than one specimen per idx
-
-    Counting the number of specimens within a WINDOW is a little awkward. The
-    DENSE_RANK function counts the number of unique entries seen in a column.
-    By using two WINDOWS, one ascending and the other descending, they can be
-    added togther to get the number of unique values in the column.
     """
 
     sql = """
@@ -228,7 +223,7 @@ def report_multi_specimen_idx(con, csv_file):
           SELECT idx
           , ROW_NUMBER() OVER same_idx AS dup
           , COUNT(*) OVER same_idx AS n_dup
-          , (DENSE_RANK() OVER asc_spcmn) + (DENSE_RANK() OVER desc_spcmn) - 1 AS n_spcmn
+          , COUNT(DISTINCT IFNULL(specimen, '')) OVER same_idx AS n_spcmn
           , source
           , project
           , specimen
@@ -237,16 +232,6 @@ def report_multi_specimen_idx(con, csv_file):
           WINDOW same_idx AS (
             PARTITION BY idx
             ORDER BY source, project, specimen
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-          )
-          , asc_spcmn AS (
-            PARTITION BY idx
-            ORDER BY specimen ASC NULLS FIRST
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-          )
-          , desc_spcmn AS (
-            PARTITION BY idx
-            ORDER BY specimen DESC NULLS LAST
             ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
           )
         )
