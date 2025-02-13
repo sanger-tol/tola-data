@@ -226,8 +226,9 @@ def build_remote_path(row):
 
 
 def extract_pimms_description(row):
-    if (desc := row.pop("sample_description")) and "PiMmS" in desc:
-        row["pipeline_id_lims"] = "PacBio - HiFi (PiMmS)"
+    for col in "sample_type", "sample_description":
+        if (txt := row.pop(col)) and "PiMmS" in txt:
+            row["pipeline_id_lims"] = "PacBio - HiFi (PiMmS)"
 
 
 @cache
@@ -320,6 +321,7 @@ def pacbio_sql():
           , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.description AS sample_description
+          , sample.sample_type AS sample_type
           , sample.supplier_name AS supplier_name
           , sample.public_name AS tol_specimen_id
           , sample.accession_number AS biosample_accession
