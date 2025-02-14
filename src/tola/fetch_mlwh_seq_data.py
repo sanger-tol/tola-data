@@ -227,7 +227,7 @@ def build_remote_path(row):
 
 def extract_pimms_description(row):
     for col in "sample_type", "sample_description":
-        if (txt := row.pop(col)) and "PiMmS" in txt:
+        if (txt := row.pop(col)) and re.search(r"\bPiMmS\b", txt, re.IGNORECASE):
             row["pipeline_id_lims"] = "PacBio - HiFi (PiMmS)"
 
 
