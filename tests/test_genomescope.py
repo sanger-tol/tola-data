@@ -87,7 +87,7 @@ def test_build_genomescope_cmd_line(fofn_runner):  # noqa: ARG001
         "2",
         "--kmer_length",
         "31",
-        "--json-report",
+        "--json_report",
     ]
 
 

@@ -124,7 +124,7 @@ class GoaTResult:
         else:
             return None
 
-    # Copied from tol-qc/asm2json which is based on:
+    # Sourced from:
     #   https://github.com/VGP/vgp-assembly/blob/master/VGP_specimen_naming_scheme.md
     LETTER_GROUP = {
         "a": "amphibians",
@@ -146,7 +146,7 @@ class GoaTResult:
         "q": "arthropods",
         "r": "reptiles",
         "s": "sharks",
-        "t": "ctenophores",
+        "t": "other-animal-phyla",
         "u": "algae",
         "v": "vascular-plants",
         "w": "annelids",
