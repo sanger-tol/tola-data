@@ -119,8 +119,11 @@ def create_missing_new_objs_from_old(client, table, spcmns_by_id, spec_dict):
         for k, v in old_dict.items():
             if k == pk_name:
                 continue
-            # This will not work for all tables since not
-            new_attr[k.replace(".id", "_id")] = v
+            new_key = k.replace(".id", "_id")
+            # There are some acceptions to the naming of foreign keys
+            if new_key == "status_id":
+                new_key = f"{table}_{new_key}"
+            new_attr[new_key] = v
         new_obj.append(obj_bldr(table, id_=new, attributes=new_attr))
 
     return new_obj
