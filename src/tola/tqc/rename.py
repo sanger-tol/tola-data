@@ -19,7 +19,10 @@ class ToLQCRenameError(Exception):
     "--table",
     help="Name of table to rename",
     type=click.Choice(
-        ("species",),
+        (
+            "species",
+            "specimen",
+        ),
         case_sensitive=False,
     ),
 )
@@ -38,23 +41,21 @@ def rename(ctx, table, input_files):
 
     client = ctx.obj
     input_obj = input_objects_or_exit(ctx, input_files)
+    spec_dict = build_spec_dict(table, input_obj)
 
     try:
         if table == "species":
-            rename_species(client, input_obj)
+            rename_species(client, table, spec_dict)
+        elif table == "specimen":
+            rename_specimens(client, table, spec_dict)
     except ToLQCRenameError as tre:
         err = "Error: " + bold("\n".join(tre.args))
         sys.exit(err)
 
 
-def rename_species(client, input_obj):
-    spec_dict = build_species_rename_spec(input_obj)
-
-    # Fetch all of the old and new species
-    species_by_id = fetch_entries_from_specs(client, "species", spec_dict)
-
-    # Abort if any of the "old" species do not exist
-    check_for_missing_old(spec_dict, species_by_id)
+def rename_species(client, table, spec_dict):
+    # Fetch all of the old and existing "new" species
+    species_by_id = fetch_entries_from_specs(client, table, spec_dict)
 
     # If there's no taxon_id in the new species, fetch it from the old
     fill_mising_taxon_id_from_old_species(spec_dict, species_by_id)
@@ -67,21 +68,62 @@ def rename_species(client, input_obj):
     rename_tolid_prefix_in_old_species(client, spec_dict, species_by_id)
 
     # Store new species entries
-    client.ads.upsert("species", new_species)
+    client.ads.upsert(table, new_species)
 
     # In specimens, change to new species_id
-    switch_specimens_to_new_species(client, spec_dict)
+    switch_to_many_entries(client, spec_dict, table, "specimen")
 
     # Delete any edit_species entries linked to old species
     delete_old_edit_species(client, spec_dict)
 
     # Delete old species entries
-    client.ads.delete("species", list(spec_dict))
+    client.ads.delete(table, list(spec_dict))
 
     if sys.stdout.isatty():
         new = bold(len(new_species))
         old = bold(len(spec_dict))
         click.echo(f"Created {new} new species and deleted {old}", err=True)
+
+
+def rename_specimens(client, table, spec_dict):
+    # Fetch old and any existing "new" specimens
+    spcmns_by_id = fetch_entries_from_specs(client, table, spec_dict)
+
+    # Create any new specimens required, copying all the fields from the old
+    # entries
+    new_spcmns = create_missing_new_objs_from_old(
+        client, table, spcmns_by_id, spec_dict
+    )
+
+    # Store the new specimens
+    client.ads.upsert(table, new_spcmns)
+
+    # Switch samples to new specimens
+    switch_to_many_entries(client, spec_dict, table, "sample")
+
+    ### Will need code here to handle the offspring table once it is populated
+
+
+def create_missing_new_objs_from_old(client, table, spcmns_by_id, spec_dict):
+    ads = client.ads
+    obj_bldr = ads.data_object_factory
+    new_obj = []
+    pk_name = f"{table}.id"
+    for spec in spec_dict.values():
+        new, old = spec[pk_name]
+        if spcmns_by_id.get(new):
+            # Object with this primary key already exists
+            continue
+        old_dict = spcmns_by_id[old]
+        new_attr = {}
+        for k, v in old_dict.items():
+            if k == pk_name:
+                continue
+            # This will not work for all tables since not
+            new_attr[k.replace(".id", "_id")] = v
+        new_obj.append(obj_bldr(table, id_=new, attributes=new_attr))
+
+    return new_obj
 
 
 def fetch_entries_from_specs(client, table, spec_dict):
@@ -92,7 +134,13 @@ def fetch_entries_from_specs(client, table, spec_dict):
     flat_list = [
         core_data_object_to_dict(x) for x in fetch_all(client, table, id_field, id_list)
     ]
-    return {x[id_field]: x for x in flat_list}
+
+    flat_by_id = {x[id_field]: x for x in flat_list}
+
+    # Abort if any of the "old" species do not exist
+    check_for_missing_old(spec_dict, flat_by_id)
+
+    return flat_by_id
 
 
 def check_for_missing_old(spec_dict, id_dict):
@@ -139,19 +187,27 @@ def rename_tolid_prefix_in_old_species(client, spec_dict, species_by_id):
         species_by_id[sp.id] = core_data_object_to_dict(sp)
 
 
-def switch_specimens_to_new_species(client, spec_dict):
+def switch_to_many_entries(client, spec_dict, table, many_tbl):
     ads = client.ads
     obj_bldr = ads.data_object_factory
-    specimens = client.ads.get_list(
-        "specimen",
-        object_filters=DataSourceFilter(in_list={"species_id": list(spec_dict)}),
-    )
-    old_new = {x: y["species.id"][0] for x, y in spec_dict.items()}
-    switch_species = [
-        obj_bldr("specimen", id_=x.id, attributes={"species_id": old_new[x.species.id]})
-        for x in specimens
+
+    pk_name = f"{table}.id"
+    fk_name = f"{table}_id"
+    many_pk_name = f"{many_tbl}.id"
+
+    many = [
+        core_data_object_to_dict(x)
+        for x in client.ads.get_list(
+            many_tbl,
+            object_filters=DataSourceFilter(in_list={fk_name: list(spec_dict)}),
+        )
     ]
-    ads.upsert("specimen", switch_species)
+    old_new = {x: y[pk_name][0] for x, y in spec_dict.items()}
+    switch_obj = [
+        obj_bldr(many_tbl, id_=x[many_pk_name], attributes={fk_name: old_new[x[pk_name]]})
+        for x in many
+    ]
+    ads.upsert(table, switch_obj)
 
 
 def create_new_species_from_goat(client, spec_dict, species_by_id):
@@ -180,25 +236,46 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
     return new_species
 
 
-def build_species_rename_spec(input_obj):
-    renames = {}
-    for obj in input_obj:
-        rename_id = get_rename_field(
-            (
+def build_spec_dict(table, input_obj):
+    table_defs = {
+        "species": {
+            "key": (
                 "species.id",
                 "species_id",
                 "scientific_name",
             ),
-            obj,
-        )
-        taxon_change = get_rename_field(("taxon_id",), obj, maybe=True)
-        spec = {
-            "species.id": rename_id,
-            "taxon_id": taxon_change,
-        }
+            "other": [
+                ("taxon_id", True),
+            ],
+        },
+        "specimen": {
+            "key": (
+                "specimen.id",
+                "specimen_id",
+                "tol_specimen_id",
+            ),
+            "other": [],
+        },
+    }
+
+    fld_names = table_defs[table]["key"]
+    pk = fld_names[0]
+    other_flds = table_defs[table]["other"]
+
+    renames = {}
+    for obj in input_obj:
+        rename_id = get_rename_field(fld_names, obj)
+        spec = {pk: rename_id}
+        for fld, maybe in other_flds:
+            if isinstance(fld, tuple):
+                fld_tuple = fld
+                fld = fld_tuple[0]
+            else:
+                fld_tuple = (fld,)
+            spec[fld] = get_rename_field(fld_tuple, obj, maybe=maybe)
         old = rename_id[1]
         if (prev_spec := renames.get(old)) and spec != prev_spec:
-            msg = f"Found {prev_spec!r} for {old!r} when storing {spec!r}"
+            msg = f"Found {prev_spec!r} for {old!r} when building {spec!r}"
             raise ToLQCRenameError(msg)
         else:
             renames[old] = spec
