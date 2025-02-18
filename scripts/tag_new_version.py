@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import re
+import sys
 from subprocess import CalledProcessError, run
 
 import tomllib
@@ -14,9 +15,9 @@ def main():
     gtv = git_tag_version()
     if gtv:
         if gtv == version:
-            exit(f"Tag for version {version} already exists")
+            sys.exit(f"Tag for version {version} already exists")
         elif natural(version) < natural(gtv):
-            exit(f"Version {version} in {pyproj} is less than latest git tag {gtv}")
+            sys.exit(f"Version {version} in {pyproj} is less than latest git tag {gtv}")
     run(("git", "tag", version), check=True)  # noqa: S603
     run(("git", "push", "--tags"), check=True)  # noqa: S603
 
@@ -38,4 +39,4 @@ if __name__ == "__main__":
     try:
         main()
     except CalledProcessError as cpe:
-        exit(cpe.stderr)
+        sys.exit(cpe.stderr)
