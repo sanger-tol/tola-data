@@ -232,7 +232,7 @@ def cli(
     diff_db.conn.close()
 
     if not diffs:
-        exit(0)
+        sys.exit(0)
 
     if table:
         # Write patches suitable for feeding into the `tqc` command
@@ -260,7 +260,7 @@ def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
 def write_table_patch(diffs, table, filehandle):
     col_map = table_map().get(table)
     if not col_map:
-        exit(f"No column map for table '{table}'")
+        sys.exit(f"No column map for table '{table}'")
     for m in diffs:
         if patch := m.get_patch_for_table(table, col_map):
             filehandle.write(ndjson_row(patch))
