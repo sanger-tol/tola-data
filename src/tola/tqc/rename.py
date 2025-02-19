@@ -139,19 +139,19 @@ def fetch_entries_from_specs(client, table, spec_dict):
     flat_by_id = {x[id_field]: x for x in flat_list}
 
     # Abort if any of the "old" species do not exist
-    check_for_missing_old(spec_dict, flat_by_id)
+    check_for_missing_old(table, spec_dict, flat_by_id)
 
     return flat_by_id
 
 
-def check_for_missing_old(spec_dict, id_dict):
+def check_for_missing_old(table, spec_dict, id_dict):
     old_missing = []
     for old in spec_dict:
         if not id_dict.get(old):
             old_missing.append(old)
 
     if old_missing:
-        err = f"{len(old_missing)} old species not found: {old_missing!r}\n"
+        err = f"{len(old_missing)} old {table} not found: {old_missing!r}\n"
         raise ToLQCRenameError(err)
 
 
