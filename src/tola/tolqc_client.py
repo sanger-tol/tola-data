@@ -48,10 +48,21 @@ class TolClient:
             api_url="/".join((self.tolqc_url, self.api_path)),
             token=self.api_token,
             data_prefix="/data",
+            retries=0,
         )
         tolqc.page_size = self.page_size
         core_data_object(tolqc)
         return tolqc
+
+    @cached_property
+    def build_cdo(self):
+        """
+        Returns a function which builds a CoreDataObject (cdo)
+        """
+        obj_bldr = self.ads.data_object_factory
+        def cdo_builder(table: str, name: str, attr: dict = None):
+            return obj_bldr(table, id_=name, attributes=attr)
+        return cdo_builder
 
     @cached_property
     def s3(self):
