@@ -102,17 +102,17 @@ def rename_records(client, table, input_obj):
     return len(new_records), len(spec_dict)
 
 
-def create_missing_new_objs_from_old(client, table, spcmns_by_id, spec_dict):
+def create_missing_new_objs_from_old(client, table, records_by_id, spec_dict):
     cdo = client.build_cdo
 
     new_obj = []
     pk_name = f"{table}.id"
     for spec in spec_dict.values():
         new, old = spec[pk_name]
-        if spcmns_by_id.get(new):
+        if records_by_id.get(new):
             # Object with this primary key already exists
             continue
-        old_dict = spcmns_by_id[old]
+        old_dict = records_by_id[old]
         new_attr = {}
         for k, v in old_dict.items():
             if k == pk_name:
