@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "tola-data"
 version = "1.0.25"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">= 3.10"
 dependencies = [
     "SQLAlchemy ~= 2.0",
     # boto3 v1.36 produces an error on S3 storage which isn't Amazon AWS
@@ -21,7 +21,7 @@ dependencies = [
     "python-irodsclient",
     "python-ulid",
     "requests",
-    'importlib-metadata; python_version>="3.8"',
+    'importlib-metadata; python_version >= "3.10"',
 ]
 
 [project.optional-dependencies]

@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 import requests
-from tol.api_client2 import create_api_datasource
+from tol.api_client import create_api_datasource
 from tol.core import core_data_object
 
 from tola.db_connection import get_connection_params_entry
