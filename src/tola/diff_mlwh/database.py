@@ -331,10 +331,10 @@ class MLWHDiffDB:
 
         for sql_def in (
             # Implements speciesops directory hash.
-            # e.g. taxon_hash(9627) produces '2/e/9/7/6/a'
+            # e.g. taxon_hash('9627') produces '2/e/9/7/6/a'
             """
-            MACRO taxon_hash(taxon_id) AS
-              md5(taxon_id::VARCHAR)[:6].split('').array_to_string('/')
+            MACRO taxon_hash(str) AS
+              md5(str)[:6].split('').array_to_string('/')
             """,
             # Converts species scientific name to hierarchy_name
             r"""
@@ -343,18 +343,23 @@ class MLWHDiffDB:
             """,
             # Uses taxon_hash() and species_hn() to build path to lustre directory
             """
-            MACRO species_lustre(taxon_id, species) AS
+            MACRO species_lustre(taxon_str, species) AS
               CONCAT_WS('/'
                 , '/lustre/scratch122/tol/data'
-                , taxon_hash(taxon_id)
+                , taxon_hash(taxon_str)
                 , species_hn(species))
             """,
-            # Creates a view of the tolqc table showing the species directories
+            # Creates a view of the tolqc table showing the species
+            # directories. Uses the WOSPI ID for taxon_id = 32644
+            # (unidentified) species.
             """
             VIEW species_dir AS
               SELECT DISTINCT scientific_name AS species_id
                 , taxon_id
-                , species_lustre(taxon_id, scientific_name) AS directory
+                , species_lustre(
+                    IF(taxon_id = 32644, tol_specimen_id, taxon_id::VARCHAR)
+                    , IF(taxon_id = 32644, tol_specimen_id, scientific_name)
+                  ) AS directory
               FROM tolqc
               WHERE taxon_id IS NOT NULL
                 AND scientific_name IS NOT NULL
