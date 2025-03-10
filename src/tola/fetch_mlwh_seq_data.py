@@ -77,7 +77,7 @@ def cli(
         write_mlwh_data_to_filehandle(mlwh, project_id_list, sys.stdout)
     else:
         mlwh_data = (
-            NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")
+            NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")  # noqa: SIM115
             if run_diff_mlwh
             else None
         )

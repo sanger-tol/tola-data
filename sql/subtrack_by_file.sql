@@ -8,7 +8,7 @@ SELECT sub.id
   , sub.sample_id
   , sub.ext_db AS archive
   , sub.ebi_sub_acc AS submission_accession
-  , sub.ebi_study_acc AS study_accession
+  , sub.ebi_study_acc AS data_accession
   , sub.ebi_sample_acc AS sample_accession
   , sub.ebi_exp_acc AS experiment_accession
   , sub.ebi_run_acc AS run_accession
@@ -22,4 +22,4 @@ JOIN cv_status
 JOIN files
   ON files.sub_id = sub.id
 LEFT JOIN receipt rcpt USING (ebi_sub_acc)
-WHERE files.file_name = '48358_3-4#5.cram'
+WHERE files.file_name = '48358_3-4#5.cram';
