@@ -261,6 +261,6 @@ def write_table_patch(diffs, table, filehandle):
     col_map = table_map().get(table)
     if not col_map:
         sys.exit(f"No column map for table '{table}'")
-    for m in diffs:
-        if patch := m.get_patch_for_table(table, col_map):
+    for mm in diffs:
+        if patch := mm.get_patch_for_table(table, col_map):
             filehandle.write(ndjson_row(patch))
