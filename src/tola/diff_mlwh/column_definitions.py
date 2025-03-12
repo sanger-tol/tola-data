@@ -5,9 +5,21 @@ Built using the script `scripts/make_table_map.py`
 def table_map():
 
     return {
+        "data": {
+            "data_id": "data.id",
+            "study_id": "study_id",
+            "lims_qc": "lims_qc",
+            "qc_date": "date",
+            "tag1_id": "tag1_id",
+            "tag2_id": "tag2_id",
+        },
         "file": {
             "data_id": "data.id",
             "remote_path": "remote_path",
+        },
+        "library": {
+            "pipeline_id_lims": "library_type_id",
+            "library_id": "library.id",
         },
         "pacbio_run_metrics": {
             "run_id": "pacbio_run_metrics.id",
@@ -54,28 +66,6 @@ def table_map():
             "platform_type": "name",
             "instrument_model": "model",
         },
-        "data": {
-            "data_id": "data.id",
-            "study_id": "study_id",
-            "lims_qc": "lims_qc",
-            "qc_date": "date",
-            "tag1_id": "tag1_id",
-            "tag2_id": "tag2_id",
-        },
-        "sample": {
-            "sample_name": "sample.id",
-            "tol_specimen_id": "specimen.id",  # Added by hand
-            "biosample_accession": "accession_id",
-        },
-        "specimen": {
-            "tol_specimen_id": "specimen.id",
-            "scientific_name": "species.id",  # Added by hand
-            "biospecimen_accession": "accession_id",
-        },
-        "species": {
-            "scientific_name": "species.id",
-            "taxon_id": "taxon_id",
-        },
         "run": {
             "run_id": "run.id",
             "instrument_name": "instrument_name",
@@ -85,9 +75,19 @@ def table_map():
             "run_complete": "complete",
             "plex_count": "plex_count",
         },
-        "library": {
-            "pipeline_id_lims": "library_type_id",
-            "library_id": "library.id",
+        "sample": {
+            "sample_name": "sample.id",
+            "tol_specimen_id": "specimen.id",  # Added by hand
+            "biosample_accession": "accession_id",
+        },
+        "species": {
+            "scientific_name": "species.id",
+            "taxon_id": "taxon_id",
+        },
+        "specimen": {
+            "tol_specimen_id": "specimen.id",
+            "scientific_name": "species.id",  # Added by hand
+            "biospecimen_accession": "accession_id",
         },
     }
 
