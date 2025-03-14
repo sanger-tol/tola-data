@@ -4,6 +4,7 @@ import click
 from tol.core import DataSourceFilter
 
 from tola import click_options, tolqc_client
+from tola.tqc.engine import fetch_all
 
 
 @click.command
@@ -41,11 +42,9 @@ def cli(tolqc_alias, tolqc_url, api_token, data_id_list, set_processed):
     ads = client.ads
 
     if data_id_list:
-        fetched_data = {}
-        for chunk in client.pages(data_id_list):
-            filt = DataSourceFilter(in_list={"id": chunk})
-            for data in ads.get_list("data", object_filters=filt):
-                fetched_data[data.id] = data
+        fetched_data = {
+            x.id: x for x in fetch_all(client, "data", "data.id", data_id_list)
+        }
 
         # Check if we found a data record for each name
         if missed := set(data_id_list) - fetched_data.keys():
