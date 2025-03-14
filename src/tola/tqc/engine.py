@@ -107,8 +107,11 @@ def fetch_list_or_exit(client, table, key, id_list):
 def fetch_all(client, table, key, id_list):
     key = "id" if key == f"{table}.id" else key
 
-    ### Could use get_by_ids():
-    ###     speciess = ads.get_by_ids('species', [1234])
+    # Not using get_by_ids():
+    #
+    #    species = client.ads.get_by_ids("species", id_list)
+    #
+    # because it does a separate GET for each ID
 
     if id_list:
         fetched = []
