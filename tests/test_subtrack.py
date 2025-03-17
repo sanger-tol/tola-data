@@ -31,4 +31,9 @@ def test_subtrack_fetch(subtrack_db):
     ]
     sub_info = list(subtrack_db.fetch_submission_info(query_files))
     assert len(sub_info) == len(query_files)
-    logging.debug(sub_info)
+
+    # Check row dict is ordered as wanted
+    col_names = list(SubTrack.SUB_INFO_DICT.values())
+    for row in sub_info:
+        assert list(row.keys()) == col_names
+
