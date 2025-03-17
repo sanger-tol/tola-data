@@ -1,4 +1,3 @@
-import logging
 from functools import cache, cached_property
 from inspect import cleandoc
 
@@ -39,9 +38,8 @@ class SubTrack:
     }
 
     def fetch_submission_info(self, file_names):
-        col_dict = self.SUB_INFO_DICT
         crsr = self.conn.cursor()
-        col_names = list(col_dict.values())
+        col_names = list(self.SUB_INFO_DICT.values())
         for page in self.pages(file_names):
             sql = submission_info_sql(len(page))
             crsr.execute(sql, page)
