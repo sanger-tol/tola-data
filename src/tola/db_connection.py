@@ -19,6 +19,10 @@ def sts_db():
     return make_connection("sts")
 
 
+def subtrack_db():
+    return make_connection("subtrack")
+
+
 def make_connection(db_alias):
     params = get_connection_params_entry(db_alias)
     dbd = params.pop("dbd")
