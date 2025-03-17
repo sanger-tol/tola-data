@@ -14,6 +14,7 @@ from tola.tqc.genomescope import genomescope
 from tola.tqc.rename import rename
 from tola.tqc.show import show
 from tola.tqc.status import status
+from tola.tqc.subtrack import subtrack
 
 
 @click.group()
@@ -48,3 +49,4 @@ cli.add_command(genomescope)
 cli.add_command(rename)
 cli.add_command(show)
 cli.add_command(status)
+cli.add_command(subtrack)

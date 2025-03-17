@@ -1,5 +1,3 @@
-import logging
-
 import pytest
 
 from tola.db_connection import ConnectionParamsError, get_connection_params_entry
@@ -36,4 +34,3 @@ def test_subtrack_fetch(subtrack_db):
     col_names = list(SubTrack.SUB_INFO_DICT.values())
     for row in sub_info:
         assert list(row.keys()) == col_names
-
