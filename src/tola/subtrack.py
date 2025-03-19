@@ -1,4 +1,4 @@
-from functools import cache, cached_property
+from functools import cached_property
 from inspect import cleandoc
 
 from tola import db_connection
@@ -29,44 +29,46 @@ class SubTrack:
         "submission.study_id": "study_id",
         "submission.sample_id": "sample_id",
         "submission.ext_db": "archive",
-        "submission.ebi_sub_acc": "submission_accession",
-        "submission.ebi_study_acc": "data_accession",
+        "submission.ebi_study_acc": "study_accession",
         "submission.ebi_sample_acc": "sample_accession",
         "submission.ebi_exp_acc": "experiment_accession",
         "submission.ebi_run_acc": "run_accession",
+        "submission.ebi_sub_acc": "submission_accession",
         "receipt.timestamp": "submission_time",
     }
 
     def fetch_submission_info(self, file_names):
         crsr = self.conn.cursor()
         col_names = list(self.SUB_INFO_DICT.values())
+        last_page = None
         for page in self.pages(file_names):
-            sql = submission_info_sql(len(page))
+            page_size = len(page)
+            if page_size != last_page:
+                sql = self.submission_info_sql(page_size)
+                last_page = page_size
             crsr.execute(sql, page)
             for row in crsr:
                 yield {col_names[i]: val for i, val in enumerate(row)}
 
+    def submission_info_sql(self, count):
+        placeholders = ",".join(["%s"] * count)
+        select_cols = "\n          , ".join(
+            f"{col} AS {name}" for col, name in self.SUB_INFO_DICT.items()
+        )
 
-@cache
-def submission_info_sql(count):
-    placeholders = ",".join(["%s"] * count)
-    select_cols = "\n          , ".join(
-        f"{col} AS {name}" for col, name in SubTrack.SUB_INFO_DICT.items()
-    )
-
-    return cleandoc(
-        f"""
-        SELECT
-            {select_cols}
-        FROM submission
-        JOIN sub_status
-          ON submission.id = sub_status.id
-          AND sub_status.is_current = 'Y'
-        JOIN cv_status
-          ON sub_status.status = cv_status.code
-        JOIN files
-          ON submission.id = files.sub_id
-        LEFT JOIN receipt USING (ebi_sub_acc)
-        WHERE files.file_name IN ({placeholders})
-        """  # noqa: S608
-    )
+        return cleandoc(
+            f"""
+            SELECT
+                {select_cols}
+            FROM submission
+            JOIN sub_status
+              ON submission.id = sub_status.id
+              AND sub_status.is_current = 'Y'
+            JOIN cv_status
+              ON sub_status.status = cv_status.code
+            JOIN files
+              ON submission.id = files.sub_id
+            LEFT JOIN receipt USING (ebi_sub_acc)
+            WHERE files.file_name IN ({placeholders})
+            """  # noqa: S608
+        )
