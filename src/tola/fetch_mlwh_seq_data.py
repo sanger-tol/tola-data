@@ -42,7 +42,6 @@ from tola.ndjson import ndjson_row
 @click_options.diff_mlwh_duckdb
 @click.argument(
     "project_id_list",
-    metavar="PROJECT_ID",
     type=click.INT,
     nargs=-1,
     required=False,

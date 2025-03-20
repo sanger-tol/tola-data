@@ -2,8 +2,11 @@
 Built using the script `scripts/make_table_map.py`
 """
 
+
 def table_map():
 
+
+    ### Replace values with functions
     return {
         "data": {
             "data_id": "data.id",
@@ -93,6 +96,7 @@ def table_map():
 
     return table_map
 
+
 COL_DEFS = {
     "data_id": "VARCHAR",
     "study_id": "INTEGER",
@@ -156,11 +160,13 @@ COL_DEFS = {
     "remote_path": "VARCHAR",
 }
 
+
 def table_cols():
     return "\n, ".join(
         f"{n} {t} PRIMARY KEY" if n == "data_id" else f"{n} {t}"
         for n, t in COL_DEFS.items()
     )
+
 
 def json_cols():
     return "\n, ".join(f"{n}: '{t}'" for n, t in COL_DEFS.items())

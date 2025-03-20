@@ -125,8 +125,9 @@ from tola.pretty import bold
 )
 @click.option(
     "--table",
-    help="Name of table for which to print patching NDJSON",
+    help="Name of table to patch",
 )
+@click_options.apply_flag
 def cli(
     tolqc_alias,
     tolqc_url,
@@ -147,6 +148,7 @@ def cli(
     show_columns,
     since,
     table,
+    apply_flag,
     update,
 ):
     """

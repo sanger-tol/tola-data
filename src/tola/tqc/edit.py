@@ -106,7 +106,7 @@ def edit_col(
 @click_options.key
 @click_options.apply_flag
 @click_options.input_files
-def edit_rows(ctx, table, key, apply_flag, input_files):
+def edit_rows_cli(ctx, table, key, apply_flag, input_files):
     """Populate or update rows in a table from ND-JSON input
 
     INPUT_FILES is a list of files in ND-JSON format. Each line is expected to
@@ -114,16 +114,18 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
     given will be used to update columns for the row.
     """
 
+    client = ctx.obj
+    input_obj = input_objects_or_exit(ctx, input_files)
+    edit_rows(client, table, input_obj, key, apply_flag)
+
+
+def edit_rows(client, table, input_obj, key="id", apply_flag=False):
     if key == "id":
         key = f"{table}.id"
 
     # Modification metadata is not editable
     ignore = {"modified_by", "modified_at"}
 
-    input_obj = input_objects_or_exit(ctx, input_files)
-
-    client = ctx.obj
-    ads = client.ads
     id_list = [x[key] for x in input_obj]
     db_obj = fetch_list_or_exit(client, table, key, id_list)
     flat_obj = [core_data_object_to_dict(x) for x in db_obj]
@@ -145,6 +147,7 @@ def edit_rows(ctx, table, key, apply_flag, input_files):
             updates.append({f"{table}.id": obj.id, **attr})
     if updates:
         if apply_flag:
+            ads = client.ads
             for chunk in client.pages(dicts_to_core_data_objects(ads, table, updates)):
                 ads.upsert(table, chunk)
         if sys.stdout.isatty():
