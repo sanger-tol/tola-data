@@ -34,11 +34,15 @@ def add(ctx, table, key, apply_flag, input_files):
     """
 
     client = ctx.obj
+    input_obj = input_objects_or_exit(ctx, input_files)
+    return add_rows(client, table, key, input_obj, apply_flag)
+
+
+def add_rows(client, table, key, input_obj, apply_flag):
     pk = f"{table}.id"
     if key == "id":
         key = pk
 
-    input_obj = input_objects_or_exit(ctx, input_files)
 
     # Check that all the input objects have a value for the key which will be
     # used to fetch the created objects.
