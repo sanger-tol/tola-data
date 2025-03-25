@@ -25,7 +25,7 @@ class SubTrack:
         "submission.lane": "lane",
         "submission.mux": "tag",
         "sub_status.status": "status",
-        "cv_status.description": "status_decription",
+        "cv_status.description": "status_description",
         "submission.study_id": "study_id",
         "submission.sample_id": "sample_id",
         "submission.ext_db": "archive",
