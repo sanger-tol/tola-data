@@ -1,12 +1,10 @@
-"""
-Built using the script `scripts/make_table_map.py`
-"""
+from functools import cache
 
 
 def table_map():
-
-
-    ### Replace values with functions
+    """
+    Built using the script `scripts/make_table_map.py`
+    """
     return {
         "data": {
             "data_id": "data.id",
@@ -95,6 +93,71 @@ def table_map():
     }
 
     return table_map
+
+
+@cache
+def get_table_patcher(table):
+    if col_map := table_map().get(table):
+        patch_map = {}
+        primary_key = None
+        for key, out_key in col_map.items():
+            if out_key == table + ".id":
+                primary_key = key
+            else:
+                patch_map[key] = out_key
+        if not primary_key:
+            msg = f"Failed to find primary key in: {col_map}"
+            raise ValueError(msg)
+
+        def patcher(diff_list):
+            patches_by_pk = {}
+            for mm in diff_list:
+                mlwh = mm.mlwh
+                tolqc = mm.tolqc
+                patch = {}
+                for key, out_key in patch_map.items():
+                    if tolqc[key] != mlwh[key]:
+                        patch[out_key] = mlwh[key]
+                if patch:
+                    pk = mlwh[primary_key]
+                    patch[table + ".id"] = pk
+                    if have_patch := patches_by_pk[pk]:
+                        if patch != have_patch:
+                            msg = (
+                                f"Found two differing patches for {table}.id"
+                                f" ('{primary_key}') '{pk}':\n"
+                                f"{have_patch}\nand:\n{patch}\n"
+                            )
+                            raise ValueError(msg)
+                    else:
+                        patches_by_pk[pk] = patch
+            return patches_by_pk.values(), None
+
+        return patcher
+    elif table == "accession":
+        acc_types = {
+            "biosample_accession": "BioSample",
+            "biospecimen_accession": "BioSpecimen",
+        }
+
+        def patch_mlwh_accessions(diff_list):
+            acc_patch = {}
+            for mm in diff_list:
+                mlwh = mm.mlwh
+                tolqc = mm.tolqc
+                for key, acc_type in acc_types.items():
+                    old_acc = tolqc[key]
+                    new_acc = mlwh[key]
+                    if new_acc != old_acc and old_acc is None:
+                        ### Try fetching new accession because it might exist!
+                        new_acc = mlwh[key]
+                        acc_patch[new_acc] = {
+                            "accession.id": new_acc,
+                            "accession_type_id": acc_type,
+                        }
+            return None, acc_patch.values()
+
+        return patch_mlwh_accessions
 
 
 COL_DEFS = {

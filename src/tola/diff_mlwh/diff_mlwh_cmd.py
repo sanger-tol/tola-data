@@ -6,12 +6,14 @@ from tempfile import NamedTemporaryFile
 import click
 
 from tola import click_options, tolqc_client
-from tola.diff_mlwh.column_definitions import table_map
+from tola.diff_mlwh.column_definitions import get_table_patcher
 from tola.diff_mlwh.database import MLWHDiffDB
 from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.fetch_mlwh_seq_data import fetch_mlwh_seq_data_to_file
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, setup_pager
+from tola.pretty import bold, s, setup_pager
+from tola.tqc.add import add_rows
+from tola.tqc.edit import edit_rows
 
 
 @click.command
@@ -99,11 +101,6 @@ from tola.pretty import bold, setup_pager
     metavar="REASON",
     help="Delete the reason for the list of `data_id` supplied",
 )
-@click.argument(
-    "data_id_list",
-    metavar="DATA_ID_LIST",
-    nargs=-1,
-)
 @click.option(
     "--format",
     "output_format",
@@ -128,6 +125,11 @@ from tola.pretty import bold, setup_pager
     help="Name of table to patch",
 )
 @click_options.apply_flag
+@click.argument(
+    "data_id_list",
+    metavar="DATA_ID_LIST",
+    nargs=-1,
+)
 def cli(
     tolqc_alias,
     tolqc_url,
@@ -220,7 +222,7 @@ def cli(
             diff_db.store_reasons(reason, data_id_list)
         elif reason_action == "DELETE":
             count = diff_db.delete_reasons(reason, data_id_list)
-            click.echo(f"Deleted {bold(count)} reason tags")
+            click.echo(f"Deleted {bold(count)} reason tag{s(count)}")
             return
 
     # Fetch diffs from the database using the requested filters
@@ -237,8 +239,8 @@ def cli(
         sys.exit(0)
 
     if table:
-        # Write patches suitable for feeding into the `tqc` command
-        write_table_patch(diffs, table, sys.stdout)
+        # Write patches suitable to ToLQC
+        update_tolqc(tqc, diffs, table, apply_flag)
     else:
         # Display the diffs found
         if output_format == "PRETTY":
@@ -260,10 +262,21 @@ def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
     diff_db.update(tqc, mlwh_ndjson)
 
 
-def write_table_patch(diffs, table, filehandle):
-    col_map = table_map().get(table)
-    if not col_map:
-        sys.exit(f"No column map for table '{table}'")
-    for mm in diffs:
-        if patch := mm.get_patch_for_table(table, col_map):
-            filehandle.write(ndjson_row(patch))
+def update_tolqc(tqc, diffs, table, apply_flag):
+    patcher = get_table_patcher(table)
+    if not patcher:
+        sys.exit(f"No table patcher for table '{table}'")
+    patched_records, new_records = patcher(diffs)
+    key = f"{table}.id"
+    if patched_records:
+        edit_rows(tqc, table, key, patched_records, apply_flag)
+    if new_records:
+        add_rows(tqc, table, key, new_records, apply_flag)
+
+# def write_table_patch(diffs, table, filehandle):
+#     col_map = table_map().get(table)
+#     if not col_map:
+#         sys.exit(f"No column map for table '{table}'")
+#     for mm in diffs:
+#         if patch := mm.get_patch_for_table(table, col_map):
+#             filehandle.write(ndjson_row(patch))
