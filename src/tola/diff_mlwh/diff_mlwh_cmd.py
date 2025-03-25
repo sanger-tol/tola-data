@@ -11,7 +11,7 @@ from tola.diff_mlwh.database import MLWHDiffDB
 from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.fetch_mlwh_seq_data import fetch_mlwh_seq_data_to_file
 from tola.ndjson import ndjson_row
-from tola.pretty import bold
+from tola.pretty import bold, setup_pager
 
 
 @click.command
@@ -242,6 +242,7 @@ def cli(
     else:
         # Display the diffs found
         if output_format == "PRETTY":
+            setup_pager()
             write_pretty_output(diffs, show_columns, sys.stdout)
         else:
             for m in diffs:

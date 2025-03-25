@@ -71,6 +71,7 @@ def colour_pager(itr):
 
 
 def setup_pager():
+    os.environ.setdefault("PAGER", "less")
     os.environ.setdefault(
         "LESS",
         " ".join(
