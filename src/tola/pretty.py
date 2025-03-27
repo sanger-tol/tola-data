@@ -48,11 +48,11 @@ def bold(txt):
 
 
 def bg_green(txt):
-    return click.style(txt, bg=193)
+    return click.style(txt, fg="black", bg=193)
 
 
 def bg_red(txt):
-    return click.style(txt, bg=224)
+    return click.style(txt, fg="black", bg=224)
 
 
 def s(x):
