@@ -5,10 +5,10 @@ import click
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, colour_pager
+from tola.terminal import TerminalDict
 from tola.tqc.engine import (
     input_objects_or_exit,
     parse_datetime_fields,
-    pretty_dict,
 )
 
 
@@ -70,4 +70,4 @@ def pretty_status_itr(stored_status, table):
         max_hdr = max(len(x) for x in stored[0])
         yield f"\n{bold(len(stored))} {label} {table} status{plural}\n"
         for st in stored:
-            yield pretty_dict(st, max_hdr)
+            yield TerminalDict(st, max_hdr).pretty()

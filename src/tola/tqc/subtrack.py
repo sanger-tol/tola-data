@@ -7,7 +7,8 @@ from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
 from tola.subtrack import SubTrack
-from tola.tqc.engine import id_iterator, pretty_dict_itr
+from tola.terminal import pretty_dict_itr
+from tola.tqc.engine import id_iterator
 
 
 @click.command()

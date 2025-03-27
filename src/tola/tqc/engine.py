@@ -1,5 +1,3 @@
-import io
-import json
 import sys
 from datetime import datetime
 
@@ -9,7 +7,7 @@ from tola.ndjson import (
     get_input_objects,
     parse_ndjson_stream,
 )
-from tola.pretty import bold, bold_green, field_style, s
+from tola.pretty import bold, s
 
 
 def parse_datetime_fields(field_list, input_obj):
@@ -77,12 +75,6 @@ def check_key_values_or_exit(input_obj, key, pk):
             f"{key_type} key field '{key}' missing in {i_count - key_found}"
             f" out of {i_count} object{s(i_count)} in input.{poss_err}"
         )
-
-
-def dry_warning(count):
-    return (
-        f"Dry run. Use '--apply' flag to store {bold(count)} changed row{s(count)}.\n"
-    )
 
 
 def fetch_list_or_exit(client, table, key, id_list):
@@ -203,95 +195,6 @@ def dicts_to_core_data_objects(ads, table, flat_list):
         )
 
     return cdo_out
-
-
-def pretty_cdo_itr(cdo_list, key, head=None, tail=None, show_modified=False):
-    if not cdo_list:
-        return []
-
-    cdo_key = cdo_type_id(cdo_list[0])
-    flat_list = [
-        core_data_object_to_dict(x, show_modified=show_modified) for x in cdo_list
-    ]
-    return pretty_dict_itr(flat_list, key, cdo_key, head, tail)
-
-
-def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
-    if not row_list:
-        return []
-
-    if not head:
-        head = "Found {} row{}:"
-
-    first = row_list[0]
-    max_hdr = max(len(k) for k in first)
-
-    if key not in first and key == "id":
-        if alt_key in first:
-            key = alt_key
-        else:
-            sys.exit(
-                f"Possible key values '{key}' or '{alt_key}' not found in first row:\n"
-                + json.dumps(first, indent=4)
-            )
-
-    count = len(row_list)
-    yield head.format(bold(count), s(count)) + "\n"
-
-    for flat in row_list:
-        yield pretty_dict(flat, max_hdr, key)
-
-    if tail:
-        count = len(row_list)
-        yield "\n" + tail.format(bold(count), s(count))
-
-
-def pretty_dict(flat, max_hdr, key=None):
-    fmt = io.StringIO()
-    fmt.write("\n")
-    for k, v in flat.items():
-        v, style = field_style(k, v)
-        if k == key:
-            style = bold_green
-
-        first, *rest = v.splitlines()
-        fmt.write(f" {k:>{max_hdr}}  {style(first)}\n")
-        for r in rest:
-            fmt.write(f" {'':{max_hdr}}  {style(r)}\n")
-    return fmt.getvalue()
-
-
-def pretty_changes_itr(changes, apply_flag):
-    n_changes = len(changes)
-    verb = "Made" if apply_flag else "Found"
-    yield f"{verb} {bold(n_changes)} change{s(n_changes)}:\n"
-
-    for chng in changes:
-        key, *v_keys = chng.keys()
-        fmt = io.StringIO()
-        fmt.write(f"\n{key}  {bold(chng[key])}\n")
-
-        old_values = []
-        new_values = []
-        v_key_max = 0
-        for k in v_keys:
-            old, new = chng[k]
-            old_values.append(field_style(k, old))
-            new_values.append(field_style(k, new))
-            if (gtv := len(k)) > v_key_max:
-                v_key_max = gtv
-
-        old_val_max = max(len(x[0]) for x in old_values)
-        for k, (old_val, old_style), (new_val, new_style) in zip(
-            v_keys, old_values, new_values, strict=True
-        ):
-            old_fmt = f"{old_style(old_val):>{old_val_max}}"
-            new_fmt = new_style(new_val)
-            fmt.write(f"  {k:>{v_key_max}}  {old_fmt} to {new_fmt}\n")
-        yield fmt.getvalue()
-
-    if not apply_flag:
-        yield "\n" + dry_warning(len(changes))
 
 
 def id_iterator(key, id_list=None, file_list=None, file_format=None):

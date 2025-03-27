@@ -121,7 +121,7 @@ def get_table_patcher(table):
                 if patch:
                     pk = mlwh[primary_key]
                     patch[table + ".id"] = pk
-                    if have_patch := patches_by_pk[pk]:
+                    if have_patch := patches_by_pk.get(pk):
                         if patch != have_patch:
                             msg = (
                                 f"Found two differing patches for {table}.id"
@@ -131,7 +131,7 @@ def get_table_patcher(table):
                             raise ValueError(msg)
                     else:
                         patches_by_pk[pk] = patch
-            return patches_by_pk.values(), None
+            return list(patches_by_pk.values())
 
         return patcher
     elif table == "accession":
@@ -148,14 +148,13 @@ def get_table_patcher(table):
                 for key, acc_type in acc_types.items():
                     old_acc = tolqc[key]
                     new_acc = mlwh[key]
-                    if new_acc != old_acc and old_acc is None:
-                        ### Try fetching new accession because it might exist!
+                    if new_acc != old_acc:
                         new_acc = mlwh[key]
                         acc_patch[new_acc] = {
                             "accession.id": new_acc,
                             "accession_type_id": acc_type,
                         }
-            return None, acc_patch.values()
+            return list(acc_patch.values())
 
         return patch_mlwh_accessions
 

@@ -6,12 +6,11 @@ import click
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, colour_pager, s
+from tola.terminal import pretty_cdo_itr
 from tola.tqc.engine import (
     core_data_object_to_dict,
-    dry_warning,
     fetch_list_or_exit,
     id_iterator,
-    pretty_cdo_itr,
 )
 
 
@@ -56,4 +55,4 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
                 sys.stdout.write(ndjson_row(core_data_object_to_dict(dlt)))
             if not apply_flag:
                 count = len(db_obj)
-                dry_warning(tail.format(bold(count), s(count)))
+                click.echo(tail.format(bold(count), s(count)), err=True)
