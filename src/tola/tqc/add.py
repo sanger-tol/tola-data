@@ -5,13 +5,13 @@ import click
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, colour_pager, s
+from tola.terminal import pretty_cdo_itr
 from tola.tqc.engine import (
     check_key_values_or_exit,
     core_data_object_to_dict,
     dicts_to_core_data_objects,
     input_objects_or_exit,
     key_list_search,
-    pretty_cdo_itr,
 )
 
 
@@ -35,14 +35,13 @@ def add(ctx, table, key, apply_flag, input_files):
 
     client = ctx.obj
     input_obj = input_objects_or_exit(ctx, input_files)
-    return add_rows(client, table, key, input_obj, apply_flag)
+    return add_rows(client, table, input_obj, key, apply_flag)
 
 
-def add_rows(client, table, key, input_obj, apply_flag):
+def add_rows(client, table, input_obj, key="id", apply_flag=False):
     pk = f"{table}.id"
     if key == "id":
         key = pk
-
 
     # Check that all the input objects have a value for the key which will be
     # used to fetch the created objects.

@@ -5,16 +5,18 @@ import click
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
+from tola.terminal import (
+    dry_warning,
+    pretty_changes_itr,
+    pretty_dict_itr,
+)
 from tola.tqc.engine import (
     convert_type,
     core_data_object_to_dict,
     dicts_to_core_data_objects,
-    dry_warning,
     fetch_list_or_exit,
     id_iterator,
     input_objects_or_exit,
-    pretty_changes_itr,
-    pretty_dict_itr,
 )
 
 

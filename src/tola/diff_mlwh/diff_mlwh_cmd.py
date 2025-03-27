@@ -12,8 +12,7 @@ from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.fetch_mlwh_seq_data import fetch_mlwh_seq_data_to_file
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, s, setup_pager
-from tola.tqc.add import add_rows
-from tola.tqc.edit import edit_rows
+from tola.tqc.upsert import upsert_rows
 
 
 @click.command
@@ -266,12 +265,8 @@ def update_tolqc(tqc, diffs, table, apply_flag):
     patcher = get_table_patcher(table)
     if not patcher:
         sys.exit(f"No table patcher for table '{table}'")
-    patched_records, new_records = patcher(diffs)
-    key = f"{table}.id"
-    if patched_records:
-        edit_rows(tqc, table, key, patched_records, apply_flag)
-    if new_records:
-        add_rows(tqc, table, key, new_records, apply_flag)
+    records = patcher(diffs)
+    upsert_rows(tqc, table, records, apply_flag)
 
 # def write_table_patch(diffs, table, filehandle):
 #     col_map = table_map().get(table)
