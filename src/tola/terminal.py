@@ -7,6 +7,8 @@ from tola.tqc.engine import cdo_type_id, core_data_object_to_dict
 
 
 class TerminalObj:
+    __slots__ = "data", "key", "max_key_length"
+
     def __init__(self, data, key=None, max_key_length=None):
         self.data = data
         self.key = key

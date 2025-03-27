@@ -152,7 +152,7 @@ def get_table_patcher(table):
                         new_acc = mlwh[key]
                         acc_patch[new_acc] = {
                             "accession.id": new_acc,
-                            "accession_type_id": acc_type,
+                            "accession_type.id": acc_type,
                         }
             return list(acc_patch.values())
 

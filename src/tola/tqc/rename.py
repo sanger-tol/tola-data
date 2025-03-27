@@ -227,6 +227,12 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
             continue
         taxon_id = spec["taxon_id"][0]
         info = gc.get_species_info(taxon_id)
+        if not info:
+            err += (
+                f"No species with {taxon_id = } in GoAT"
+                f" for species {new_id!r}"
+            )
+            continue
         goat_species = info.pop("species_id")
         if new_id != goat_species:
             err += (
@@ -259,7 +265,15 @@ def build_spec_dict(table, input_obj):
                 "specimen_id",
                 "tol_specimen_id",
             ),
-            "other": [],
+            "other": [
+                (
+                    (
+                        "accession.id",
+                        "biospecimen_accession",
+                    ),
+                    True,
+                ),
+            ],
         },
     }
 
