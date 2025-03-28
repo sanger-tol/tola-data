@@ -224,6 +224,7 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
     for spec in spec_dict.values():
         new_id = spec["species.id"][0]
         if species_by_id.get(new_id):
+            # We already have this species in the database
             continue
         taxon_id = spec["taxon_id"][0]
         info = gc.get_species_info(taxon_id)
