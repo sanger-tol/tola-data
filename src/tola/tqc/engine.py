@@ -1,3 +1,4 @@
+import re
 import sys
 from datetime import datetime
 
@@ -32,6 +33,14 @@ def input_objects_or_exit(ctx, input_files):
         sys.exit("No input objects")
 
     return input_obj
+
+
+def hierarchy_name(text):
+    """
+    Turns strings of non-word characters into underscores, and trims them from
+    either end of the returned string.
+    """
+    return re.sub(r'\W+', '_', text).strip('_')
 
 
 def key_list_search(client, table, key, key_id_list):

@@ -1,5 +1,7 @@
 from functools import cache
 
+from tola.tqc.engine import hierarchy_name
+
 
 def table_map():
     """
@@ -81,10 +83,6 @@ def table_map():
             "tol_specimen_id": "specimen.id",  # Added by hand
             "biosample_accession": "accession_id",
         },
-        "species": {
-            "scientific_name": "species.id",
-            "taxon_id": "taxon_id",
-        },
         "specimen": {
             "tol_specimen_id": "specimen.id",
             "scientific_name": "species.id",  # Added by hand
@@ -134,6 +132,10 @@ def get_table_patcher(table):
             return list(patches_by_pk.values())
 
         return patcher
+
+    elif table == "species":
+        return patch_species
+
     elif table == "accession":
         acc_types = {
             "biosample_accession": "BioSample",
@@ -157,6 +159,21 @@ def get_table_patcher(table):
             return list(acc_patch.values())
 
         return patch_mlwh_accessions
+
+
+def patch_species(diff_list):
+    species_patch = {}
+    for mm in diff_list:
+        mlwh = mm.mlwh
+        tolqc = mm.tolqc
+        mlwh_sci = mlwh["scientific_name"]
+        if mlwh_sci != tolqc["scientific_name"]:
+            species_patch[mlwh_sci] = {
+                "species.id": mlwh_sci,
+                "hierarchy_name": hierarchy_name(mlwh_sci),
+                "taxon_id": mlwh["taxon_id"],
+            }
+    return list(species_patch.values())
 
 
 COL_DEFS = {
