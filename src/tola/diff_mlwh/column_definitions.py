@@ -11,10 +11,12 @@ def table_map():
         "data": {
             "data_id": "data.id",
             "study_id": "study_id",
+            "sample_name": "sample.id",
             "lims_qc": "lims_qc",
             "qc_date": "date",
             "tag1_id": "tag1_id",
             "tag2_id": "tag2_id",
+            "library_id": "library.id",
         },
         "file": {
             "data_id": "data.id",
@@ -112,13 +114,20 @@ def get_table_patcher(table):
             for mm in diff_list:
                 mlwh = mm.mlwh
                 tolqc = mm.tolqc
+                pk = mlwh[primary_key]
                 patch = {}
-                for key, out_key in patch_map.items():
-                    if tolqc[key] != mlwh[key]:
+                new_flag = False
+                if tolqc[primary_key] != mlwh[primary_key]:
+                    # Need a whole new object!
+                    new_flag = True
+                    for key, out_key in patch_map.items():
                         patch[out_key] = mlwh[key]
-                if patch:
-                    pk = mlwh[primary_key]
-                    patch[table + ".id"] = pk
+                else:
+                    for key, out_key in patch_map.items():
+                        if tolqc[key] != mlwh[key]:
+                            patch[out_key] = mlwh[key]
+                if patch or new_flag:
+                    patch = {table + ".id": pk, **patch}
                     if have_patch := patches_by_pk.get(pk):
                         if patch != have_patch:
                             msg = (
