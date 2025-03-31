@@ -180,6 +180,7 @@ def rename_tolid_prefix_in_old_species(client, spec_dict, species_by_id):
     rename_taxon_id = [
         cdo("species", x["species.id"], {"tolid_prefix": x["tolid_prefix"] + "-deltmp"})
         for x in old_species
+        if x["tolid_prefix"] is not None
     ]
     for sp in client.ads.upsert("species", rename_taxon_id):
         species_by_id[sp.id] = core_data_object_to_dict(sp)
