@@ -23,7 +23,7 @@ def table_map():
             "remote_path": "remote_path",
         },
         "library": {
-            "pipeline_id_lims": "library_type_id",
+            "pipeline_id_lims": "library_type.id",
             "library_id": "library.id",
         },
         "pacbio_run_metrics": {
@@ -83,12 +83,12 @@ def table_map():
         "sample": {
             "sample_name": "sample.id",
             "tol_specimen_id": "specimen.id",  # Added by hand
-            "biosample_accession": "accession_id",
+            "biosample_accession": "accession.id",
         },
         "specimen": {
             "tol_specimen_id": "specimen.id",
             "scientific_name": "species.id",  # Added by hand
-            "biospecimen_accession": "accession_id",
+            "biospecimen_accession": "accession.id",
         },
     }
 
