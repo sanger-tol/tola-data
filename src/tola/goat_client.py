@@ -1,5 +1,4 @@
 import json
-import re
 import sys
 
 import click
@@ -76,7 +75,6 @@ class GoaTResult:
         info = {
             "species_id": self.scientific_name,
             "tolid_prefix": self.get_name("tolid_prefix"),
-            "strain": self.get_strain(),
             "common_name": self.get_name("common name"),
             "taxon_id": self.taxon_id,
             "taxon_family": self.get_lineage("family"),
@@ -87,18 +85,6 @@ class GoaTResult:
             "chromosome_number": self.get_value("chromosome_number"),
         }
         return info
-
-    def get_strain(self):
-        if self.taxon_rank == "subspecies":
-            return self.scientific_name.split()[-1]
-        elif m := re.search(
-            r"\bstrain\s+(\S+)",
-            self.scientific_name,
-            re.IGNORECASE,
-        ):
-            return m.group(1)
-        else:
-            return None
 
     def get_name(self, name):
         """Returns the first instance found of 'name' argument"""
