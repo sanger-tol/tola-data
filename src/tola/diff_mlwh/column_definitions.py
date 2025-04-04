@@ -1,7 +1,5 @@
 from functools import cache
 
-from tola.tqc.engine import hierarchy_name
-
 
 def table_map():
     """
@@ -179,7 +177,6 @@ def patch_species(diff_list):
         if mlwh_sci != tolqc["scientific_name"]:
             species_patch[mlwh_sci] = {
                 "species.id": mlwh_sci,
-                "hierarchy_name": hierarchy_name(mlwh_sci),
                 "taxon_id": mlwh["taxon_id"],
             }
     return list(species_patch.values())
