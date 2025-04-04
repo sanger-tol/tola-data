@@ -75,7 +75,6 @@ class GoaTResult:
     def make_info(self):
         info = {
             "species_id": self.scientific_name,
-            "hierarchy_name": self.hierarchy_name(),
             "tolid_prefix": self.get_name("tolid_prefix"),
             "strain": self.get_strain(),
             "common_name": self.get_name("common name"),
@@ -88,10 +87,6 @@ class GoaTResult:
             "chromosome_number": self.get_value("chromosome_number"),
         }
         return info
-
-    def hierarchy_name(self):
-        hn = re.sub(r"\W+", "_", self.scientific_name)
-        return hn.strip("_")
 
     def get_strain(self):
         if self.taxon_rank == "subspecies":
