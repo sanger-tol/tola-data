@@ -25,12 +25,15 @@ def cli(tolqc_alias):
         }
     )
 
-    for spmn in ads.get_list("specimen", object_filters=filt):
-        sid = spmn.id
+    for spcmn in ads.get_list("specimen", object_filters=filt):
+        sid = spcmn.id
+        if not spcmn.species:
+            click.echo(f"Skipping {sid} which has no species", err=True)
+            continue
         location_path = hash_dir(sid, sid)
         loc = client.fetch_or_new("location", {"path": location_path}, key="path")
-        spmn.location = loc
-        ads.upsert("specimen", [spmn])
+        spcmn.location = loc
+        ads.upsert("specimen", [spcmn])
         click.echo(f"{sid} = {location_path}", err=True)
 
 
