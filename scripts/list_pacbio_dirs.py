@@ -3,6 +3,7 @@ from pathlib import Path
 from sys import stdout
 
 import duckdb
+
 from tola.ndjson import ndjson_row
 
 conn = duckdb.connect(os.getenv("DIFF_MLWH_DUCKDB"))

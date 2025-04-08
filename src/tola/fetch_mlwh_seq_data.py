@@ -429,7 +429,7 @@ def patch_species(client):
     )
     gc = GoaTClient()
     updates = []
-    for sp in client.ads.get_list("species", object_filters=filt):
+    for sp in ads.get_list("species", object_filters=filt):
         if spec_info := gc.get_species_info(sp.taxon_id):
             if sp.id != spec_info["species_id"]:
                 if not reassign_species(client, sp, spec_info):

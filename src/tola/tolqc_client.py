@@ -8,7 +8,7 @@ from pathlib import Path
 
 import requests
 from tol.api_client import create_api_datasource
-from tol.core import core_data_object
+from tol.core import DataSourceFilter, core_data_object
 
 from tola.db_connection import get_connection_params_entry
 from tola.s3client import S3Client
@@ -60,9 +60,37 @@ class TolClient:
         Returns a function which builds a CoreDataObject (cdo)
         """
         obj_bldr = self.ads.data_object_factory
-        def cdo_builder(table: str, name: str, attr: dict = None):
+
+        def cdo_builder(table: str, name: str = None, attr: dict = None):
             return obj_bldr(table, id_=name, attributes=attr)
+
         return cdo_builder
+
+    def fetch_or_new(self, table: str, spec: dict, key=None):
+        ads = self.ads
+        id_key = f"{table}.id"
+        if key is None or key == id_key:
+            find_val = name = spec.get(id_key)
+            store = {k: v for k, v in spec.items() if k != id_key}
+        else:
+            find_val = spec.get(key)
+            name = None
+            store = spec
+
+        if find_val is None:
+            msg = f"No value under key '{key or id_key}' in spec:\n{spec}"
+            raise ValueError(msg)
+        exstng = list(
+            ads.get_list(table, object_filters=DataSourceFilter(exact={key: find_val}))
+        )
+        if exstng:
+            return exstng[0]
+
+        upsrtd = list(ads.upsert(table, [self.build_cdo(table, name, store)]))
+        if upsrtd:
+            return upsrtd[0]
+
+        return None
 
     @cached_property
     def s3(self):
