@@ -28,9 +28,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     logging.basicConfig(level=getattr(logging, log_level))
     setup_pager()
     try:
-        ctx.obj = tolqc_client.TolClient(
-            tolqc_url, api_token, tolqc_alias, page_size=100
-        )
+        ctx.obj = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     except ConnectionParamsError as cpe:
         if sys.stdout.isatty():
             # Show help if we're on a TTY

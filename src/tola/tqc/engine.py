@@ -1,6 +1,7 @@
 import re
 import sys
 from datetime import datetime
+from hashlib import md5
 
 from tol.core import DataSourceFilter
 
@@ -40,7 +41,13 @@ def hierarchy_name(text):
     Turns strings of non-word characters into underscores, and trims them from
     either end of the returned string.
     """
-    return re.sub(r'\W+', '_', text).strip('_')
+    return re.sub(r"\W+", "_", text).strip("_")
+
+
+def hash_dir(hash_me, sci_name):
+    dir_name = hierarchy_name(sci_name)
+    hash_prefix = md5(str(hash_me).encode()).hexdigest()[:6]  # noqa: S324
+    return "/".join((*hash_prefix, dir_name))
 
 
 def key_list_search(client, table, key, key_id_list):
