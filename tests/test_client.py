@@ -1,9 +1,12 @@
 import logging
 
+import pytest
 from tol.core import DataSourceFilter
 
+from tola.tolqc_client import TolClientError
 
-def test_fetch(client):
+
+def test_fetch_project(client):
     rspns = client.json_get("data/project", {"filter": {"exact": {"study_id": 5901}}})
     assert len(rspns["data"]) == 1
     assert rspns["data"][0]["attributes"] == {
@@ -43,3 +46,17 @@ def test_fetch_unfilled_species(ads):
     }
     unfilled = list(ads.get_list("species", object_filters=filt))
     assert len(unfilled)
+
+
+def test_fetch_or_store_one(client):
+    tbl = "library_type"
+    spec = {
+        "library_type.id": "ACME Corp Genome Sequencer",
+        "default_category": "genomic_data",
+    }
+    with pytest.raises(TolClientError, match=r"Multiple matches"):
+        client.fetch_or_store_one(tbl, spec, key="default_category")
+    lib_typ = client.fetch_or_store_one(tbl, spec)
+    assert lib_typ.id == spec["library_type.id"]
+    client.ads.delete(tbl, [lib_typ.id])
+
