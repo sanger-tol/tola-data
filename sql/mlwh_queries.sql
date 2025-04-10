@@ -258,3 +258,15 @@ LEFT JOIN seq_product_irods_locations loc
   ON m.id_iseq_product = loc.id_product
 WHERE y.id_study_lims = 5901;
 
+
+-- When did samples arrive in SciOps?
+-- Connects studies to samples before sequencing data is present.
+
+SELECT study.id_study_lims AS study
+  , sample.name AS sample_name
+  , stock_resource.created AS sample_received
+FROM study
+JOIN stock_resource USING (id_study_tmp)
+JOIN sample USING (id_sample_tmp)
+WHERE study.id_study_lims = '5901';
+
