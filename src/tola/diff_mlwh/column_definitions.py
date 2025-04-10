@@ -21,8 +21,8 @@ def table_map():
             "remote_path": "remote_path",
         },
         "library": {
-            "pipeline_id_lims": "library_type.id",
             "library_id": "library.id",
+            "pipeline_id_lims": "library_type.id",
         },
         "pacbio_run_metrics": {
             "run_id": "pacbio_run_metrics.id",

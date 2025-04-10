@@ -157,17 +157,13 @@ class Mismatch:
                 pad = " " * (max_val_width - len(mlwh_v))
                 mlwh_fmt = mlwh_style(mlwh_v)
                 tolqc_fmt = tolqc_style(tolqc_v)
-                if show_columns:
+                if show_columns and mlwh_v != tolqc_v:
                     # When extra columns have been requested, highlight matching
                     # and differing values.
-                    if mlwh_v == tolqc_v:
+                    if mlwh_v != "null":
                         mlwh_fmt = bg_green(mlwh_fmt)
-                        tolqc_fmt = bg_green(tolqc_fmt)
-                    else:
-                        if mlwh_v != "null":
-                            mlwh_fmt = bg_red(mlwh_fmt)
-                        if tolqc_v != "null":
-                            tolqc_fmt = bg_red(tolqc_fmt)
+                    if tolqc_v != "null":
+                        tolqc_fmt = bg_red(tolqc_fmt)
 
                 fmt.write(f"  {col:>{max_col_width}}  {mlwh_fmt}{pad}  {tolqc_fmt}\n")
                 col = "..."
