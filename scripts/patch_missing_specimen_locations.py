@@ -31,7 +31,9 @@ def cli(tolqc_alias):
             click.echo(f"Skipping {sid} which has no species", err=True)
             continue
         location_path = hash_dir(sid, sid)
-        loc = client.fetch_or_new("location", {"path": location_path}, key="path")
+        loc = client.fetch_or_store_one(
+            "location", {"path": location_path}, key="path"
+        )
         spcmn.location = loc
         ads.upsert("specimen", [spcmn])
         click.echo(f"{sid} = {location_path}", err=True)

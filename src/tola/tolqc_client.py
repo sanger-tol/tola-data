@@ -13,10 +13,16 @@ from tol.core import DataSourceFilter, core_data_object
 from tola.db_connection import get_connection_params_entry
 from tola.s3client import S3Client
 from tola.store_folder import FolderLocation
+from tola.terminal import TerminalDict
+from tola.tqc.engine import core_data_object_to_dict
 
 ca_file = Path("/etc/ssl/certs/ca-certificates.crt")
 if ca_file.exists():
     os.environ.setdefault("REQUESTS_CA_BUNDLE", str(ca_file))
+
+
+class TolClientError(Exception):
+    """Error from TolClient"""
 
 
 class TolClient:
@@ -66,7 +72,16 @@ class TolClient:
 
         return cdo_builder
 
-    def fetch_or_new(self, table: str, spec: dict, key=None):
+    def fetch_or_store_one(self, table: str, spec: dict, key=None):
+        """
+        Fetches a CoreDataObject from a table given the flattened dict `spec`,
+        or stores a new one. The optional `key` parameter is the name of the
+        key to search under. Throws TolClientError exceptions if the search
+        returns multiple records, or when storing a new record fails.
+
+        Returns the CoreDataObject.
+        """
+
         ads = self.ads
         id_key = f"{table}.id"
         if key is None or key == id_key:
@@ -79,18 +94,43 @@ class TolClient:
 
         if find_val is None:
             msg = f"No value under key '{key or id_key}' in spec:\n{spec}"
-            raise ValueError(msg)
-        exstng = list(
-            ads.get_list(table, object_filters=DataSourceFilter(exact={key: find_val}))
-        )
-        if exstng:
-            return exstng[0]
+            raise TolClientError(msg)
 
+        # Is there an existing record?
+        if exstng := list(
+            ads.get_list(
+                table, object_filters=DataSourceFilter(exact={key or "id": find_val})
+            )
+        ):
+            if len(exstng) == 1:
+                return exstng[0]
+            else:
+                msg = (
+                    f"Multiple matches: found {len(exstng)}"
+                    f" records in {table} where {key} = {find_val!r}:\n"
+                    + "".join(
+                        TerminalDict(core_data_object_to_dict(x), key=key).pretty()
+                        for x in exstng
+                    )
+                )
+                raise TolClientError(msg)
+
+        # Create a new record
         upsrtd = list(ads.upsert(table, [self.build_cdo(table, name, store)]))
-        if upsrtd:
+        if len(upsrtd) == 1:
             return upsrtd[0]
-
-        return None
+        else:
+            msg = f"Expecting 1 new {table} record but got {len(upsrtd)}"
+            if upsrtd:
+                msg = (
+                    msg
+                    + ":\n"
+                    + "".join(
+                        TerminalDict(core_data_object_to_dict(x), key=key).pretty()
+                        for x in upsrtd
+                    )
+                )
+            raise TolClientError(msg)
 
     @cached_property
     def s3(self):
