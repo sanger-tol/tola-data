@@ -13,6 +13,7 @@ from tola.tqc.edit import edit_col, edit_rows_cli
 from tola.tqc.genomescope import genomescope
 from tola.tqc.rename import rename
 from tola.tqc.show import show
+from tola.tqc.species import upsert_species
 from tola.tqc.status import status
 from tola.tqc.subtrack import subtrack
 
@@ -46,5 +47,6 @@ cli.add_command(edit_rows_cli, name="edit-rows")
 cli.add_command(genomescope)
 cli.add_command(rename)
 cli.add_command(show)
+cli.add_command(upsert_species, name="species")
 cli.add_command(status)
 cli.add_command(subtrack)

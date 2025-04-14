@@ -17,51 +17,74 @@ from tola.tqc.engine import (
 )
 
 
-def upsert_rows(client, table, input_obj, apply_flag=False):
-    key = f"{table}.id"
+class TableUpserter:
+    def __init__(self, client):
+        self.client = client
+        self.table_upserts = {}
+        self.changes = []
+        self.new_count = 0
+        self.diff_count = 0
 
-    idx_db_obj = key_list_search(client, table, key, [x[key] for x in input_obj])
+    def build_table_upserts(self, table, input_obj, key=None):
+        if not key:
+            key = f"{table}.id"
 
-    # Modification metadata is not editable
-    ignore = {"modified_by", "modified_at", key}
+        idx_db_obj = key_list_search(
+            self.client, table, key, [x[key] for x in input_obj]
+        )
 
-    upserts = []
-    changes = []
-    diff_count = 0
-    new_count = 0
-    for inp in input_obj:
-        oid = inp[key]
-        if obj := idx_db_obj.get(oid):
-            flat = core_data_object_to_dict(obj)
-            attr = {}
-            chng = {key: oid}
-            for k, inp_v in inp.items():
-                if k in ignore:
-                    continue
-                flat_v = flat.get(k)
-                if inp_v != flat_v:
-                    attr[k] = inp_v
-                    chng[k] = flat_v, inp_v
-            if attr:
-                diff_count += 1
-                changes.append(TerminalDiff(chng))
-                upserts.append({key: oid, **attr})
-        else:
-            new_count += 1
-            changes.append(TerminalDict(inp))
-            upserts.append(inp)
+        # Modification metadata is not editable
+        ignore = {"modified_by", "modified_at", key}
 
-    if upserts:
+        upserts = []
+        changes = []
+        for inp in input_obj:
+            oid = inp[key]
+            if obj := idx_db_obj.get(oid):
+                flat = core_data_object_to_dict(obj)
+                attr = {}
+                chng = {key: oid}
+                for k, inp_v in inp.items():
+                    if k in ignore:
+                        continue
+                    flat_v = flat.get(k)
+                    if inp_v != flat_v:
+                        attr[k] = inp_v
+                        chng[k] = flat_v, inp_v
+                if attr:
+                    self.diff_count += 1
+                    changes.append(TerminalDiff(chng))
+                    upserts.append({key: oid, **attr})
+            else:
+                self.new_count += 1
+                changes.append(TerminalDict(inp))
+                upserts.append(inp)
+
+        self.table_upserts.setdefault(table, []).extend(upserts)
+        self.changes.extend(changes)
+
+    def apply_upserts(self):
+        client = self.client
+        ads = client.ads
+
+        output_cdo = []
+        for table in list(self.table_upserts):
+            upserts = self.table_upserts.pop(table)
+            for chunk in client.pages(dicts_to_core_data_objects(ads, table, upserts)):
+                output_cdo.extend(ads.upsert(table, chunk))
+        return output_cdo
+
+    def page_results(self, apply_flag=False):
+        diff_count = self.diff_count
+        new_count = self.new_count
+        changes = self.changes
+
         if apply_flag:
             verb = "Made"
             action = "created "
-            ads = client.ads
-            for chunk in client.pages(dicts_to_core_data_objects(ads, table, upserts)):
-                ads.upsert(table, chunk)
         else:
             verb = "Found"
             action = ""
-
         header = (
             f"{verb} {bold(diff_count)} change{s(diff_count)}"
             f" and {action}{bold(new_count)} new row{s(new_count)}:\n"
@@ -73,4 +96,4 @@ def upsert_rows(client, table, input_obj, apply_flag=False):
             for chng in changes:
                 sys.stdout.write(ndjson_row(chng.data))
             if not apply_flag:
-                click.echo(dry_warning(len(upserts)), err=True)
+                click.echo(dry_warning(len(changes)), err=True)
