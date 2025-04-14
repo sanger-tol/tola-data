@@ -12,7 +12,7 @@ from tola.diff_mlwh.diff_store import write_pretty_output
 from tola.fetch_mlwh_seq_data import fetch_mlwh_seq_data_to_file
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, s, setup_pager
-from tola.tqc.upsert import upsert_rows
+from tola.tqc.upsert import TableUpserter
 
 
 @click.command
@@ -121,7 +121,9 @@ from tola.tqc.upsert import upsert_rows
 )
 @click.option(
     "--table",
-    help="Name of table to patch",
+    "tables_to_patch",
+    multiple=True,
+    help="Names of tables to patch",
 )
 @click_options.apply_flag
 @click.argument(
@@ -148,7 +150,7 @@ def cli(
     output_format,
     show_columns,
     since,
-    table,
+    tables_to_patch,
     apply_flag,
     update,
 ):
@@ -237,9 +239,9 @@ def cli(
     if not diffs:
         sys.exit(0)
 
-    if table:
+    if tables_to_patch:
         # Write patches suitable to ToLQC
-        update_tolqc(tqc, diffs, table, apply_flag)
+        update_tolqc(tqc, diffs, tables_to_patch, apply_flag)
     else:
         # Display the diffs found
         if output_format == "PRETTY":
@@ -261,9 +263,14 @@ def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
     diff_db.update(tqc, mlwh_ndjson)
 
 
-def update_tolqc(tqc, diffs, table, apply_flag):
-    patcher = get_table_patcher(table)
-    if not patcher:
-        sys.exit(f"No table patcher for table '{table}'")
-    records = patcher(diffs)
-    upsert_rows(tqc, table, records, apply_flag)
+def update_tolqc(tqc, diffs, tables_to_patch, apply_flag):
+    ups = TableUpserter(tqc)
+    for table in tables_to_patch:
+        patcher = get_table_patcher(table)
+        if not patcher:
+            sys.exit(f"No table patcher for table '{table}'")
+        records = patcher(diffs)
+        ups.build_table_upserts(table, records)
+    if (apply_flag):
+        ups.apply_upserts()
+    ups.page_results(apply_flag)
