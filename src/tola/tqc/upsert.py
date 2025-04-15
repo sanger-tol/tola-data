@@ -18,6 +18,10 @@ from tola.tqc.engine import (
 
 
 class TableUpserter:
+    """
+    Manages queuing and reporting updates and inserts for one or more tables.
+    """
+
     def __init__(self, client):
         self.client = client
         self.table_upserts = {}
@@ -26,6 +30,11 @@ class TableUpserter:
         self.diff_count = 0
 
     def build_table_upserts(self, table, input_obj, key=None):
+        """
+        Compares database records to input data for a table and prepares a
+        list of changes to be made.
+        """
+
         if not key:
             key = f"{table}.id"
 
@@ -64,6 +73,10 @@ class TableUpserter:
         self.changes.extend(changes)
 
     def apply_upserts(self):
+        """
+        Applies changes accumulated in the object across all tables listed.
+        """
+
         client = self.client
         ads = client.ads
 
@@ -75,6 +88,11 @@ class TableUpserter:
         return output_cdo
 
     def page_results(self, apply_flag=False):
+        """
+        Reports formatted results to the terminal, or ND-JSON if STDOUT is not
+        a TTY.
+        """
+
         diff_count = self.diff_count
         new_count = self.new_count
         changes = self.changes
