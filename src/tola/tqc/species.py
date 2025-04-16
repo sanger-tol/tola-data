@@ -63,7 +63,7 @@ def upsert_species(ctx, key, file_list, file_format, id_list, apply_flag):
                 msg = "Missing species info for path {path!r}"
                 raise ValueError(msg)
 
-    # Prepare and apply the updates if the `apply_flag` is set
+    # Prepare the updates and apply them if the `apply_flag` is set
     ups.build_table_upserts("species", species_info)
     if apply_flag:
         ups.apply_upserts()
