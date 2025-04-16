@@ -33,6 +33,9 @@ def rename(ctx, table_names, input_files):
     """
     Rename ToLQC database entries
 
+    This command is risky! It does not, unlike other tqc commands, preview
+    changes that would be made, but applies them immediately.
+
     INTPUT_FILES is a list of ND-JSON input files where each row is an object
     where the values under each key are arrays of [NEW, OLD] name changes.
 
