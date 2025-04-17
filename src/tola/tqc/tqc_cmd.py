@@ -2,6 +2,7 @@ import logging
 import sys
 
 import click
+from tol.core.datasource_error import DataSourceError
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsError
@@ -18,7 +19,15 @@ from tola.tqc.status import status
 from tola.tqc.subtrack import subtrack
 
 
-@click.group()
+class HandleDataSourceError(click.Group):
+    def __call__(self, *args, **kwargs):
+        try:
+            return self.main(*args, **kwargs)
+        except DataSourceError as dse:
+            sys.exit(f'{dse.status_code}: {dse.title} - {dse.detail}')
+
+
+@click.group(cls=HandleDataSourceError)
 @click_options.tolqc_alias
 @click_options.tolqc_url
 @click_options.api_token
