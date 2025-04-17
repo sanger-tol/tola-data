@@ -58,9 +58,10 @@ class TerminalDiff(TerminalObj):
         for k, (old_val, old_style), (new_val, new_style) in zip(
             v_keys, old_values, new_values, strict=True
         ):
-            old_fmt = f"{old_style(old_val):>{old_val_max}}"
+            pad = " " * (old_val_max - len(old_val))
+            old_fmt = old_style(old_val)
             new_fmt = new_style(new_val)
-            fmt.write(f" {k:>{max_hdr}}  {old_fmt} to {new_fmt}\n")
+            fmt.write(f" {k:>{max_hdr}}  {pad}{old_fmt} to {new_fmt}\n")
 
         return fmt.getvalue()
 
