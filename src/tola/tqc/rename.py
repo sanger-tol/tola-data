@@ -271,7 +271,7 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
         if loc_id := spec.get("location.id"):
             nso.location = cdo("location", loc_id[0], loc_info)
         else:
-            nso.location = cdo("location", None, loc_info)
+            nso.location = client.fetch_or_store_one("location", loc_info, key="path")
 
         new_species.append(nso)
     if err:
