@@ -1,5 +1,6 @@
 import json
 import sys
+from functools import cached_property
 
 import click
 import requests
@@ -87,11 +88,23 @@ class GoaTResult:
         return info
 
     def get_name(self, name):
-        """Returns the first instance found of 'name' argument"""
+        """Returns the first instance found of `name` argument"""
         for tn in self.taxon_names:
             if tn["class"] == name:
                 return tn["name"]
         return None
+
+    @cached_property
+    def synonyms(self) -> set[str]:
+        """
+        Returns a set of the scientific name and all `equivalent name`,
+        `synonym` and `includes` class taxon name entries.
+        """
+        synonyms = set(self.scientific_name)
+        for tn in self.taxon_names:
+            if tn["class"] in {"equivalent name", "synonym", "includes"}:
+                synonyms.add(tn["name"])
+        return synonyms
 
     def get_lineage(self, name):
         for lg in self.lineage:

@@ -5,8 +5,13 @@ from tol.core import DataSourceFilter
 
 from tola import click_options
 from tola.goat_client import GoaTClient
-from tola.pretty import bold
-from tola.tqc.engine import core_data_object_to_dict, fetch_all, input_objects_or_exit
+from tola.pretty import bold, s
+from tola.tqc.engine import (
+    core_data_object_to_dict,
+    fetch_all,
+    hash_dir,
+    input_objects_or_exit,
+)
 
 
 class ToLQCRenameError(Exception):
@@ -71,6 +76,7 @@ def rename_records(client, table, input_obj):
         to_many_tables = ("specimen", "umbrella")
         # If there's no taxon_id in the new species, fetch it from the old
         fill_mising_taxon_id_from_old_species(spec_dict, records_by_id)
+        fill_mising_field_from_old_records("location.id", spec_dict, records_by_id)
 
         # Create new species objects from GoaT via taxon_id (and check scientific
         # name matches the expected new species.id).
@@ -85,12 +91,17 @@ def rename_records(client, table, input_obj):
 
         # Create any new specimens required, copying any field values from the
         # old entries
+        fill_mising_field_from_old_records("location.id", spec_dict, records_by_id)
         new_records = create_missing_new_objs_from_old(
             client, table, records_by_id, spec_dict
         )
 
     # Store new records
     client.ads.upsert(table, new_records)
+
+    # Patch locations
+    if table == "species":
+        client.ads.upsert("location", [x.location for x in new_records])
 
     # Switch to-many related objects to point to new records
     for to_many in to_many_tables:
@@ -166,6 +177,14 @@ def fill_mising_taxon_id_from_old_species(spec_dict, species_by_id):
         spec["taxon_id"] = [old_txn, old_txn]
 
 
+def fill_mising_field_from_old_records(field, spec_dict, flat_by_id):
+    for old_id, spec in spec_dict.items():
+        if spec.get(field):
+            continue
+        if old_loc := flat_by_id[old_id].get(field):
+            spec[field] = [old_loc, old_loc]
+
+
 def delete_old_edit_entries(client, table, spec_dict):
     ads = client.ads
     edit_table = f"edit_{table}"
@@ -231,21 +250,30 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
             # We already have this species in the database
             continue
         taxon_id = spec["taxon_id"][0]
-        info = gc.get_species_info(taxon_id)
-        if not info:
-            err += (
-                f"No species with {taxon_id = } in GoAT"
-                f" for species {new_id!r}"
-            )
+        gr = gc.one_result_or_none(gc.taxon_id_payload(taxon_id))
+        if not gr:
+            err += f"No species with {taxon_id = } in GoAT for species {new_id!r}\n"
             continue
+
+        info = gr.make_info()
         goat_species = info.pop("species_id")
-        if new_id != goat_species:
+        if new_id not in gr.synonyms:
             err += (
                 f"Species {new_id!r} with {taxon_id = }"
-                f" is named {goat_species!r} in GoaT"
+                f" is named {goat_species!r} in GoaT\n"
             )
             continue
-        new_species.append(cdo("species", new_id, info))
+
+        nso = cdo("species", new_id, info)
+
+        # Copy location.id or create a new Location
+        loc_info = {"path": hash_dir(taxon_id, new_id)}
+        if loc_id := spec.get("location.id"):
+            nso.location = cdo("location", loc_id[0], loc_info)
+        else:
+            nso.location = cdo("location", None, loc_info)
+
+        new_species.append(nso)
     if err:
         raise ToLQCRenameError(err)
 
