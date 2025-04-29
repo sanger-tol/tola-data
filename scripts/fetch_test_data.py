@@ -20,11 +20,14 @@ from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
 from tolqc.schema.assembly_models import Dataset, DatasetElement
 from tolqc.schema.base import Base
+from tolqc.schema.folder_models import FolderLocation
 from tolqc.schema.sample_data_models import (
     AccessionTypeDict,
+    CategoryDict,
     Centre,
     Data,
     LibraryType,
+    PacbioRunMetrics,
     Platform,
     Project,
     QCDict,
@@ -136,9 +139,11 @@ def build_sample_data(ssn_maker):
         # Fetch data from all of the dictionary-like tables
         for cls in (
             AccessionTypeDict,
+            CategoryDict,
             LibraryType,
             Platform,
             Centre,
+            FolderLocation,
             QCDict,
             Sex,
             VisibilityDict,
@@ -221,6 +226,8 @@ def fetch_species_data(session, species_list):
         select(Species)
         .where(Species.species_id.in_(species_list))
         # Specify a `selectinload` path to each leaf we want fetched
+        .options(selectinload(Species.location))
+        .options(selectinload(Species.specimens).selectinload(Specimen.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.accession))
         .options(
             selectinload(Species.specimens)
@@ -237,6 +244,12 @@ def fetch_species_data(session, species_list):
             selectinload(Species.specimens)
             .selectinload(Specimen.samples)
             .selectinload(Sample.data)
+            .selectinload(Data.accession)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.samples)
+            .selectinload(Sample.data)
             .selectinload(Data.library)
         )
         .options(
@@ -245,12 +258,25 @@ def fetch_species_data(session, species_list):
             .selectinload(Sample.data)
             .selectinload(Data.run)
             .selectinload(Run.pacbio_run_metrics)
+            .selectinload(PacbioRunMetrics.folder)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.samples)
+            .selectinload(Sample.data)
+            .selectinload(Data.run)
         )
         .options(
             selectinload(Species.specimens)
             .selectinload(Specimen.samples)
             .selectinload(Sample.data)
             .selectinload(Data.files)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.samples)
+            .selectinload(Sample.data)
+            .selectinload(Data.folder)
         )
     )
     species_data = session.scalars(statement).all()
