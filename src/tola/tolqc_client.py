@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 from tol.api_client import create_api_datasource
 from tol.core import DataSourceFilter, core_data_object
+from tol.core.datasource_error import DataSourceError
 
 from tola.db_connection import get_connection_params_entry
 from tola.s3client import S3Client
@@ -220,7 +221,27 @@ class TolClient:
             timeout=120,
         )
 
-        yield from r.iter_lines()
+        itr = r.iter_lines()
+        try:
+            first = next(itr)
+            # Status is not available with stream=True until the first content
+            # is fetched:
+            if r.status_code != requests.codes.ok:
+                body = json.loads(first)
+                if "errors" in body:
+                    err = body["errors"][0]
+                    raise DataSourceError(
+                        title=err.get("title"),
+                        detail=err.get("detail"),
+                        status_code=r.status_code,
+                    )
+                else:
+                    r.raise_for_status()
+        except StopIteration:
+            # Zero lines in reply
+            return
+        yield first
+        yield from itr
 
     def _content_disposition_filename(self, r):
         """Extracts the filename from the Content-Disposition header"""
