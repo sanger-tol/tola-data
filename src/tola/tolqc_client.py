@@ -4,6 +4,7 @@ import os
 import re
 from functools import cached_property
 from io import StringIO
+from json.decoder import JSONDecodeError
 from pathlib import Path
 
 import requests
@@ -227,16 +228,18 @@ class TolClient:
             # Status is not available with stream=True until the first content
             # is fetched:
             if r.status_code != requests.codes.ok:
-                body = json.loads(first)
-                if "errors" in body:
-                    err = body["errors"][0]
-                    raise DataSourceError(
-                        title=err.get("title"),
-                        detail=err.get("detail"),
-                        status_code=r.status_code,
-                    )
-                else:
-                    r.raise_for_status()
+                try:
+                    body = json.loads(first)
+                    if "errors" in body:
+                        err = body["errors"][0]
+                        raise DataSourceError(
+                            title=err.get("title"),
+                            detail=err.get("detail"),
+                            status_code=r.status_code,
+                        )
+                except JSONDecodeError:
+                    pass
+                r.raise_for_status()
         except StopIteration:
             # Zero lines in reply
             return

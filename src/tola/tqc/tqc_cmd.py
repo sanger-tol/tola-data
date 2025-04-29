@@ -2,6 +2,7 @@ import logging
 import sys
 
 import click
+from requests.exceptions import HTTPError
 from tol.core.datasource_error import DataSourceError
 
 from tola import click_options, tolqc_client
@@ -25,7 +26,9 @@ class HandleDataSourceError(click.Group):
         try:
             return self.main(*args, **kwargs)
         except DataSourceError as dse:
-            sys.exit(f'{dse.status_code}: {dse.title} - {dse.detail}')
+            sys.exit(f"{dse.status_code}: {dse.title} - {dse.detail}")
+        except HTTPError as httpe:
+            sys.exit(httpe.args)
 
 
 @click.group(cls=HandleDataSourceError)
