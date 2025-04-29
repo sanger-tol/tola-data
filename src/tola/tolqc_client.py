@@ -219,7 +219,6 @@ class TolClient:
             stream=True,
             timeout=120,
         )
-        r.raise_for_status()
 
         yield from r.iter_lines()
 
