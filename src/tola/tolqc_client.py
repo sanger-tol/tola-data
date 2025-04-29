@@ -211,6 +211,18 @@ class TolClient:
 
         return filename
 
+    def stream_lines(self, path, payload=None):
+        enc = self._encode_payload(payload)
+        r = requests.get(
+            self.build_path(path),
+            params=enc,
+            stream=True,
+            timeout=120,
+        )
+        r.raise_for_status()
+
+        yield from r.iter_lines()
+
     def _content_disposition_filename(self, r):
         """Extracts the filename from the Content-Disposition header"""
 
