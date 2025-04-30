@@ -228,6 +228,7 @@ def extract_pimms_description(row):
     for col in "sample_type", "sample_description":
         if (txt := row.pop(col)) and re.search(r"\bPiMmS\b", txt, re.IGNORECASE):
             row["pipeline_id_lims"] = "PacBio - HiFi (PiMmS)"
+            row["pcr_adapter_id"] = "TruSeq_i7s_UDI001--TruSeq_i5s_UDI001"
 
 
 @cache
