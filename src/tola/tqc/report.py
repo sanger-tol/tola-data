@@ -45,9 +45,10 @@ def report(ctx, report_name, params):
     if sys.stdout.isatty():
         click.echo_via_pager(pretty_terminal_dict_itr(first, itr, first_key))
     else:
-        sys.stdout.buffer.write(first)
+        out = sys.stdout.buffer
+        out.write(first + b"\n")
         for line in itr:
-            sys.stdout.buffer.write(line)
+            out.write(line + b"\n")
 
 
 def pretty_terminal_dict_itr(first, itr, first_key=None):
