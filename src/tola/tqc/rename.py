@@ -5,7 +5,7 @@ from tol.core import DataSourceFilter
 
 from tola import click_options
 from tola.goat_client import GoaTClient
-from tola.pretty import bold, s
+from tola.pretty import bold
 from tola.tqc.engine import (
     core_data_object_to_dict,
     fetch_all,

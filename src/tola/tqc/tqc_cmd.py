@@ -21,23 +21,22 @@ from tola.tqc.status import status
 from tola.tqc.subtrack import subtrack
 
 
-class HandleDataSourceError(click.Group):
-    def __call__(self, *args, **kwargs):
-        try:
-            return self.main(*args, **kwargs)
-        except DataSourceError as dse:
-            sys.exit(f"{dse.status_code}: {dse.title} - {dse.detail}")
-        except HTTPError as httpe:
-            sys.exit(httpe.args)
+def cli():
+    try:
+        tqc_main()
+    except DataSourceError as dse:
+        sys.exit(f"{dse.status_code}: {dse.title} - {dse.detail}")
+    except (HTTPError, ValueError) as err:
+        sys.exit(f"{err.__class__.__name__}: {err}")
 
 
-@click.group(cls=HandleDataSourceError)
+@click.group
 @click_options.tolqc_alias
 @click_options.tolqc_url
 @click_options.api_token
 @click_options.log_level
 @click.pass_context
-def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
+def tqc_main(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
     logging.basicConfig(level=getattr(logging, log_level))
     setup_pager()
@@ -52,15 +51,15 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, log_level):
             sys.exit("\n".join(cpe.args))
 
 
-cli.add_command(add)
-cli.add_command(dataset)
-cli.add_command(delete)
-cli.add_command(edit_col)
-cli.add_command(edit_rows_cli, name="edit-rows")
-cli.add_command(genomescope)
-cli.add_command(rename)
-cli.add_command(report)
-cli.add_command(show)
-cli.add_command(upsert_species, name="species")
-cli.add_command(status)
-cli.add_command(subtrack)
+tqc_main.add_command(add)
+tqc_main.add_command(dataset)
+tqc_main.add_command(delete)
+tqc_main.add_command(edit_col)
+tqc_main.add_command(edit_rows_cli, name="edit-rows")
+tqc_main.add_command(genomescope)
+tqc_main.add_command(rename)
+tqc_main.add_command(report)
+tqc_main.add_command(show)
+tqc_main.add_command(upsert_species, name="species")
+tqc_main.add_command(status)
+tqc_main.add_command(subtrack)
