@@ -2,6 +2,7 @@ import json
 import sys
 
 import click
+import requests
 
 from tola.terminal import TerminalDict
 
@@ -13,12 +14,19 @@ from tola.terminal import TerminalDict
     nargs=1,
     required=True,
 )
+@click.option(
+    "--url",
+    "show_url",
+    is_flag=True,
+    flag_value=True,
+    help="Prints the URL for the report and exits.",
+)
 @click.argument(
     "params",
     nargs=-1,
     required=False,
 )
-def report(ctx, report_name, params):
+def report(ctx, show_url, report_name, params):
     """
     Fetch data from ToLQC `/report` endpoints.
 
@@ -34,7 +42,16 @@ def report(ctx, report_name, params):
 
     client = ctx.obj
     first_key, payload = build_payload(params)
-    itr = client.stream_lines(f"report/{report_name}", payload)
+
+    report = f"report/{report_name}"
+    if show_url:
+        req = requests.Request(
+            "GET", client.build_path(report), params=payload
+        ).prepare()
+        print(req.url)
+        return
+
+    itr = client.stream_lines(report, payload)
 
     try:
         first = next(itr)

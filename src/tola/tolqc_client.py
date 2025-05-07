@@ -56,7 +56,7 @@ class TolClient:
             api_url="/".join((self.tolqc_url, self.api_path)),
             token=self.api_token,
             data_prefix="/data",
-            retries=0,
+            retries=False,
         )
         tolqc.page_size = self.page_size
         core_data_object(tolqc)
