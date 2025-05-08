@@ -27,8 +27,8 @@ def status_db_today():
     show_default=True,
 )
 def cli(duckdb_file):
-    con = duckdb.connect(duckdb_file)
-    con.begin()
+    conn = duckdb.connect(duckdb_file)
+    conn.begin()
     click.echo(f"Created duckdb database is '{duckdb_file}'", err=True)
 
     # ID of "Tree of Life assembly informatics" Google Sheet
@@ -43,14 +43,16 @@ def cli(duckdb_file):
         "binned_meta_sub": "688995138",
         "raw_data_sub": "249200423",
         "bio_projects": "728482940",
+        "metagenome_tmp": "1641921323",
+        "metagenome_bin": "688995138",
     }
 
     for sheet_table, gid in db_sheets_gid.items():
         try:
             row_itr = fetch_sheet_lines(document_id, gid)
-            create_table(con, sheet_table, row_itr)
+            create_table(conn, sheet_table, row_itr)
         except Exception as e:
-            con.rollback()
+            conn.rollback()
             msg = f"Error creating table '{sheet_table}' from sheet gid = '{gid}'"
             raise Exception(msg) from e
 
@@ -58,17 +60,35 @@ def cli(duckdb_file):
         ("sample", "specimen"),
         ("statussummary", "status_summary"),
     ):
-        con.execute(f"ALTER TABLE status RENAME COLUMN {old_col} TO {new_col}")
+        conn.execute(f"ALTER TABLE status RENAME COLUMN {old_col} TO {new_col}")
 
-    con.commit()
+    # Split the run_accessions column into an array
+    conn.execute(
+        """
+        CREATE TABLE metagenome AS
+        SELECT * EXCLUDE run_accessions
+          , string_split(run_accessions, ',') AS run_accessions
+        FROM metagenome_tmp
+        """
+    )
+    conn.execute("DROP TABLE metagenome_tmp")
+
+    # Fix metagenome_bin.length which is a FLOAT in Mbp to INTEGER in bp
+    conn.execute("UPDATE metagenome_bin SET length = round(1e6 * length, 0)")
+    conn.execute("ALTER TABLE metagenome_bin ALTER COLUMN length TYPE INTEGER")
+    for col in ("23s", "16s", "5s"):
+        conn.execute(f'ALTER TABLE metagenome_bin ALTER COLUMN "{col}" TYPE BOOLEAN')
+        conn.execute(f'ALTER TABLE metagenome_bin RENAME COLUMN "{col}" TO has_{col}')
+
+    conn.commit()
 
     # Start duckdb cli if run in a terminal
     if sys.stdout.isatty():
-        con.close()
-        os.execlp("duckdb", "duckdb", duckdb_file)  # noqa: S607
+        conn.close()
+        os.execlp("duckdb", "duckdb", "-ui", duckdb_file)  # noqa: S606, S607
 
 
-def create_table(con, table_name, row_itr):
+def create_table(conn, table_name, row_itr):
     try:
         header = next(row_itr)
     except StopIteration:
@@ -89,7 +109,7 @@ def create_table(con, table_name, row_itr):
     header = cleanup_header(header[first_col:last_col])
 
     # Create temporary TSV file and write header and body
-    tsv_tmp = tempfile.NamedTemporaryFile(
+    tsv_tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
         "w",
         prefix=f"status__{table_name}_",
         suffix=".tsv",
@@ -105,7 +125,7 @@ def create_table(con, table_name, row_itr):
 
     # Import the data from the temporary CSV file into duckdb
     stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto(?)"  # noqa: S608
-    con.execute(stmt, (tsv_tmp.name,))
+    conn.execute(stmt, (tsv_tmp.name,))
 
 
 def fetch_sheet_lines(document_id, gid):

@@ -82,9 +82,9 @@ def check_key_values_or_exit(input_obj, key, pk):
         key_type = "Primary" if key == pk else "Parent"
         if key == pk:
             key_type = "Primary"
-            poss_err = "\nMissing `--key` argument for parent to-one relation?"
+            poss_err = "\nMissing `--key` argument?"
         else:
-            key_type = "Parent"
+            key_type = "Unique"
             poss_err = ""
         i_count = len(input_obj)
         sys.exit(
