@@ -190,10 +190,10 @@ def build_taxonomy_table(conn, table, file, config):
         CREATE TABLE {table}
         AS SELECT * EXCLUDE ({last_col})
           , IF(length({last_col}) = 2, {cast_sql}) AS {last_col}
-        FROM read_csv('{file}', sep='\t|\t', columns={parse_config!r})
+        FROM read_csv(?, sep='\t|\t', columns={parse_config!r})
         """)  # noqa: S608
-    click.echo("\n" + sql, err=True)
-    conn.execute(sql)
+    click.echo(f"\n{sql};", err=True)
+    conn.execute(sql, [str(file)])
 
 
 if __name__ == "__main__":

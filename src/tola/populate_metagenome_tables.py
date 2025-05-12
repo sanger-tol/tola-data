@@ -19,9 +19,26 @@ from tola.tqc.upsert import TableUpserter
     required=True,
     help="Filename of the DuckDB database created by `status-duckdb`",
 )
+@click.option(
+    "--taxonomy-duckdb",
+    "taxonomy_duckdb_file",
+    required=True,
+    help="""
+        Filename of a NCBI taxonomy DuckDB database
+        containing a `rankedlineage` table
+        """,
+)
 @click_options.apply_flag
 @click.pass_context
-def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
+def cli(
+    ctx,
+    tolqc_alias,
+    tolqc_url,
+    api_token,
+    status_duckdb_file,
+    taxonomy_duckdb_file,
+    apply_flag,
+):
     """
     Populate the metagenome tables from a DuckDB database of the status Google
     sheet created by the `status-duckdb` script.
@@ -38,6 +55,7 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
             sys.exit("\n".join(cpe.args))
 
     conn = duckdb.connect(status_duckdb_file, read_only=True)
+    conn.execute(f"ATTACH '{taxonomy_duckdb_file}' AS ncbi")
     ups = TableUpserter(client)
     ups.build_table_upserts(
         "bin_type_dict",
@@ -53,27 +71,37 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
         ],
     )
 
+    # Populate species by NCBI taxon_id
     species_specs = []
-    for species_id, taxon_id in conn.execute(
-        """
-        SELECT MAX(species_id)
-          , taxon_id
-        FROM (
-          SELECT taxname AS species_id
-            , taxid AS taxon_id
+    for species_id, taxon_id, family, order, phylum, group in conn.execute(
+        r"""
+        SELECT tax_name
+          , tax_id
+          , family
+          , "order"
+          , phylum
+          , IF(domain IS NULL
+            , 'metagenome'
+            , lower(domain)) AS taxon_group
+        FROM ncbi.rankedlineage
+        WHERE tax_id IN (
+          SELECT taxid
           FROM metagenome
           UNION
-          SELECT taxname AS species_id
-            , taxid AS taxon_id
+          SELECT taxid
           FROM metagenome_bin
         )
-        GROUP BY taxon_id
+        ORDER BY ALL
         """
     ).fetchall():
         species_specs.append(
             {
                 "species.id": species_id,
                 "taxon_id": taxon_id,
+                "taxon_family": family,
+                "taxon_order": order,
+                "taxon_phylum": phylum,
+                "taxon_group": group,
             }
         )
     ups.build_table_upserts("species", species_specs)
@@ -98,6 +126,9 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
     #            column17 = NULL
     #      run_accessions = [ERR14842679, ERR14842680, ERR14857143]
     accession_specs = []
+    renamed_specimens = {
+        "odPioVast1": "odPioSpec1",
+    }
     metagenome_specs = []
     col_acc_types = {
         "biosample": "BioSample",
@@ -115,16 +146,20 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
                     }
                 )
 
+        specimen_id = row["host_tolid"]
+        host_specimen_id = renamed_specimens.get(specimen_id, specimen_id)
+
         # Add metagenome table row
         metagenome_specs.append(
             {
-                "metagenome.id": row.get("tolid"),
-                "species.id": row.get("taxname"),
-                "biosample_accession.id": row.get("biosample"),
-                "bioproject_accession.id": row.get("bioproject"),
-                "assembly_accession.id": row.get("assembly_accession"),
-                "coverage": row.get("coverage"),
-                "version": row.get("version"),
+                "metagenome.id": row["tolid"],
+                "species.id": row["species_name"],
+                "host_specimen.id": host_specimen_id,
+                "biosample_accession.id": row["biosample"],
+                "bioproject_accession.id": row["bioproject"],
+                "assembly_accession.id": row["assembly_accession"],
+                "coverage": row["coverage"],
+                "version": row["version"],
             }
         )
 
@@ -173,15 +208,15 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
 
         # Add metagenome table row
         spec = {
-            "metagenome_bin.id": row.get("tolid"),
-            "metagenome.id": row.get("primary_tolid"),
-            "species.id": row.get("taxname"),
-            "biosample_accession.id": row.get("biosample"),
-            "assembly_accession.id": row.get("assembly_accession"),
-            "bin_type": bin_type_dict.get(row.get("bin_type")),
-            "ssu_count": row.get("SSUs"),
-            "trna_total": row.get("total_trnas"),
-            "trna_unique": row.get("unique_trnas"),
+            "metagenome_bin.id": row["tolid"],
+            "metagenome.id": row["primary_tolid"],
+            "species.id": row["species_name"],
+            "biosample_accession.id": row["biosample"],
+            "assembly_accession.id": row["assembly_accession"],
+            "bin_type": bin_type_dict[row["bin_type"]],
+            "ssu_count": row["SSUs"],
+            "trna_total": row["total_trnas"],
+            "trna_unique": row["unique_trnas"],
         }
         for col_name in (
             "length",
@@ -199,6 +234,16 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
         metagenome_bin_specs.append(spec)
 
     ups.build_table_upserts("accession", accession_specs)
+    ups.build_table_upserts(
+        "specimen",
+        [
+            {
+                # This species was present, but the specimen missing
+                "specimen.id": "xgElyCris1",
+                "species.id": "Elysia crispata",
+            }
+        ],
+    )
     ups.build_table_upserts("metagenome", metagenome_specs)
     ups.build_table_upserts("metagenome_bin", metagenome_bin_specs)
 
@@ -208,7 +253,13 @@ def cli(ctx, tolqc_alias, tolqc_url, api_token, status_duckdb_file, apply_flag):
 
 
 def iter_table(conn, table):
-    conn.execute(f"FROM {table}")
+    conn.execute(f"""
+        SELECT rl.tax_name AS species_name
+          , m.*
+        FROM {table} AS m
+        LEFT JOIN ncbi.rankedlineage AS rl
+          ON m.taxid = rl.tax_id
+        """)  # noqa: S608
     col_names = tuple(x[0] for x in conn.description)
     for row in conn.fetchall():
         yield {c: x for c, x in zip(col_names, row, strict=True)}  # noqa: C416
