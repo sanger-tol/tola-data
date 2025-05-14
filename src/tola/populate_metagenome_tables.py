@@ -55,7 +55,7 @@ def cli(
             sys.exit("\n".join(cpe.args))
 
     conn = duckdb.connect(status_duckdb_file, read_only=True)
-    conn.execute(f"ATTACH '{taxonomy_duckdb_file}' AS ncbi")
+    conn.execute(f"ATTACH '{taxonomy_duckdb_file}' AS ncbi (READ_ONLY)")
     ups = TableUpserter(client)
     ups.build_table_upserts(
         "bin_type_dict",
@@ -73,13 +73,14 @@ def cli(
 
     # Populate species by NCBI taxon_id
     species_specs = []
-    for species_id, taxon_id, family, order, phylum, group in conn.execute(
+    for spec in iter_sql(
+        conn,
         r"""
-        SELECT tax_name
-          , tax_id
-          , family
-          , "order"
-          , phylum
+        SELECT tax_name AS 'species.id'
+          , tax_id AS taxon_id
+          , family AS taxon_family
+          , "order" AS taxon_order
+          , phylum AS taxon_phylum
           , IF(domain IS NULL
             , 'metagenome'
             , lower(domain)) AS taxon_group
@@ -90,20 +91,16 @@ def cli(
           UNION
           SELECT taxid
           FROM metagenome_bin
+          UNION
+          SELECT m.new_tax_id
+          FROM metagenome_bin AS b
+          JOIN ncbi.merged AS m
+            ON b.taxid = m.old_tax_id
         )
         ORDER BY ALL
-        """
-    ).fetchall():
-        species_specs.append(
-            {
-                "species.id": species_id,
-                "taxon_id": taxon_id,
-                "taxon_family": family,
-                "taxon_order": order,
-                "taxon_phylum": phylum,
-                "taxon_group": group,
-            }
-        )
+        """,
+    ):
+        species_specs.append(spec)
     ups.build_table_upserts("species", species_specs)
 
     #          host_tolid = odSpoBarb1
@@ -253,16 +250,27 @@ def cli(
 
 
 def iter_table(conn, table):
-    conn.execute(f"""
-        SELECT rl.tax_name AS species_name
+    return iter_sql(
+        conn,
+        f"""
+        SELECT IFNULL(rl.tax_name, mrl.tax_name) AS species_name
           , m.*
         FROM {table} AS m
         LEFT JOIN ncbi.rankedlineage AS rl
           ON m.taxid = rl.tax_id
-        """)  # noqa: S608
+        LEFT JOIN ncbi.merged
+          ON m.taxid = merged.old_tax_id
+        LEFT JOIN ncbi.rankedlineage AS mrl
+          ON merged.new_tax_id = mrl.tax_id
+        """,
+    )  # noqa: S608
+
+
+def iter_sql(conn, sql):
+    conn.execute(sql)
     col_names = tuple(x[0] for x in conn.description)
     for row in conn.fetchall():
-        yield {c: x for c, x in zip(col_names, row, strict=True)}  # noqa: C416
+        yield dict(zip(col_names, row, strict=True))
 
 
 if __name__ == "__main__":
