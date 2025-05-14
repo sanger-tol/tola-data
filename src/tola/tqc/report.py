@@ -4,6 +4,7 @@ import sys
 import click
 import requests
 
+from tola.pretty import bold, s
 from tola.terminal import TerminalDict
 
 
@@ -69,13 +70,17 @@ def report(ctx, show_url, report_name, params):
 
 
 def pretty_terminal_dict_itr(first, itr, first_key=None):
+    row_count = 0
     if first:
+        row_count = 1
         obj = json.loads(first)
         max_hdr = max(len(x) for x in obj)
         yield TerminalDict(obj, key=first_key, max_key_length=max_hdr).pretty()
         for line in itr:
+            row_count += 1
             obj = json.loads(line)
             yield TerminalDict(obj, key=first_key, max_key_length=max_hdr).pretty()
+    yield f"\nReport has {bold(row_count)} row{s(row_count)}"
 
 
 def build_payload(params):
