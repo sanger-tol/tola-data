@@ -82,7 +82,7 @@ def cli(
           , "order" AS taxon_order
           , phylum AS taxon_phylum
           , IF(domain IS NULL
-            , 'metagenome'
+            , 'metagenomes'
             , lower(domain)) AS taxon_group
         FROM ncbi.rankedlineage
         WHERE tax_id IN (

@@ -22,12 +22,23 @@ from tola.terminal import TerminalDict
     flag_value=True,
     help="Prints the URL for the report and exits.",
 )
+@click.option(
+    "--format",
+    "report_format",
+    type=click.Choice(
+        ["NDJSON", "TSV"],
+        case_sensitive=False,
+    ),
+    default="NDJSON",
+    show_default=True,
+    help="Output format of report.",
+)
 @click.argument(
     "params",
     nargs=-1,
     required=False,
 )
-def report(ctx, show_url, report_name, params):
+def report(ctx, show_url, report_format, report_name, params):
     """
     Fetch data from ToLQC `/report` endpoints.
 
@@ -42,7 +53,7 @@ def report(ctx, show_url, report_name, params):
     """
 
     client = ctx.obj
-    first_key, payload = build_payload(params)
+    first_key, payload = build_payload(params, report_format)
 
     report = f"report/{report_name}"
     if show_url:
@@ -54,19 +65,22 @@ def report(ctx, show_url, report_name, params):
 
     itr = client.stream_lines(report, payload)
 
-    try:
-        first = next(itr)
-    except StopIteration:
-        # Zero lines in report
-        return
-
-    if sys.stdout.isatty():
-        click.echo_via_pager(pretty_terminal_dict_itr(first, itr, first_key))
+    if report_format == "TSV":
+        print_tsv(itr)
     else:
-        out = sys.stdout.buffer
-        out.write(first + b"\n")
-        for line in itr:
-            out.write(line + b"\n")
+        try:
+            first = next(itr)
+        except StopIteration:
+            # Zero lines in report
+            return
+
+        if sys.stdout.isatty():
+            click.echo_via_pager(pretty_terminal_dict_itr(first, itr, first_key))
+        else:
+            out = sys.stdout.buffer
+            out.write(first + b"\n")
+            for line in itr:
+                out.write(line + b"\n")
 
 
 def pretty_terminal_dict_itr(first, itr, first_key=None):
@@ -83,7 +97,13 @@ def pretty_terminal_dict_itr(first, itr, first_key=None):
     yield f"\nReport has {bold(row_count)} row{s(row_count)}"
 
 
-def build_payload(params):
+def print_tsv(itr):
+    out = sys.stdout.buffer
+    for row in itr:
+        out.write(row + b"\n")
+
+
+def build_payload(params, report_format="NDJSON"):
     param_dict = {}
     first_key = None
     for spec in params:
@@ -91,5 +111,5 @@ def build_payload(params):
         param_dict[k] = v
         if first_key is None:
             first_key = k
-    param_dict["format"] = "NDJSON"
+    param_dict["format"] = report_format
     return first_key, param_dict
