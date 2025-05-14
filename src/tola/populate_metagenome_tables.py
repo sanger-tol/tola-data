@@ -262,6 +262,7 @@ def iter_table(conn, table):
           ON m.taxid = merged.old_tax_id
         LEFT JOIN ncbi.rankedlineage AS mrl
           ON merged.new_tax_id = mrl.tax_id
+        WHERE status != '9 suppressed'
         """,
     )  # noqa: S608
 
