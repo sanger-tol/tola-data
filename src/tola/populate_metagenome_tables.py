@@ -132,7 +132,6 @@ def cli(
     col_acc_types = {
         "biosample": "BioSample",
         "bioproject": "BioProject",
-        "assembly_accession": "Analysis",
     }
     for row in iter_table(conn, "metagenome"):
         # Add accessions
@@ -144,6 +143,16 @@ def cli(
                         "accession_type.id": acc_type,
                     }
                 )
+        if acc := row.get("assembly_accession"):
+            acc_type = (
+                "GenBank Genome Assembly" if acc.startswith("GCA_") else "Analysis"
+            )
+            accession_specs.append(
+                {
+                    "accession.id": acc,
+                    "accession_type.id": acc_type,
+                }
+            )
 
         specimen_id = row["host_tolid"]
         host_specimen_id = renamed_specimens.get(specimen_id, specimen_id)
