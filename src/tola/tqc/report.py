@@ -4,7 +4,7 @@ import sys
 import click
 import requests
 
-from tola.pretty import bold, s
+from tola.pretty import bold, colour_pager, s
 from tola.terminal import TerminalDict
 
 
@@ -47,7 +47,7 @@ def report(ctx, show_url, report_format, report_name, params):
 
     e.g.
 
-        tqc report pipeline-data 'species_id=Vulpes vulpes'
+        tqc report pipeline-data species='Vulpes vulpes'
 
         tqc report folder/data data_id=48728_7-8#1
     """
@@ -75,7 +75,7 @@ def report(ctx, show_url, report_format, report_name, params):
             return
 
         if sys.stdout.isatty():
-            click.echo_via_pager(pretty_terminal_dict_itr(first, itr, first_key))
+            colour_pager(pretty_terminal_dict_itr(first, itr, first_key))
         else:
             out = sys.stdout.buffer
             out.write(first + b"\n")
@@ -94,7 +94,7 @@ def pretty_terminal_dict_itr(first, itr, first_key=None):
             row_count += 1
             obj = json.loads(line)
             yield TerminalDict(obj, key=first_key, max_key_length=max_hdr).pretty()
-    yield f"\nReport has {bold(row_count)} row{s(row_count)}"
+    yield f"\nReport has {bold(row_count)} row{s(row_count)}\n"
 
 
 def print_tsv(itr):

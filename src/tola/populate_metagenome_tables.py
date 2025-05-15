@@ -54,6 +54,8 @@ def cli(
         else:
             sys.exit("\n".join(cpe.args))
 
+    client.page_size = 100
+
     conn = duckdb.connect(status_duckdb_file, read_only=True)
     conn.execute(f"ATTACH '{taxonomy_duckdb_file}' AS ncbi (READ_ONLY)")
     ups = TableUpserter(client)

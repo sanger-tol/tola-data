@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 
 import click
 
@@ -62,12 +63,44 @@ def s(x):
 
 
 def colour_pager(itr):
-    """
-    click fails to detect that output can be coloured when the script is at
-    the end of a UNIX pipe and STDOUT is a tty, so we set the `color`
-    parmameter here to `True` which overrides its autodetection.
-    """
-    click.echo_via_pager(itr, color=True)
+    if isinstance(itr, str):
+        itr = [itr]
+
+    pager_cmd = [os.environ.get("PAGER", "less").strip()]
+    pager_cmd.extend(
+        os.environ.get(
+            "LESS",
+            " ".join(
+                (
+                    "--no-init",
+                    "--quit-if-one-screen",
+                    "--ignore-case",
+                    "--RAW-CONTROL-CHARS",
+                )
+            ),
+        ).split()
+    )
+
+    c = subprocess.Popen(  # noqa: S602, S603
+        pager_cmd,
+        stdin=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for text in itr:
+            c.stdin.write(text)
+    except (OSError, KeyboardInterrupt):
+        pass
+    else:
+        c.stdin.close()
+
+    while True:
+        try:
+            c.wait()
+        except KeyboardInterrupt:
+            pass
+        else:
+            break
 
 
 def setup_pager():
