@@ -67,19 +67,15 @@ def colour_pager(itr):
         itr = [itr]
 
     pager_cmd = [os.environ.get("PAGER", "less").strip()]
-    pager_cmd.extend(
-        os.environ.get(
-            "LESS",
-            " ".join(
-                (
-                    "--no-init",
-                    "--quit-if-one-screen",
-                    "--ignore-case",
-                    "--RAW-CONTROL-CHARS",
-                )
-            ),
-        ).split()
-    )
+    if pager_cmd == "less" and not os.environ.get("LESS"):
+        pager_cmd.extend(
+            [
+                "--no-init",
+                "--quit-if-one-screen",
+                "--ignore-case",
+                "--RAW-CONTROL-CHARS",
+            ]
+        )
 
     c = subprocess.Popen(  # noqa: S602, S603
         pager_cmd,
