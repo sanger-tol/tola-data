@@ -4,11 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tola-data"
-version = "1.0.31"
+version = "1.0.32"
 readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
-    "SQLAlchemy ~= 2.0",
     # boto3 v1.36 produces an error on S3 storage which isn't Amazon AWS
     # If upgrading boto3 check that fix in `src/tola/s3client.py` is still
     # required.
@@ -16,20 +15,13 @@ dependencies = [
     "click",
     "duckdb ~= 1.2.0",
     "mysql-connector-python",
-    "psycopg2", # PostgreSQL connector
     "pyarrow",
     "python-irodsclient",
     "python-ulid",
     "pytz",
     "requests",
     'importlib-metadata; python_version >= "3.10"',
-]
-
-[project.optional-dependencies]
-devel = [
-    "flask",
-    "pytest",
-    "ruff",
+    "tol-sdk",
 ]
 
 [project.scripts]
@@ -73,12 +65,23 @@ select = [
     "PYI",
     "S",
     "SIM",
-    "U"
+    "U",
 ]
 ignore = [
     "COM812",
-    "C901"
+    "C901",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "{test_*,*_test,conftest}.py" = ["E501", "S101"]
+
+[tool.uv.sources]
+tol-sdk = { git = "https://github.com/sanger-tol/tol-sdk" }
+
+[dependency-groups]
+dev = [
+    "SQLAlchemy ~= 2.0",
+    "psycopg2-binary", # PostgreSQL connector
+    "pytest>=8.3.4",
+    "ruff>=0.9.3",
+]
