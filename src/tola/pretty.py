@@ -87,8 +87,7 @@ def colour_pager(itr):
             c.stdin.write(text)
     except (OSError, KeyboardInterrupt):
         pass
-    else:
-        c.stdin.close()
+    c.stdin.close()
 
     while True:
         try:
