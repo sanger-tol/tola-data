@@ -13,7 +13,7 @@ dependencies = [
     # required.
     "boto3 ~= 1.36.0",
     "click",
-    "duckdb ~= 1.2.0",
+    "duckdb",
     "mysql-connector-python",
     "psycopg2-binary", # PostgreSQL connector
     "pyarrow",
@@ -81,7 +81,7 @@ tol-sdk = { git = "https://github.com/sanger-tol/tol-sdk" }
 
 [dependency-groups]
 dev = [
-    "SQLAlchemy ~= 2.0",
-    "pytest>=8.3.4",
-    "ruff>=0.9.3",
+    "SQLAlchemy ~= 2.0.0",
+    "pytest",
+    "ruff",
 ]
