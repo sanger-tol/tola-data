@@ -26,18 +26,20 @@ from tolqc.schema.sample_data_models import (
     CategoryDict,
     Centre,
     Data,
+    FileTypeDict,
     LibraryType,
     PacbioRunMetrics,
     Platform,
-    Project,
     QCDict,
     Run,
     Sample,
     Sex,
     Species,
     Specimen,
+    Study,
     VisibilityDict,
 )
+from tolqc.schema.system_models import Token, User
 
 data_dir = pathlib.Path()
 
@@ -55,18 +57,6 @@ data_dir = pathlib.Path()
     required=True,
 )
 @click.option(
-    "--sql-data-file",
-    help="File of SQL INSERT statements for test database",
-    type=click.Path(
-        dir_okay=False,
-        readable=True,
-        path_type=pathlib.Path,
-    ),
-    default=data_dir / "test_data.sql",
-    required=True,
-    show_default=True,
-)
-@click.option(
     "--build-db-uri",
     envvar="BUILD_DB_URI",
     help=(
@@ -79,6 +69,7 @@ data_dir = pathlib.Path()
     "--samples/--datasets",
     "build_samples",
     help="Output Samples or Datasets",
+    default=True,
     show_default=True,
 )
 @click.option(
@@ -93,12 +84,18 @@ data_dir = pathlib.Path()
     default=False,
     show_default=True,
 )
-def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db, build_samples):
+def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     # Fetch sample data
     engine = create_engine(db_uri, echo=echo_sql)
     ssn_maker = sessionmaker(bind=engine)
     sample_data = (
         build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
+    )
+    sample_data.extend(
+        [
+            User(id=100, email="test@nowhere.ac.uk", name="test-user", registered=True),
+            Token(id=200, token="__TOKEN_PLACEHOLDER__", user_id=100),  # noqa: S106
+        ]
     )
     sys.stdout.write(code_string(sample_data))
 
@@ -112,15 +109,10 @@ def cli(db_uri, build_db_uri, sql_data_file, echo_sql, create_db, build_samples)
         # Populate build database
         populate_database(sessionmaker(bind=build_engine), sample_data)
 
-    # # Clean up build database unless it's wanted
-    # if delete_build_db:
-    #     build_engine.dispose()
-    #     drop_build_db(build_url)
-
 
 def make_sql_data_file(build_url, sql_data_file):
     with open(sql_data_file, "w") as sql_fh:
-        sql_dump = subprocess.run(
+        sql_dump = subprocess.run(  # noqa: S603
             (
                 "pg_dump",
                 "--data-only",
@@ -143,6 +135,7 @@ def build_sample_data(ssn_maker):
             LibraryType,
             Platform,
             Centre,
+            FileTypeDict,
             FolderLocation,
             QCDict,
             Sex,
@@ -151,9 +144,9 @@ def build_sample_data(ssn_maker):
             entries = session.scalars(select(cls)).all()
             fetched.extend(entries)
 
-        # Projects required
+        # Studies required
         study_ids = 5822, 5901, 6327
-        fetched.extend(fetch_projects(session, study_ids))
+        fetched.extend(fetch_studies(session, study_ids))
 
         # Fetch data for a list of test species
         species_list = "Juncus effusus", "Brachiomonas submarina"
@@ -212,8 +205,8 @@ def pg_engine(url):
     return create_engine(pg_url, isolation_level="AUTOCOMMIT")
 
 
-def fetch_projects(session, study_ids):
-    statement = select(Project).where(Project.study_id.in_(study_ids))
+def fetch_studies(session, study_ids):
+    statement = select(Study).where(Study.study_id.in_(study_ids))
     return session.scalars(statement).all()
 
 
@@ -333,6 +326,7 @@ def sqlalchemy_data_objects_repr(sql_alchemy_data):
     Base.__repr__ = new_repr
     code_repr = repr(sql_alchemy_data)
     Base.__repr__ = save_repr
+    code_repr = code_repr.replace("'__TOKEN_PLACEHOLDER__'", "token")
     return code_repr, class_list
 
 
@@ -356,13 +350,23 @@ def black_formatted_string_io(code, black_mode):
 def code_string(obj, max_line_length=99):
     tolp_black_mode = build_black_mode(max_line_length - 1)
     obj_repr, class_list = sqlalchemy_data_objects_repr(obj)
-    class_list_str = ", ".join(sorted(class_list))
-    imports_header = f"\nfrom tolqc.sample_data_models import {class_list_str}\n\n"
+    class_list_str = ", ".join(
+        sorted(
+            x
+            for x in class_list
+            if x not in {"Folder", "FolderLocation", "Token", "User"}
+        )
+    )
+    imports_header = (
+        f"\nfrom tolqc.schema.folder_models import Folder, FolderLocation\n"
+        f"from tolqc.schema.sample_data_models import {class_list_str}\n"
+        f"from tolqc.schema.system_models import Token, User\n\n"
+    )
     blk_fmt = black_formatted_string_io(
         (
             license_string()
             + imports_header
-            + "def test_data():\n    return "
+            + "def test_data(token: str):\n    return "
             + obj_repr
         ),
         tolp_black_mode,
@@ -469,7 +473,7 @@ def string_with_newlines(lines):
 
 
 def license_string():
-    this_year = datetime.date.today().year
+    this_year = datetime.date.today().year  # noqa: DTZ011
     return inspect.cleandoc(
         f"""
         # SPDX-FileCopyrightText: {this_year} Genome Research Ltd.
