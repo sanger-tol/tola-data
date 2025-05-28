@@ -41,7 +41,7 @@ from tola.ndjson import ndjson_row
 )
 @click_options.diff_mlwh_duckdb
 @click.argument(
-    "project_id_list",
+    "study_id_list",
     type=click.INT,
     nargs=-1,
     required=False,
@@ -50,7 +50,7 @@ def cli(
     tolqc_url,
     api_token,
     tolqc_alias,
-    project_id_list,
+    study_id_list,
     write_to_stdout,
     run_diff_mlwh,
     diff_mlwh_duckdb,
@@ -61,19 +61,18 @@ def cli(
     Fetches both Illumina and PacBio sequencing run data by querying the MLWH
     MySQL database, and prints out a report of new and changed data.
 
-    Where each PROJECT_ID is a numeric project ID,
-    e.g. 5901 (Darwin Tree of Life).
+    Where each STUDY_ID is a numeric ID, e.g. 5901 (Darwin Tree of Life).
 
-    Iterates over each project in the ToLQC database if no PROJECT_IDs are
+    Iterates over each study in the ToLQC database if no STUDY_IDs are
     supplied.
     """
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
-    if not project_id_list:
-        project_id_list = client.list_project_study_ids()
+    if not study_id_list:
+        study_id_list = client.list_study_ids()
     mlwh = db_connection.mlwh_db()
 
     if write_to_stdout:
-        write_mlwh_data_to_filehandle(mlwh, project_id_list, sys.stdout)
+        write_mlwh_data_to_filehandle(mlwh, study_id_list, sys.stdout)
     else:
         mlwh_data = (
             NamedTemporaryFile("w", prefix="mlwh_", suffix=".ndjson")  # noqa: SIM115
@@ -81,14 +80,14 @@ def cli(
             else None
         )
 
-        for project_id in project_id_list:
+        for study_id in study_id_list:
             for platform, run_data_fetcher in (
                 ("PacBio", pacbio_fetcher),
                 ("Illumina", illumina_fetcher),
             ):
-                row_itr = run_data_fetcher(mlwh, project_id, mlwh_data)
+                row_itr = run_data_fetcher(mlwh, study_id, mlwh_data)
                 rspns = client.ndjson_post("loader/seq-data", row_itr)
-                click.echo(formatted_response(rspns, project_id, platform), nl=False)
+                click.echo(formatted_response(rspns, study_id, platform), nl=False)
 
         if run_diff_mlwh:
             # Ensure data is flushed to storage
@@ -104,27 +103,27 @@ def cli(
         patch_species(client)
 
 
-def write_mlwh_data_to_filehandle(mlwh, project_id_list, fh):
-    for project_id in project_id_list:
+def write_mlwh_data_to_filehandle(mlwh, study_id_list, fh):
+    for study_id in study_id_list:
         for run_data_fetcher in (pacbio_fetcher, illumina_fetcher):
-            for row in run_data_fetcher(mlwh, project_id):
+            for row in run_data_fetcher(mlwh, study_id):
                 fh.write(row)
 
 
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh = db_connection.mlwh_db()
     write_mlwh_data_to_filehandle(
-        mlwh, tqc.list_project_study_ids(), mlwh_ndjson.open("w")
+        mlwh, tqc.list_study_ids(), mlwh_ndjson.open("w")
     )
 
 
-def formatted_response(response, project_id, platform):
+def formatted_response(response, study_id, platform):
     out = StringIO("")
 
     new = response.get("new")
     if new:
         out.write(
-            f"\n\nNew {platform} data in '{new[0]['project']} ({project_id})':\n\n"
+            f"\n\nNew {platform} data in '{new[0]['study']} ({study_id})':\n\n"
         )
         for row in new:
             out.write(response_row_std_fields(row))
@@ -132,7 +131,7 @@ def formatted_response(response, project_id, platform):
     upd = response.get("updated")
     if upd:
         out.write(
-            f"\n\nUpdated {platform} data in '{upd[0]['project']} ({project_id})':\n\n"
+            f"\n\nUpdated {platform} data in '{upd[0]['study']} ({study_id})':\n\n"
         )
         for row in upd:
             out.write(response_row_std_fields(row))
@@ -143,13 +142,13 @@ def formatted_response(response, project_id, platform):
 
 
 def response_row_std_fields(row):
-    return "\t".join(str(row[x]) for x in row if x not in ("project", "changes")) + "\n"
+    return "\t".join(str(row[x]) for x in row if x not in ("study", "changes")) + "\n"
 
 
-def illumina_fetcher(mlwh, project_id, save_data=None):
-    logging.info(f"Fetching Illumina data for project '{project_id}'")
+def illumina_fetcher(mlwh, study_id, save_data=None):
+    logging.info(f"Fetching Illumina data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
-    crsr.execute(illumina_sql(), (project_id,))
+    crsr.execute(illumina_sql(), (study_id,))
     for row in crsr:
         build_remote_path(row)
         fmt = ndjson_row(row)
@@ -169,10 +168,10 @@ PIPELINE_TO_LIBRARY_TYPE = {
 }
 
 
-def pacbio_fetcher(mlwh, project_id, save_data=None):
-    logging.info(f"Fetching PacBio data for project '{project_id}'")
+def pacbio_fetcher(mlwh, study_id, save_data=None):
+    logging.info(f"Fetching PacBio data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
-    crsr.execute(pacbio_sql(), (project_id,))
+    crsr.execute(pacbio_sql(), (study_id,))
     for row in crsr:
         build_remote_path(row)
         extract_pimms_description(row)

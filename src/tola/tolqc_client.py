@@ -281,13 +281,9 @@ class TolClient:
         for i in range(0, len(book), page):
             yield book[i : i + page]
 
-    def list_project_study_ids(self):
+    def list_study_ids(self):
         rspns_json = self.json_get("data/study")
-        project_study_ids = []
-        for proj in rspns_json["data"]:
-            if study_id := proj["attributes"].get("study_id"):
-                project_study_ids.append(study_id)
-        return sorted(project_study_ids)
+        return sorted(int(x["id"]) for x in rspns_json["data"])
 
     def get_folder_location(self, folder_location_id: str) -> FolderLocation:
         return self.__folder_location_dict.get(folder_location_id)

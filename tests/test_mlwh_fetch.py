@@ -44,7 +44,7 @@ def response_data():
                 "species": "Viscaria vulgaris",
                 "library_type": "PacBio - HiFi",
                 "sample": "DTOL14477585",
-                "project": "DTOL_Darwin Tree of Life",
+                "study": "DTOL_Darwin Tree of Life",
             },
             {
                 "name": "m84047_240229_113813_s2",
@@ -52,7 +52,7 @@ def response_data():
                 "species": "Myosotis scorpioides",
                 "library_type": "PacBio - HiFi",
                 "sample": "DTOL14200424",
-                "project": "DTOL_Darwin Tree of Life",
+                "study": "DTOL_Darwin Tree of Life",
             },
             {
                 "name": "m84047_240229_121030_s3",
@@ -60,7 +60,7 @@ def response_data():
                 "species": "Nephtys cirrosa",
                 "library_type": "PacBio - HiFi",
                 "sample": "DTOL14593466",
-                "project": "DTOL_Darwin Tree of Life",
+                "study": "DTOL_Darwin Tree of Life",
             },
         ],
         "updated": [
@@ -70,7 +70,7 @@ def response_data():
                 "species": "Adonis annua",
                 "library_type": "PacBio - HiFi",
                 "sample": "DTOL14161840",
-                "project": "DTOL_Darwin Tree of Life",
+                "study": "DTOL_Darwin Tree of Life",
                 "changes": {
                     "date": [None, "2024-03-06T14:19:38+00:00"],
                     "lims_qc": [None, "pass"],
@@ -82,7 +82,7 @@ def response_data():
                 "species": "Adoxa moschatellina",
                 "library_type": "PacBio - HiFi",
                 "sample": "DTOL14550109",
-                "project": "DTOL_Darwin Tree of Life",
+                "study": "DTOL_Darwin Tree of Life",
                 "changes": {
                     "date": ["2024-02-20T15:05:57+00:00", "2024-03-04T15:46:01+00:00"],
                     "lims_qc": [None, "fail"],
