@@ -14,7 +14,7 @@ from tola.tqc.genomescope import (
     parse_summary_txt,
     report_json_contents,
 )
-from tola.tqc.tqc_cmd import cli
+from tola.tqc.tqc_cmd import tqc_main
 
 
 def gs_results_dir(base):
@@ -160,7 +160,7 @@ def test_load_genomescope(client, fofn_runner, test_alias, gscope_fldr_loc):
         gscope_fldr_loc.id,
         str(gs_results_dir(here)),
     )
-    result = fofn_runner.invoke(cli, args)
+    result = fofn_runner.invoke(tqc_main, args)
     assert result.exit_code == 0
     out = json.loads(result.stdout)
     logging.info("\n" + json.dumps(out, indent=2))

@@ -6,22 +6,22 @@ from tol.core import DataSourceFilter
 from tola.tolqc_client import TolClientError
 
 
-def test_fetch_project(client):
-    rspns = client.json_get("data/project", {"filter": {"exact": {"study_id": 5901}}})
+def test_fetch_study(client):
+    rspns = client.json_get("data/study", {"filter": {"exact": {"study_id": 5901}}})
     assert len(rspns["data"]) == 1
     assert rspns["data"][0]["attributes"] == {
-        "description": "DTOL_Darwin Tree of Life",
-        "hierarchy_name": "darwin/{}",
-        "study_id": 5901,
+        "name": "DTOL_Darwin Tree of Life",
+        "auto_sync": True,
+        "modified_at": None,
     }
 
 
 def test_fetch_ads(ads):
     filt = DataSourceFilter()
     filt.exact = {"study_id": 5901}
-    (darwin,) = ads.get_list("project", object_filters=filt)
+    (darwin,) = ads.get_list("study", object_filters=filt)
     assert darwin is not None
-    assert darwin.study_id == 5901
+    assert darwin.id == '5901'
 
 
 def test_upsert(ads):

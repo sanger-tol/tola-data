@@ -282,7 +282,7 @@ class TolClient:
             yield book[i : i + page]
 
     def list_project_study_ids(self):
-        rspns_json = self.json_get("data/project")
+        rspns_json = self.json_get("data/study")
         project_study_ids = []
         for proj in rspns_json["data"]:
             if study_id := proj["attributes"].get("study_id"):

@@ -2,7 +2,7 @@ import re
 from textwrap import dedent
 
 from tola.tqc.dataset import latest_dataset_id
-from tola.tqc.tqc_cmd import cli
+from tola.tqc.tqc_cmd import tqc_main
 
 
 def test_latest_dataset_id(fofn_dir):
@@ -17,7 +17,7 @@ def test_fofn_dir(fofn_runner, test_alias):
         "--fofn",
         "fofn",
     )
-    result = fofn_runner.invoke(cli, args)
+    result = fofn_runner.invoke(tqc_main, args)
     assert result.exit_code == 0
     assert re.match(
         dedent(
