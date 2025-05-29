@@ -147,8 +147,8 @@ def show_key_count(file):
             click.echo(f"{v:7d}  {k}")
 
 
-def count_keys(count_dict, dict):
-    for k, v in dict.items():
+def count_keys(count_dict, dctnry):
+    for k, v in dctnry.items():
         if v is not None and v != "":
             count_dict[k] = 1 + count_dict.get(k, 0)
 

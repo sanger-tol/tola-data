@@ -71,6 +71,7 @@ select = [
 ignore = [
     "COM812",
     "C901",
+    "LOG015",
 ]
 
 [tool.ruff.lint.per-file-ignores]

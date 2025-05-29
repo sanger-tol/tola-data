@@ -7,7 +7,7 @@ from tol.core.datasource_error import DataSourceError
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsError
-from tola.pretty import bold, setup_pager
+from tola.pretty import bold
 from tola.tqc.add import add
 from tola.tqc.dataset import dataset
 from tola.tqc.delete import delete
@@ -40,7 +40,6 @@ def cli():
 def tqc_main(ctx, tolqc_alias, tolqc_url, api_token, log_level):
     """Show and update rows and columns in the ToLQC database"""
     logging.basicConfig(level=getattr(logging, log_level))
-    setup_pager()
     try:
         ctx.obj = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     except ConnectionParamsError as cpe:

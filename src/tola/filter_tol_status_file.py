@@ -24,7 +24,7 @@ def fetch_current_sheet():
     url = (
         f"https://docs.google.com/spreadsheets/d/{document_id}/export?exportFormat=tsv"
     )
-    r = requests.get(url)
+    r = requests.get(url, timeout=10)
     if r.status_code == requests.codes.ok:
         # Encoding was 'ISO-8859-1'.  Setting to apparent sets 'utf-8',
         # correctly encoding bullet characters in spreadsheet.
@@ -35,10 +35,10 @@ def fetch_current_sheet():
 
 
 def fixup_status_tsv_file(file):
-    input = Path(file)
-    fixed = construct_date_stamped_path(input)
+    input_path = Path(file)
+    fixed = construct_date_stamped_path(input_path)
 
-    input_io = input.open()
+    input_io = input_path.open()
     fixup_status_data(input_io, fixed)
 
 
@@ -61,10 +61,11 @@ def fixup_status_data(input_io, fixed):
         row[0] = str(row_n)
 
         if len(row) != col_count:
-            raise ValueError(
+            msg = (
                 f"Row {row_n} has {len(row)} columns,"
                 f" but header has {col_count} columns"
             )
+            raise ValueError(msg)
 
         fixed_io.write("\t".join(row) + "\n")
 
@@ -87,13 +88,13 @@ def make_identifier(txt):
 
 
 def construct_date_stamped_path(path):
-    mod_time = datetime.datetime.fromtimestamp(path.stat().st_mtime)
+    mod_time = datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.UTC)
     fixed = Path(re.sub(r"[-\s]+", "_", path.name))
     return fixed.with_stem(fixed.stem + "_" + mod_time.date().isoformat())
 
 
 def today_status_path():
-    today = datetime.date.today().isoformat()
+    today = datetime.date.today().isoformat()  # noqa: DTZ011
     return Path(f"Tree_of_Life_assembly_informatics_Status_{today}.tsv")
 
 

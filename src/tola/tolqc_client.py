@@ -281,7 +281,7 @@ class TolClient:
         for i in range(0, len(book), page):
             yield book[i : i + page]
 
-    def list_auto_sync_study_ids(self) -> [int]:
+    def list_auto_sync_study_ids(self) -> list[int]:
         rspns_json = self.json_get(
             "data/study", {"filter": {"exact": {"auto_sync": True}}}
         )

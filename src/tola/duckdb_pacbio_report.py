@@ -18,7 +18,7 @@ FILE_TYPE = click.Path(
 
 @cache
 def today_dir():
-    today = datetime.date.today().isoformat()
+    today = datetime.date.today().isoformat()  # noqa: DTZ011
     return pathlib.Path(f"pacbio_{today}")
 
 
@@ -76,7 +76,8 @@ def cli(ctx, csv_files, report_dir, duckdb_file):
     con = duckdb.connect(str(duckdb_file))
     if create_flag:
         click.echo(
-            f"Creating and populating DuckDB database '{duckdb_file}' from CSV files {csv_files}",
+            f"Creating and populating DuckDB database '{duckdb_file}'"
+            f" from CSV files {csv_files}",
             err=True,
         )
         try:

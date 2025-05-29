@@ -98,20 +98,6 @@ def colour_pager(itr):
             break
 
 
-def setup_pager():
-    os.environ.setdefault("PAGER", "less")
-    os.environ.setdefault(
-        "LESS",
-        " ".join(
-            (
-                "--no-init",
-                "--quit-if-one-screen",
-                "--ignore-case",
-                "--RAW-CONTROL-CHARS",
-            )
-        ),
-    )
-
 
 def natural(string):
     """

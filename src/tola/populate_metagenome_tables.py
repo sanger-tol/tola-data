@@ -5,7 +5,7 @@ import duckdb
 
 from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsError
-from tola.pretty import bold, setup_pager
+from tola.pretty import bold
 from tola.tqc.upsert import TableUpserter
 
 
@@ -43,7 +43,6 @@ def cli(
     Populate the metagenome tables from a DuckDB database of the status Google
     sheet created by the `status-duckdb` script.
     """
-    setup_pager()
     try:
         client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     except ConnectionParamsError as cpe:
@@ -274,8 +273,8 @@ def iter_table(conn, table):
         LEFT JOIN ncbi.rankedlineage AS mrl
           ON merged.new_tax_id = mrl.tax_id
         WHERE status != '9 suppressed'
-        """,
-    )  # noqa: S608
+        """,  # noqa: S608
+    )
 
 
 def iter_sql(conn, sql):
