@@ -73,26 +73,6 @@ def key_list_search(client, table, key, key_id_list):
     return db_obj_found
 
 
-def check_key_values_or_exit(input_obj, key, pk):
-    key_found = 0
-    for inp in input_obj:
-        if inp.get(key):
-            key_found += 1
-    if key_found != len(input_obj):
-        key_type = "Primary" if key == pk else "Parent"
-        if key == pk:
-            key_type = "Primary"
-            poss_err = "\nMissing `--key` argument?"
-        else:
-            key_type = "Unique"
-            poss_err = ""
-        i_count = len(input_obj)
-        sys.exit(
-            f"{key_type} key field '{key}' missing in {i_count - key_found}"
-            f" out of {i_count} object{s(i_count)} in input.{poss_err}"
-        )
-
-
 def fetch_list_or_exit(client, table, key, id_list):
     """
     Fetches all the records for `id_list` in the same order, or exits with an

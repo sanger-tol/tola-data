@@ -2,6 +2,7 @@ import sys
 
 import click
 
+from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, colour_pager, s
 from tola.terminal import (
@@ -13,8 +14,36 @@ from tola.terminal import (
 from tola.tqc.engine import (
     core_data_object_to_dict,
     dicts_to_core_data_objects,
+    input_objects_or_exit,
     key_list_search,
 )
+
+
+@click.command()
+@click.pass_context
+@click_options.table
+@click_options.key
+@click_options.apply_flag
+@click_options.input_files
+def upsert(ctx, table, key, apply_flag, input_files):
+    """Add new rows or update existing rows in a table from ND-JSON input
+
+    INPUT_FILES is a list of files in ND-JSON format.
+
+    Specify a `--key` argument for the name of the field to use to find
+    existing rows if not using the default of a primary key field named
+    `<table>.id`
+    """
+
+    if key == "id":
+        key = f"{table}.id"
+
+    input_obj = input_objects_or_exit(ctx, input_files)
+    ups = TableUpserter(ctx.obj)
+    ups.build_table_upserts(table, input_obj, key)
+    if apply_flag:
+        ups.apply_upserts()
+    ups.page_results()
 
 
 class TableUpserter:

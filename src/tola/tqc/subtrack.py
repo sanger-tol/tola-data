@@ -47,6 +47,8 @@ def subtrack(key, throw_if_missing, file_list, file_format, data_filenames):
     e.g. tqc subtrack 36703_6#11.cram m84047_240704_124657_s2.hifi_reads.bc2070.bam
     """
 
+    ### Add data_id to output
+
     name_list = tuple(
         Path(x).name for x in id_iterator(key, data_filenames, file_list, file_format)
     )
