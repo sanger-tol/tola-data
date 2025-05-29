@@ -68,7 +68,7 @@ def cli(
     """
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if not study_id_list:
-        study_id_list = client.list_study_ids()
+        study_id_list = client.list_auto_sync_study_ids()
     mlwh = db_connection.mlwh_db()
 
     if write_to_stdout:
@@ -113,7 +113,7 @@ def write_mlwh_data_to_filehandle(mlwh, study_id_list, fh):
 def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     mlwh = db_connection.mlwh_db()
     write_mlwh_data_to_filehandle(
-        mlwh, tqc.list_study_ids(), mlwh_ndjson.open("w")
+        mlwh, tqc.list_auto_sync_study_ids(), mlwh_ndjson.open("w")
     )
 
 

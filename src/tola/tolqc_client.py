@@ -281,8 +281,10 @@ class TolClient:
         for i in range(0, len(book), page):
             yield book[i : i + page]
 
-    def list_study_ids(self):
-        rspns_json = self.json_get("data/study")
+    def list_auto_sync_study_ids(self) -> [int]:
+        rspns_json = self.json_get(
+            "data/study", {"filter": {"exact": {"auto_sync": True}}}
+        )
         return sorted(int(x["id"]) for x in rspns_json["data"])
 
     def get_folder_location(self, folder_location_id: str) -> FolderLocation:

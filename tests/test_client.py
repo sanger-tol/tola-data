@@ -16,12 +16,19 @@ def test_fetch_study(client):
     }
 
 
+def test_fetch_all_study_ids(client):
+    id_list = client.list_auto_sync_study_ids()
+    assert len(id_list) > 1
+    for x in id_list:
+        assert isinstance(x, int)
+
+
 def test_fetch_ads(ads):
     filt = DataSourceFilter()
     filt.exact = {"study_id": 5901}
     (darwin,) = ads.get_list("study", object_filters=filt)
     assert darwin is not None
-    assert darwin.id == '5901'
+    assert darwin.id == "5901"
 
 
 def test_upsert(ads):
@@ -59,4 +66,3 @@ def test_fetch_or_store_one(client):
     lib_typ = client.fetch_or_store_one(tbl, spec)
     assert lib_typ.id == spec["library_type.id"]
     client.ads.delete(tbl, [lib_typ.id])
-
