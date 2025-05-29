@@ -159,7 +159,7 @@ def illumina_fetcher(mlwh, study_id, save_data=None):
 
 PIPELINE_TO_LIBRARY_TYPE = {
     "PacBio_Ultra_Low_Input": "PacBio - HiFi (ULI)",
-    "PacBio_Ultra_Low_Input_mplx": "PacBio - HiFi (ULI)",
+    "PacBio_Ultra_Low_Input_mplx": "PacBio - HiFi (Ampli-Fi)",
     "Pacbio_HiFi": "PacBio - HiFi",
     "Pacbio_HiFi_mplx": "PacBio - HiFi",
     "Pacbio_IsoSeq": "PacBio - IsoSeq",
