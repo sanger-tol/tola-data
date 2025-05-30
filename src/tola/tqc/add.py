@@ -56,6 +56,7 @@ def add_rows(client, table, input_obj, key="id", apply_flag=False, skip_existing
     # used to fetch the created objects.
     key_id_list = check_key_values_or_exit(input_obj, key, pk)
 
+    db_obj_before = None
     if key_id_list and (
         db_obj_before := key_list_search(client, table, key, key_id_list)
     ):
@@ -71,7 +72,7 @@ def add_rows(client, table, input_obj, key="id", apply_flag=False, skip_existing
 
     if not apply_flag:
         count = len(input_obj)
-        n_before = len(db_obj_before)
+        n_before = len(db_obj_before) if db_obj_before else 0
         existing = (
             (
                 f"(Skipped {bold(n_before)} row{s(n_before)}"
@@ -102,7 +103,7 @@ def add_rows(client, table, input_obj, key="id", apply_flag=False, skip_existing
         )
 
     if sys.stdout.isatty():
-        colour_pager(pretty_cdo_itr(new_obj, key, head="Created {} new row{}:\n"))
+        colour_pager(pretty_cdo_itr(new_obj, key, head="Created {} new row{}:"))
     else:
         for cdo in new_obj:
             sys.stdout.write(ndjson_row(core_data_object_to_dict(cdo)))

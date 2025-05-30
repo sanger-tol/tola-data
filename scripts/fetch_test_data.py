@@ -18,11 +18,11 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
+from tolqc.schema.accession_models import AccessionTypeDict
 from tolqc.schema.assembly_models import Dataset, DatasetElement
 from tolqc.schema.base import Base
 from tolqc.schema.folder_models import FolderLocation
 from tolqc.schema.sample_data_models import (
-    AccessionTypeDict,
     CategoryDict,
     Centre,
     Data,
@@ -358,7 +358,8 @@ def code_string(obj, max_line_length=99):
         )
     )
     imports_header = (
-        f"\nfrom tolqc.schema.folder_models import Folder, FolderLocation\n"
+        f"\nfrom tolqc.schema.accession_models import Accession, AccessionTypeDict\n"
+        f"from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
         f"from tolqc.schema.system_models import Token, User\n\n"
     )
