@@ -97,9 +97,7 @@ def add_rows(client, table, input_obj, key="id", apply_flag=False, skip_existing
     n_new = len(new_obj)
     if n_new != n_inp:
         sys.exit(
-            f"Error: Created {n_new} row{s(n_new)}"
-            f" from {n_inp} input object{s(n_inp)}.\n"
-            "       Existing database rows may have been edited."
+            f"Error: Created {n_new} row{s(n_new)} from {n_inp} input object{s(n_inp)}."
         )
 
     if sys.stdout.isatty():
