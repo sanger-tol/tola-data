@@ -9,7 +9,7 @@ from tola.ndjson import (
     get_input_objects,
     parse_ndjson_stream,
 )
-from tola.pretty import bold, s
+from tola.pretty import bold
 
 
 def parse_datetime_fields(field_list, input_obj):
