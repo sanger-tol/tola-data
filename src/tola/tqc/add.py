@@ -65,9 +65,10 @@ def add_rows(client, table, input_obj, key="id", apply_flag=False, skip_existing
             input_obj = [x for x in input_obj if not db_obj_before.get(x[key])]
         else:
             plural = s(db_obj_before)
+            matches = "".join(f"  {x!r}\n" for x in sorted(db_obj_before))
             sys.exit(
                 f"Error: {len(db_obj_before)} row{plural} present in database"
-                f" with matching '{key}' value{plural}: {sorted(db_obj_before)}"
+                f" with matching '{key}' value{plural}:\n{matches}"
             )
 
     if not apply_flag:

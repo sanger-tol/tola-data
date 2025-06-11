@@ -18,6 +18,7 @@ from tola.tqc.report import report
 from tola.tqc.show import show
 from tola.tqc.species import upsert_species
 from tola.tqc.status import status
+from tola.tqc.sts import sts_specimen
 from tola.tqc.subtrack import subtrack
 from tola.tqc.upsert import upsert
 from tola.tqc.view import view
@@ -63,6 +64,7 @@ tqc_main.add_command(report)
 tqc_main.add_command(show)
 tqc_main.add_command(upsert_species, name="species")
 tqc_main.add_command(status)
+tqc_main.add_command(sts_specimen, name="sts-specimen")
 tqc_main.add_command(subtrack)
 tqc_main.add_command(upsert)
 tqc_main.add_command(view)

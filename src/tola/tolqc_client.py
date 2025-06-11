@@ -287,6 +287,14 @@ class TolClient:
         )
         return sorted(int(x["id"]) for x in rspns_json["data"])
 
+    @cached_property
+    def sex_table(self):
+        tbl = {}
+        for obj in self.ads.get_list("sex"):
+            sex = obj.id
+            tbl[uc_munge(sex)] = sex
+        return tbl
+
     def get_folder_location(self, folder_location_id: str) -> FolderLocation:
         return self.__folder_location_dict.get(folder_location_id)
 
@@ -303,3 +311,7 @@ class TolClient:
                 attr["files_template"],
             )
         return fldr_loc
+
+
+def uc_munge(txt):
+    return re.sub(r"\W+", "_", txt).strip("_").upper()
