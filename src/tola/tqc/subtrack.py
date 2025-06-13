@@ -18,7 +18,7 @@ from tola.tqc.engine import guess_file_type, parse_id_list_stream
 @click.command()
 @click.option(
     "--key",
-    default="remote_path",
+    default="file_name",
     show_default=True,
     help="Name of column in input containg data filenames.",
 )

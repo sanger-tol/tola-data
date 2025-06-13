@@ -7,9 +7,9 @@ from tol.sources.portal import portal
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
-from tola.terminal import pretty_dict_itr
+from tola.terminal import pretty_changes_itr, pretty_dict_itr
 from tola.tolqc_client import uc_munge
-from tola.tqc.engine import core_data_object_to_dict
+from tola.tqc.engine import core_data_object_to_dict, dicts_to_core_data_objects
 
 
 @click.command()
@@ -72,7 +72,7 @@ def sts_specimen(ctx, specimen_names, show_info, all_fields, auto_populate, appl
         if all_fields:
             sts_info = [
                 core_data_object_to_dict(x)
-                for x in fetch_sts_data_itr_from_portal(specimen_names)
+                for x in fetch_sts_data_itr_from_portal(client, specimen_names)
             ]
         else:
             sts_info = fetch_sts_info(client, specimen_names)
@@ -99,20 +99,33 @@ def sts_specimen(ctx, specimen_names, show_info, all_fields, auto_populate, appl
             updates.append(chng)
 
     if updates:
+        if apply_flag:
+            ads.upsert("specimen", dicts_to_core_data_objects(ads, "specimen", updates))
         if sys.stdout.isatty():
-            colour_pager(pretty_dict_itr(updates, "specimen.id"))
+            changes = updates_to_changes(updates)
+            colour_pager(pretty_changes_itr(changes, apply_flag))
         else:
             for upd in updates:
                 sys.stdout.write(ndjson_row(upd))
 
 
+def updates_to_changes(updates):
+    changes = []
+    for upd in updates:
+        first, *other = upd
+        chg = {first: upd[first]}
+        for otr in other:
+            chg[otr] = [None, upd[otr]]
+        changes.append(chg)
+    return changes
+
+
 def fetch_specimen_info_where_fields_are_null(ads):
-    filt = DataSourceFilter(
-        or_={
-            "supplied_name": {"eq": {"value": None}},
-            "sex.id": {"eq": {"value": None}},
-        }
-    )
+    filt = DataSourceFilter()
+    filt.or_ = {
+        "supplied_name": {"eq": {"value": None}},
+        "sex.id": {"eq": {"value": None}},
+    }
     return fetch_specimen_info_by_filter(ads, filt)
 
 
@@ -136,11 +149,8 @@ def fetch_sts_info(client, specimen_names):
     ]
     sex_tbl = client.sex_table
 
-    # Treat these uninformative values as NULL
-    null_values = {"NOT_COLLECTED", "NOT_PROVIDED"}
-
     found = []
-    for cdo in fetch_sts_data_itr_from_portal(specimen_names):
+    for cdo in fetch_sts_data_itr_from_portal(client, specimen_names):
         sts = obj_to_dict(fields_wanted, cdo)
         out = {
             "specimen.id": sts["sts_tolid.id"],
@@ -149,7 +159,7 @@ def fetch_sts_info(client, specimen_names):
         sex = None
         if sts_sex := sts["sts_sex"]:
             key = uc_munge(sts_sex)
-            sex = None if key in null_values else sex_tbl.get(key, sts_sex)
+            sex = sex_tbl.get(key, sts_sex)
         out["sex.id"] = sex
 
         found.append(out)
@@ -157,18 +167,20 @@ def fetch_sts_info(client, specimen_names):
     return de_duplicate_dicts("specimen.id", found)
 
 
-def fetch_sts_data_itr_from_portal(specimen_names):
+def fetch_sts_data_itr_from_portal(client, specimen_names):
     prtl = portal()
     prtl.page_size = 200
 
-    filt = DataSourceFilter()
-    filt.and_ = {
-        "sts_tolid.id": {"in_list": {"value": specimen_names}},
-        # Excludes records which haven't been exported from STS, so won't have
-        # gone to the lab:
-        "sts_ep_exported": {"eq": {"value": True}},
-    }
-    return prtl.get_list("sample", object_filters=filt)
+    for page in client.pages(specimen_names):
+        filt = DataSourceFilter(
+            and_={
+                "sts_tolid.id": {"in_list": {"value": page}},
+                # Excludes records which haven't been exported from STS, so won't have
+                # gone to the lab:
+                "sts_ep_exported": {"eq": {"value": True}},
+            }
+        )
+        yield from prtl.get_list("sample", object_filters=filt)
 
 
 def obj_to_dict(fields, cdo):
@@ -200,16 +212,16 @@ def de_duplicate_dicts(key, dict_list):
     """
     sngl = {}
     skip = set()
-    for d in dict_list:
-        k = d[key]
-        if k in skip:
+    for flat in dict_list:
+        oid = flat[key]
+        if oid in skip:
             continue
-        if xst := sngl.get(k):
-            if xst != d:
-                click.echo(f"Mismatched responses for '{key}':\n{d}\n{xst}")
-                sngl.pop(k)
-                skip.add(k)
+        if xst := sngl.get(oid):
+            if xst != flat:
+                click.echo(f"Mismatched responses for '{oid}':\n  {xst}\n  {flat}")
+                sngl.pop(oid)
+                skip.add(oid)
         else:
-            sngl[k] = d
+            sngl[oid] = flat
 
     return list(sngl.values())
