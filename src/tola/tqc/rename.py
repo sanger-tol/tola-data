@@ -73,7 +73,7 @@ def rename_records(client, table, input_obj):
     records_by_id = fetch_entries_from_specs(client, table, spec_dict)
 
     if table == "species":
-        to_many_tables = ("specimen", "umbrella")
+        to_many_tables = ("specimen",)
         # If there's no taxon_id in the new species, fetch it from the old
         fill_mising_taxon_id_from_old_species(spec_dict, records_by_id)
         fill_mising_field_from_old_records("location.id", spec_dict, records_by_id)
