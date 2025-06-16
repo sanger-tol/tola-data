@@ -4,7 +4,7 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager, s
+from tola.pretty import bold, colour_pager, plain_text_from_itr, s
 from tola.terminal import (
     TerminalDict,
     TerminalDiff,
@@ -116,7 +116,7 @@ class TableUpserter:
                 output_cdo.extend(ads.upsert(table, chunk))
         return output_cdo
 
-    def page_results(self, apply_flag=False):
+    def page_results(self, apply_flag=False, plain_text=False):
         """
         Reports formatted results to the terminal, or ND-JSON if STDOUT is not
         a TTY.
@@ -137,8 +137,12 @@ class TableUpserter:
             f" and {action}{bold(new_count)} new row{s(new_count)}:\n"
         )
 
-        if sys.stdout.isatty():
-            colour_pager(pretty_terminal_itr(changes, header, apply_flag))
+        if plain_text or sys.stdout.isatty():
+            itr = pretty_terminal_itr(changes, header, apply_flag)
+            if plain_text:
+                return plain_text_from_itr(itr)
+            else:
+                colour_pager(itr)
         else:
             for chng in changes:
                 sys.stdout.write(ndjson_row(chng.data))

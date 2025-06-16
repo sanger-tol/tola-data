@@ -7,9 +7,10 @@ from tol.sources.portal import portal
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
-from tola.terminal import pretty_changes_itr, pretty_dict_itr
+from tola.terminal import pretty_dict_itr
 from tola.tolqc_client import uc_munge
-from tola.tqc.engine import core_data_object_to_dict, dicts_to_core_data_objects
+from tola.tqc.engine import core_data_object_to_dict
+from tola.tqc.upsert import TableUpserter
 
 
 @click.command()
@@ -69,61 +70,67 @@ def sts_specimen(ctx, specimen_names, show_info, all_fields, auto_populate, appl
         return
 
     if show_info:
-        if all_fields:
-            sts_info = [
-                core_data_object_to_dict(x)
-                for x in fetch_sts_data_itr_from_portal(client, specimen_names)
-            ]
-        else:
-            sts_info = fetch_sts_info(client, specimen_names)
+        show_sts_info(client, all_fields, specimen_names)
+    else:
+        if upsrtr := update_specimen_fields(
+            client, specimen_names, patches, apply_flag
+        ):
+            upsrtr.page_results(apply_flag)
 
-        if sys.stdout.isatty():
-            key = "sts_tolid.id" if all_fields else "specimen.id"
-            colour_pager(pretty_dict_itr(sts_info, key))
-        else:
-            for info in sts_info:
-                sys.stdout.write(ndjson_row(info))
-        return
 
+def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
     updates = []
+    acc_updates = []
     for info in fetch_sts_info(client, specimen_names):
         sid = info["specimen.id"]
         dbv = patches[sid]
         update_flag = False
         chng = {"specimen.id": sid}
-        for fld in "supplied_name", "sex.id":
+        for fld in "supplied_name", "accession.id", "sex.id":
             if dbv[fld] is None and (val := info[fld]):
                 update_flag = True
                 chng[fld] = val
         if update_flag:
             updates.append(chng)
+            if acc := chng.get("accession.id"):
+                acc_updates.append(
+                    {
+                        "accession.id": acc,
+                        "accession_type.id": "BioSpecimen",
+                    }
+                )
 
     if updates:
+        upsrtr = TableUpserter(client)
+        upsrtr.build_table_upserts("accession", acc_updates)
+        upsrtr.build_table_upserts("specimen", updates)
         if apply_flag:
-            ads.upsert("specimen", dicts_to_core_data_objects(ads, "specimen", updates))
-        if sys.stdout.isatty():
-            changes = updates_to_changes(updates)
-            colour_pager(pretty_changes_itr(changes, apply_flag))
-        else:
-            for upd in updates:
-                sys.stdout.write(ndjson_row(upd))
+            upsrtr.apply_upserts()
+        return upsrtr
 
 
-def updates_to_changes(updates):
-    changes = []
-    for upd in updates:
-        first, *other = upd
-        chg = {first: upd[first]}
-        for otr in other:
-            chg[otr] = [None, upd[otr]]
-        changes.append(chg)
-    return changes
+def show_sts_info(client, all_fields, specimen_names):
+    if all_fields:
+        sts_info = [
+            core_data_object_to_dict(x)
+            for x in fetch_sts_data_itr_from_portal(client, specimen_names)
+        ]
+    else:
+        sts_info = fetch_sts_info(client, specimen_names)
+
+    if sys.stdout.isatty():
+        key = "sts_tolid.id" if all_fields else "specimen.id"
+        colour_pager(pretty_dict_itr(sts_info, key))
+    else:
+        for info in sts_info:
+            sys.stdout.write(ndjson_row(info))
 
 
 def fetch_specimen_info_where_fields_are_null(ads):
     filt = DataSourceFilter()
     filt.or_ = {
         "supplied_name": {"eq": {"value": None}},
+        "accession.id": {"eq": {"value": None}},
         "sex.id": {"eq": {"value": None}},
     }
     return fetch_specimen_info_by_filter(ads, filt)
@@ -136,7 +143,7 @@ def fetch_specimen_info_for_specimens(ads, specimen_names):
 
 def fetch_specimen_info_by_filter(ads, filt):
     itr = ads.get_list("specimen", object_filters=filt)
-    fields = ["specimen.id", "supplied_name", "sex.id"]
+    fields = ["specimen.id", "supplied_name", "accession.id", "sex.id"]
     found = [obj_to_dict(fields, x) for x in itr]
     return {x["specimen.id"]: x for x in found}
 
@@ -145,6 +152,8 @@ def fetch_sts_info(client, specimen_names):
     fields_wanted = [
         "sts_tolid.id",
         "sts_specimen.id",
+        "sts_biospecimen_accession",
+        "sts_sample_same_as",
         "sts_sex",
     ]
     sex_tbl = client.sex_table
@@ -155,6 +164,9 @@ def fetch_sts_info(client, specimen_names):
         out = {
             "specimen.id": sts["sts_tolid.id"],
             "supplied_name": sts["sts_specimen.id"],
+            "accession.id": (
+                sts["sts_biospecimen_accession"] or sts["sts_sample_same_as"]
+            ),
         }
         sex = None
         if sts_sex := sts["sts_sex"]:
@@ -175,9 +187,6 @@ def fetch_sts_data_itr_from_portal(client, specimen_names):
         filt = DataSourceFilter(
             and_={
                 "sts_tolid.id": {"in_list": {"value": page}},
-                # Excludes records which haven't been exported from STS, so won't have
-                # gone to the lab:
-                "sts_ep_exported": {"eq": {"value": True}},
             }
         )
         yield from prtl.get_list("sample", object_filters=filt)
@@ -218,7 +227,12 @@ def de_duplicate_dicts(key, dict_list):
             continue
         if xst := sngl.get(oid):
             if xst != flat:
-                click.echo(f"Mismatched responses for '{oid}':\n  {xst}\n  {flat}")
+                click.echo(
+                    f"\nMismatched responses for '{oid}':\n"
+                    f"  {ndjson_row(xst)}  {ndjson_row(flat)}",
+                    nl=False,
+                    err=True,
+                )
                 sngl.pop(oid)
                 skip.add(oid)
         else:

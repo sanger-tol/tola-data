@@ -16,6 +16,7 @@ from tola.diff_mlwh.database import MLWHDiffDB
 from tola.diff_mlwh.diff_store import pretty_diff_iterator
 from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
+from tola.tqc.sts import fetch_specimen_info_for_specimens, update_specimen_fields
 
 
 @click.command()
@@ -80,6 +81,7 @@ def cli(
             else None
         )
 
+        new_specimens = {}
         for study_id in study_id_list:
             for platform, run_data_fetcher in (
                 ("PacBio", pacbio_fetcher),
@@ -88,6 +90,16 @@ def cli(
                 row_itr = run_data_fetcher(mlwh, study_id, mlwh_data)
                 rspns = client.ndjson_post("loader/seq-data", row_itr)
                 click.echo(formatted_response(rspns, study_id, platform), nl=False)
+                record_new_specimens(new_specimens, rspns)
+
+        # Import any missing specimen info from STS for newly added specimens
+        if specimen_names := list(new_specimens):
+            patches = fetch_specimen_info_for_specimens(client.ads, specimen_names)
+            if upsrtr := update_specimen_fields(
+                client, specimen_names, patches, apply_flag=True
+            ):
+                click.echo("")
+                click.echo(upsrtr.page_results(apply_flag=True, plain_text=True))
 
         if run_diff_mlwh:
             # Ensure data is flushed to storage
@@ -117,19 +129,22 @@ def fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson):
     )
 
 
+def record_new_specimens(new_specimens, response):
+    if new := response.get("new"):
+        for row in new:
+            if spcmn := row.get("specimen"):
+                new_specimens[spcmn] = True
+
+
 def formatted_response(response, study_id, platform):
     out = StringIO("")
 
-    new = response.get("new")
-    if new:
-        out.write(
-            f"\n\nNew {platform} data in '{new[0]['study']} ({study_id})':\n\n"
-        )
+    if new := response.get("new"):
+        out.write(f"\n\nNew {platform} data in '{new[0]['study']} ({study_id})':\n\n")
         for row in new:
             out.write(response_row_std_fields(row))
 
-    upd = response.get("updated")
-    if upd:
+    if upd := response.get("updated"):
         out.write(
             f"\n\nUpdated {platform} data in '{upd[0]['study']} ({study_id})':\n\n"
         )

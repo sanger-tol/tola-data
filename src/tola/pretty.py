@@ -3,8 +3,24 @@ import json
 import os
 import re
 import subprocess
+from io import StringIO
 
 import click
+
+
+def strip_ansi(txt):
+    """
+    Strips any ANSI escape codes from `txt`
+    """
+    return re.sub(r"\033\[[;?0-9]*[a-zA-Z]", "", txt)
+
+
+def plain_text_from_itr(itr):
+    out = StringIO("")
+    for txt in itr:
+        out.write(strip_ansi(txt))
+
+    return out.getvalue()
 
 
 def field_style(column_name, val):
@@ -96,7 +112,6 @@ def colour_pager(itr):
             pass
         else:
             break
-
 
 
 def natural(string):
