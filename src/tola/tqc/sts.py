@@ -9,7 +9,7 @@ from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
 from tola.terminal import pretty_dict_itr
 from tola.tolqc_client import uc_munge
-from tola.tqc.engine import core_data_object_to_dict
+from tola.tqc.engine import core_data_object_to_dict, id_iterator
 from tola.tqc.upsert import TableUpserter
 
 
@@ -37,19 +37,41 @@ from tola.tqc.upsert import TableUpserter
       `sex.id` fields, and fill them in using the ToL Portal's `sample` tab.
       """,
 )
+@click_options.apply_flag
+@click.option(
+    "--key",
+    default="specimen.id",
+    show_default=True,
+    help="Name of field containing specimen IDs in ND-JSON input files",
+)
+@click_options.file
+@click_options.file_format
 @click.argument(
     "specimen-names",
     nargs=-1,
 )
-@click_options.apply_flag
-def sts_specimen(ctx, specimen_names, show_info, all_fields, auto_populate, apply_flag):
+def sts_specimen(
+    ctx,
+    show_info,
+    all_fields,
+    auto_populate,
+    apply_flag,
+    key,
+    file_list,
+    file_format,
+    specimen_names,
+):
     """
     Fetches fields required for the `specimen` table from STS values found in
     the ToL Portal.
     """
 
+    if key == "id":
+        key = "specimen.id"
+
+    specimen_names = list(id_iterator(key, specimen_names, file_list, file_format))
+
     client = ctx.obj
-    ads = client.ads
 
     if all_fields:
         show_info = True
@@ -62,10 +84,10 @@ def sts_specimen(ctx, specimen_names, show_info, all_fields, auto_populate, appl
         )
 
     if auto_populate:
-        patches = fetch_specimen_info_where_fields_are_null(ads)
+        patches = fetch_specimen_info_where_fields_are_null(client)
         specimen_names = list(patches)
     elif specimen_names:
-        patches = fetch_specimen_info_for_specimens(ads, specimen_names)
+        patches = fetch_specimen_info_for_specimens(client, specimen_names)
     else:
         return
 
@@ -90,6 +112,9 @@ def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
             if dbv[fld] is None and (val := info[fld]):
                 update_flag = True
                 chng[fld] = val
+        # if (val := info["supplied_name"]) and val != dbv["supplied_name"]:
+        #     update_flag = True
+        #     chng["supplied_name"] = val
         if update_flag:
             updates.append(chng)
             if acc := chng.get("accession.id"):
@@ -126,23 +151,25 @@ def show_sts_info(client, all_fields, specimen_names):
             sys.stdout.write(ndjson_row(info))
 
 
-def fetch_specimen_info_where_fields_are_null(ads):
+def fetch_specimen_info_where_fields_are_null(client):
     filt = DataSourceFilter()
     filt.or_ = {
         "supplied_name": {"eq": {"value": None}},
         "accession.id": {"eq": {"value": None}},
         "sex.id": {"eq": {"value": None}},
     }
-    return fetch_specimen_info_by_filter(ads, filt)
+    return fetch_specimen_info_by_filter(client, filt)
 
 
-def fetch_specimen_info_for_specimens(ads, specimen_names):
-    filt = DataSourceFilter(in_list={"id": specimen_names})
-    return fetch_specimen_info_by_filter(ads, filt)
+def fetch_specimen_info_for_specimens(client, specimen_names):
+    ads = client.ads
+    for page in client.pages(specimen_names):
+        filt = DataSourceFilter(in_list={"id": page})
+        yield from fetch_specimen_info_by_filter(ads, filt)
 
 
-def fetch_specimen_info_by_filter(ads, filt):
-    itr = ads.get_list("specimen", object_filters=filt)
+def fetch_specimen_info_by_filter(client, filt):
+    itr = client.ads.get_list("specimen", object_filters=filt)
     fields = ["specimen.id", "supplied_name", "accession.id", "sex.id"]
     found = [obj_to_dict(fields, x) for x in itr]
     return {x["specimen.id"]: x for x in found}
