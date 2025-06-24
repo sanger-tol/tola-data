@@ -33,7 +33,7 @@ from tola.tqc.upsert import TableUpserter
     flag_value=True,
     default=False,
     help="""
-      Query the ToLQC `specimen` table for any empty `supplied_name` or
+      Query the ToLQC `specimen` table for any empty `sts_specimen` or
       `sex.id` fields, and fill them in using the ToL Portal's `sample` tab.
       """,
 )
@@ -108,13 +108,13 @@ def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
         dbv = patches[sid]
         update_flag = False
         chng = {"specimen.id": sid}
-        for fld in "supplied_name", "accession.id", "sex.id":
+        for fld in "sts_specimen", "accession.id", "sex.id":
             if dbv[fld] is None and (val := info[fld]):
                 update_flag = True
                 chng[fld] = val
-        # if (val := info["supplied_name"]) and val != dbv["supplied_name"]:
+        # if (val := info["sts_specimen"]) and val != dbv["sts_specimen"]:
         #     update_flag = True
-        #     chng["supplied_name"] = val
+        #     chng["sts_specimen"] = val
         if update_flag:
             updates.append(chng)
             if acc := chng.get("accession.id"):
@@ -154,7 +154,7 @@ def show_sts_info(client, all_fields, specimen_names):
 def fetch_specimen_info_where_fields_are_null(client):
     filt = DataSourceFilter()
     filt.or_ = {
-        "supplied_name": {"eq": {"value": None}},
+        "sts_specimen": {"eq": {"value": None}},
         "accession.id": {"eq": {"value": None}},
         "sex.id": {"eq": {"value": None}},
     }
@@ -162,15 +162,16 @@ def fetch_specimen_info_where_fields_are_null(client):
 
 
 def fetch_specimen_info_for_specimens(client, specimen_names):
-    ads = client.ads
+    info = {}
     for page in client.pages(specimen_names):
         filt = DataSourceFilter(in_list={"id": page})
-        yield from fetch_specimen_info_by_filter(ads, filt)
+        info.update(fetch_specimen_info_by_filter(client, filt))
+    return info
 
 
 def fetch_specimen_info_by_filter(client, filt):
     itr = client.ads.get_list("specimen", object_filters=filt)
-    fields = ["specimen.id", "supplied_name", "accession.id", "sex.id"]
+    fields = ["specimen.id", "sts_specimen", "accession.id", "sex.id"]
     found = [obj_to_dict(fields, x) for x in itr]
     return {x["specimen.id"]: x for x in found}
 
@@ -190,7 +191,7 @@ def fetch_sts_info(client, specimen_names):
         sts = obj_to_dict(fields_wanted, cdo)
         out = {
             "specimen.id": sts["sts_tolid.id"],
-            "supplied_name": sts["sts_specimen.id"],
+            "sts_specimen": sts["sts_specimen.id"],
             "accession.id": (
                 sts["sts_biospecimen_accession"] or sts["sts_sample_same_as"]
             ),

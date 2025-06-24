@@ -94,7 +94,7 @@ def cli(
 
         # Import any missing specimen info from STS for newly added specimens
         if specimen_names := list(new_specimens):
-            patches = fetch_specimen_info_for_specimens(client.ads, specimen_names)
+            patches = fetch_specimen_info_for_specimens(client, specimen_names)
             if upsrtr := update_specimen_fields(
                 client, specimen_names, patches, apply_flag=True
             ):
