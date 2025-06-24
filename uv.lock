@@ -637,8 +637,8 @@ wheels = [
 
 [[package]]
 name = "tol-sdk"
-version = "1.5.13"
-source = { git = "https://github.com/sanger-tol/tol-sdk#e9f2d27639219e2ecbcf14e240b6a3b4f2b3ad65" }
+version = "1.5.14"
+source = { git = "https://github.com/sanger-tol/tol-sdk#1d0d5b07ef221209bc3679077f6383fd9fbcd25b" }
 dependencies = [
     { name = "cachetools" },
     { name = "case-converter" },
