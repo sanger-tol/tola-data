@@ -81,13 +81,19 @@ from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit
     ),
 )
 @click.option(
+    "--name",
+    "-n",
+    "dataset_name",
+    help="Name of dataset if creating a single dataset.",
+)
+@click.option(
     "--noisy/--quiet",
     default=True,
     show_default=True,
     help="List new and existing datasets to STDERR",
 )
 @click_options.input_files
-def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
+def dataset(ctx, info_flag, output, fofn_paths, dataset_name, noisy, input_files):
     """
     Store new datasets, populating the `dataset` and `dataset_element` tables
     in the ToLQC database, and giving each newly created dataset a current
@@ -109,10 +115,14 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
     field.
 
     A "dataset.id" field can also be included, but a ULID will otherwise be
-    automatically generated.
+    automatically generated.  A "name" field will be used to fill in the
+    optional name column in the "dataset" table.
     """
 
     client = ctx.obj
+
+    if dataset_name and not fofn_paths:
+        sys.exit("Cannot give --name argument when not building a single dataset")
 
     if info_flag:
         if not input_files:
@@ -129,7 +139,7 @@ def dataset(ctx, info_flag, output, fofn_paths, noisy, input_files):
     else:
         stored_datasets = {}
         input_obj = (
-            input_objects_from_fofn_or_exit(fofn_paths)
+            input_objects_from_fofn_or_exit(fofn_paths, dataset_name)
             if fofn_paths
             else input_objects_or_exit(ctx, input_files)
         )
@@ -183,14 +193,14 @@ def find_dataset_file(directory: Path):
     return found
 
 
-def input_objects_from_fofn_or_exit(fofn_paths):
-    input_obj = input_objects_from_fofn(fofn_paths)
+def input_objects_from_fofn_or_exit(fofn_paths, dataset_name):
+    input_obj = input_objects_from_fofn(fofn_paths, dataset_name)
     if not input_obj:
         sys.exit("Error: No remote paths from --fofn input")
     return input_obj
 
 
-def input_objects_from_fofn(fofn_paths):
+def input_objects_from_fofn(fofn_paths, dataset_name):
     remote_paths = []
     for fofn in fofn_paths:
         if str(fofn) == "-":
@@ -202,7 +212,7 @@ def input_objects_from_fofn(fofn_paths):
             remote_paths.extend(lines_from_filehandle(fofn.open()))
 
     return (
-        [{"elements": [{"remote_path": r} for r in remote_paths]}]
+        [{"name": dataset_name, "elements": [{"remote_path": r} for r in remote_paths]}]
         if remote_paths
         else None
     )
@@ -245,6 +255,8 @@ def echo_datasets(stored_datasets):
         ce(f"\n{bold(len(stored))} {label} dataset{s(stored)}:")
         for ds in stored:
             ce(f"\n  {bold(ds['dataset.id'])}")
+            if name := ds.get('name'):
+                ce(f"    {bold(repr(name))}")
             for ele in ds["elements"]:
                 ce(f"    {ele['data.id']}")
 
@@ -265,6 +277,7 @@ def print_dataset_info(client, found_datasets):
         display.append(
             {
                 "dataset.id": fnd[key],
+                "name": db_obj.name,
                 "status": status.status_type.id,
                 "status_time": status.status_time,
                 "specimens": specimens,
