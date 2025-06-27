@@ -23,6 +23,7 @@ from tola.tqc.sts import fetch_specimen_info_for_specimens, update_specimen_fiel
 @click_options.tolqc_url
 @click_options.api_token
 @click_options.tolqc_alias
+@click_options.log_level
 @click.option(
     "--stdout/--server",
     "write_to_stdout",
@@ -51,6 +52,7 @@ def cli(
     tolqc_url,
     api_token,
     tolqc_alias,
+    log_level,
     study_id_list,
     write_to_stdout,
     run_diff_mlwh,
@@ -67,6 +69,13 @@ def cli(
     Iterates over each study in the ToLQC database if no STUDY_IDs are
     supplied.
     """
+
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(message)s",
+        force=True,
+    )
+
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if not study_id_list:
         study_id_list = client.list_auto_sync_study_ids()
@@ -163,7 +172,7 @@ def response_row_std_fields(row):
 def illumina_fetcher(mlwh, study_id, save_data=None):
     logging.info(f"Fetching Illumina data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
-    crsr.execute(illumina_sql(), (study_id,))
+    crsr.execute(illumina_sql(), [str(study_id)])
     for row in crsr:
         build_remote_path(row)
         fmt = ndjson_row(row)
@@ -186,7 +195,7 @@ PIPELINE_TO_LIBRARY_TYPE = {
 def pacbio_fetcher(mlwh, study_id, save_data=None):
     logging.info(f"Fetching PacBio data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
-    crsr.execute(pacbio_sql(), (study_id,))
+    crsr.execute(pacbio_sql(), [str(study_id)])
     for row in crsr:
         build_remote_path(row)
         extract_pimms_description(row)
@@ -247,13 +256,19 @@ def extract_pimms_description(row):
 
 @cache
 def illumina_sql():
+    """
+    The STRAIGHT_JOIN forces the optimizer to join the tables in the order in
+    which they are listed in the FROM clause.
+    """
+
     return inspect.cleandoc(
         """
-        SELECT REGEXP_REPLACE(
-            -- Trim file suffix, i.e. ".cram"
-            irods.irods_data_relative_path
-              , '\\.[[:alnum:]]+$'
-              , ''
+        SELECT STRAIGHT_JOIN
+            REGEXP_REPLACE(
+              -- Trim file suffix, i.e. ".cram"
+              irods.irods_data_relative_path
+                , '\\.[[:alnum:]]+$'
+                , ''
             ) AS data_id
           , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
@@ -331,7 +346,8 @@ def pacbio_sql():
             USING (id_pac_bio_rw_metrics_tmp)
           GROUP BY rwm.id_pac_bio_rw_metrics_tmp
         )
-        SELECT well_metrics.movie_name AS data_id
+        SELECT STRAIGHT_JOIN
+            well_metrics.movie_name AS data_id
           , CONVERT(study.id_study_lims, SIGNED) AS study_id
           , sample.name AS sample_name
           , sample.description AS sample_description
