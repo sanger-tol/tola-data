@@ -123,3 +123,14 @@ apply_flag = click.option(
     show_default=True,
     help="Apply changes or perform a dry run and show changes which would be made.",
 )
+
+write_to_stdout = click.option(
+    "--stdout/--server",
+    "write_to_stdout",
+    default=False,
+    show_default=True,
+    help="""
+    Writes the fetched data to STDOUT as NDJSON instead of saving to the ToLQC
+    database.
+    """,
+)

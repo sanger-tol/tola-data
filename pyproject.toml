@@ -23,6 +23,7 @@ dependencies = [
     "requests",
     "tol-sdk",
     'importlib-metadata; python_version >= "3.12"',
+    "partisan",
 ]
 
 [project.scripts]
@@ -31,6 +32,7 @@ data-processed="tola.data_processed:cli"
 diff-mlwh="tola.diff_mlwh.diff_mlwh_cmd:cli"
 duckdb-pacbio-report="tola.duckdb_pacbio_report:cli"
 fetch-mlwh-seq-data="tola.fetch_mlwh_seq_data:cli"
+fetch-ont-seq-data="tola.fetch_ont_seq_data:cli"
 goat-client="tola.goat_client:cli"
 jv="tola.tqc.view:view"
 load-illumina="tola.load_illumina:cli"
@@ -79,6 +81,7 @@ ignore = [
 
 [tool.uv.sources]
 tol-sdk = { git = "https://github.com/sanger-tol/tol-sdk" }
+partisan = { git = "https://github.com/wtsi-npg/partisan", rev = "3.2.0" }
 
 [dependency-groups]
 dev = [

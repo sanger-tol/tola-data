@@ -24,16 +24,7 @@ from tola.tqc.sts import fetch_specimen_info_for_specimens, update_specimen_fiel
 @click_options.api_token
 @click_options.tolqc_alias
 @click_options.log_level
-@click.option(
-    "--stdout/--server",
-    "write_to_stdout",
-    default=False,
-    show_default=True,
-    help="""
-    Writes the fetched MLWH data to STDOUT as NDJSON instead of saving to the
-    ToLQC database.
-    """,
-)
+@click_options.write_to_stdout
 @click.option(
     "--diff-mlwh/--no-diff-mlwh",
     "run_diff_mlwh",
