@@ -38,8 +38,7 @@ class SubTrack:
     }
 
     def fetch_submission_info(self, file_names):
-        crsr = self.conn.cursor()
-        col_names = list(self.SUB_INFO_DICT.values())
+        crsr = self.conn.cursor(dictionary=True)
         last_page = None
         for page in self.pages(file_names):
             page_size = len(page)
@@ -47,8 +46,7 @@ class SubTrack:
                 sql = self.submission_info_sql(page_size)
                 last_page = page_size
             crsr.execute(sql, page)
-            for row in crsr:
-                yield {col_names[i]: val for i, val in enumerate(row)}
+            yield from crsr
 
     def submission_info_sql(self, count):
         placeholders = ",".join(["%s"] * count)

@@ -81,7 +81,7 @@ ignore = [
 
 [tool.uv.sources]
 tol-sdk = { git = "https://github.com/sanger-tol/tol-sdk" }
-partisan = { git = "https://github.com/wtsi-npg/partisan", rev = "3.2.0" }
+partisan = { git = "https://github.com/wtsi-npg/partisan", rev = "3.3.0" }
 
 [dependency-groups]
 dev = [
