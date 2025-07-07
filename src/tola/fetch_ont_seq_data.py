@@ -3,13 +3,16 @@ import logging
 import pathlib
 import re
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 import click
+import pytz
 from partisan.irods import AVU, Collection, Timestamp, query_metadata
 
 from tola import click_options, db_connection, tolqc_client
+from tola.fetch_mlwh_seq_data import formatted_response
 from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.tqc.upsert import TableUpserter
 
 
 class MetadataMismatchError(ValueError):
@@ -83,8 +86,11 @@ def cli(
 
     client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
 
+    if since:
+        since = utc_datetime(since)
+
     if not since and not write_to_stdout:
-        since = fetch_latest_irods_update_date(client)
+        since = get_irods_ont_last_modified(client)
     since_query = [Timestamp(since)] if since else None
 
     logging.basicConfig(
@@ -177,8 +183,33 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
     return merge_by_data_id(study_data)
 
 
-def fetch_latest_irods_update_date(client):
-    pass
+def utc_datetime(txt):
+    dt = datetime.fromisoformat(txt)
+    if not dt.tzinfo or dt.tzinfo.utcoffset(dt) is None:
+        return pytz.timezone("UTC").localize(dt)
+    else:
+        return dt.astimezone(UTC)
+
+
+def get_irods_ont_last_modified(client):
+    (upd,) = client.ads.get_by_ids("metadata", ["irods.ont.last_modified"])
+    return upd.timestamp_value if upd else None
+
+
+def store_irods_ont_last_modified(client, timestamp):
+    tbl = "metadata"
+    client.ads.upsert(
+        tbl,
+        [
+            client.build_cdo(
+                tbl,
+                "irods.ont.last_modified",
+                {
+                    "timestamp_value": timestamp,
+                },
+            )
+        ],
+    )
 
 
 def merge_by_data_id(study_data):
@@ -317,7 +348,7 @@ def build_run_id(avu_dict):
     # Avoid using run IDs which are just an integer
     run_id = avu_dict.get("experiment_name")
     if re.fullmatch(r"^\d+$", run_id):
-        run_id = avu_dict.get("hostname", "ONT-X") + "-" + run_id
+        run_id = f"ONT-EARLY-{run_id}"
 
     return run_id
 
@@ -460,4 +491,26 @@ def merge_data(row, mlwh_row, fields):
 
 
 def store_ont_data(client, ont_rows):
-    pass
+    mlwh_rows = []
+    data_files = []
+    for row in ont_rows:
+        data_id = row["data_id"]
+        store = {}
+        mlwh_rows.append(store)
+        for k, v in row.items():
+            if k == "files":
+                for f in v:
+                    data_files.append(
+                        {
+                            "data_id": data_id,
+                            **f,
+                        }
+                    )
+            else:
+                store[k] = v
+    rspns = client.ndjson_post("loader/seq-data", [ndjson_row(x) for x in mlwh_rows])
+    click.echo(formatted_response(rspns, "1000", "ONT"), nl=False)
+
+    upsrtr = TableUpserter(client)
+    upsrtr.build_table_upserts("file", data_files, key="remote_path")
+    upsrtr.apply_upserts()
