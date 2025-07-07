@@ -130,7 +130,7 @@ write_to_stdout = click.option(
     default=False,
     show_default=True,
     help="""
-    Writes the fetched data to STDOUT as NDJSON instead of saving to the ToLQC
+    Writes the fetched data to STDOUT as ND-JSON instead of saving to the ToLQC
     database.
     """,
 )

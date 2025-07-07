@@ -1,13 +1,15 @@
 import inspect
 import logging
+import pathlib
 import re
 import sys
+from datetime import datetime
 
 import click
-from partisan.irods import AVU, Collection, query_metadata
+from partisan.irods import AVU, Collection, Timestamp, query_metadata
 
 from tola import click_options, db_connection, tolqc_client
-from tola.ndjson import ndjson_row
+from tola.ndjson import ndjson_row, parse_ndjson_stream
 
 
 class MetadataMismatchError(ValueError):
@@ -41,6 +43,23 @@ experiment_name, flowcell_id and instrument_slot in oseq_flowcell
     nargs=-1,
     required=False,
 )
+@click.option(
+    "--since",
+    "since",
+    help="Show data modified since a particular datetime in GMT/UTC",
+)
+@click.option(
+    "--input-file",
+    "input_files",
+    type=click.Path(
+        path_type=pathlib.Path,
+        readable=True,
+        dir_okay=False,
+        allow_dash=True,
+    ),
+    multiple=True,
+    help="One or more ND-JSON input files in the format produced by '--stdout'",
+)
 def cli(
     tolqc_url,
     api_token,
@@ -48,6 +67,8 @@ def cli(
     log_level,
     study_id_list,
     write_to_stdout,
+    since,
+    input_files,
 ):
     """
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
@@ -60,6 +81,12 @@ def cli(
     database where "study.auto_sync = true".
     """
 
+    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
+
+    if not since and not write_to_stdout:
+        since = fetch_latest_irods_update_date(client)
+    since_query = [Timestamp(since)] if since else None
+
     logging.basicConfig(
         level=getattr(logging, log_level),
         format="%(message)s",
@@ -71,23 +98,30 @@ def cli(
         study_id_list = client.list_auto_sync_study_ids()
 
     ont_rows = []
-    for study_id in study_id_list:
-        ont_rows.extend(fetch_ont_irods_data_for_study(study_id))
-    add_mlwh_sample_data(ont_rows)
+    if input_files:
+        for file in input_files:
+            fh = click.open_file(file)
+            ont_rows.extend(parse_ndjson_stream(fh))
+    else:
+        for study_id in study_id_list:
+            ont_rows.extend(fetch_ont_irods_data_for_study(study_id, since_query))
+        add_mlwh_sample_data(ont_rows)
 
-    if write_to_stdout or True:
+    if write_to_stdout:
         for row in ont_rows:
             sys.stdout.write(ndjson_row(row))
+    else:
+        store_ont_data(client, ont_rows)
 
 
-def fetch_ont_irods_data_for_study(study_id):
+def fetch_ont_irods_data_for_study(study_id, since_query):
     study_data = []
     for coll in query_metadata(
         AVU("study_id", study_id),
+        timestamps=since_query,
         collection=True,
         data_object=False,
         zone="/seq/ont/",  # Restricts query to Oxford Nanopore data
-        tries=IRODS_RETRY_COUNT,
     ):
         coll_path = str(coll.path)
 
@@ -104,7 +138,6 @@ def fetch_ont_irods_data_for_study(study_id):
         avu_dict = {}
         for avu in coll.metadata(
             ancestors=True,  # Mutiplexed data needs metadata from further up the tree
-            tries=IRODS_RETRY_COUNT,
         ):
             # Remove any "ont:" prefix so that the field names match the names
             # in the mlwh.oseq_flowcell table.
@@ -128,9 +161,9 @@ def fetch_ont_irods_data_for_study(study_id):
             "instrument_name":        avu_dict.get("hostname"),
             "element":                build_element(avu_dict),
             "run_id":                 run_id,
-            "run_complete":           coll.created(tries=IRODS_RETRY_COUNT),
+            "run_start":              coll.created(),
             # Not actually a QC date.  Destined for data.date:
-            "qc_date":                coll.modified(tries=IRODS_RETRY_COUNT),
+            "qc_date":                coll.modified(),
             "tag1_id":                avu_dict.get("tag_identifier"),
             "tag2_id":                avu_dict.get("tag2_identifier"),
             "collection":             coll_path,
@@ -142,6 +175,10 @@ def fetch_ont_irods_data_for_study(study_id):
         study_data.append(row)
 
     return merge_by_data_id(study_data)
+
+
+def fetch_latest_irods_update_date(client):
+    pass
 
 
 def merge_by_data_id(study_data):
@@ -172,7 +209,7 @@ def merge_row_check_matches(data_id, skip_fields, xst, row):
     The "product" field is the location of ONT data on iRODS, so we extend
     the "files" list.
 
-    For the datetime fields, the earliest "run_complete" (created) will be the
+    For the datetime fields, the earliest "run_start" (created) will be the
     completion time of the sequencing run, and the latest "qc_date"
     (modified) will be when the re-basecalling finished.
     """
@@ -185,8 +222,8 @@ def merge_row_check_matches(data_id, skip_fields, xst, row):
             if xst_v is None:
                 xst[k] = v
             elif v is not None:
-                if k == "run_complete":
-                    # Take the earliest run_complete datetime
+                if k == "run_start":
+                    # Take the earliest run_start datetime
                     if v < xst_v:
                         xst[k] = v
                 elif k == "qc_date":
@@ -260,7 +297,7 @@ def product_from_collection(coll):
 def sub_collection_names(coll):
     top_types = set()  # Set of file types found at the top level
     sub_names = set()  # Set of subdirectory names found
-    for obj in coll.contents(tries=IRODS_RETRY_COUNT):
+    for obj in coll.contents():
         if isinstance(obj, Collection):
             sub_names.add(obj.path.name)
         elif m := re.search(r"\.(\w+)(\.gz)?$", obj.name, re.IGNORECASE):
@@ -420,3 +457,7 @@ def merge_data(row, mlwh_row, fields):
         val = mlwh_row.get(fld)
         if val is not None:
             row[fld] = val
+
+
+def store_ont_data(client, ont_rows):
+    pass
