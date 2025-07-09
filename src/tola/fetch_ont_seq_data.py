@@ -3,14 +3,14 @@ import logging
 import pathlib
 import re
 import sys
-from datetime import UTC, datetime
+from datetime import datetime
 
 import click
 import pytz
 from partisan.irods import AVU, Collection, Timestamp, query_metadata
 
 from tola import click_options, db_connection, tolqc_client
-from tola.fetch_mlwh_seq_data import formatted_response
+from tola.fetch_mlwh_seq_data import response_row_std_fields
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 from tola.tqc.upsert import TableUpserter
 
@@ -49,7 +49,11 @@ experiment_name, flowcell_id and instrument_slot in oseq_flowcell
 @click.option(
     "--since",
     "since",
-    help="Show data modified since a particular datetime in GMT/UTC",
+    help="""
+      Show data modified since a particular datetime, in ISO8601
+      (RFC3339) format. If there is no time zone it is assumed to be UTC /
+      GMT.
+    """,
 )
 @click.option(
     "--input-file",
@@ -188,7 +192,7 @@ def utc_datetime(txt):
     if not dt.tzinfo or dt.tzinfo.utcoffset(dt) is None:
         return pytz.timezone("UTC").localize(dt)
     else:
-        return dt.astimezone(UTC)
+        return dt
 
 
 def get_irods_ont_last_modified(client):
@@ -205,11 +209,23 @@ def store_irods_ont_last_modified(client, timestamp):
                 tbl,
                 "irods.ont.last_modified",
                 {
+                    "description": (
+                        "The most recent modified time of all iRODS Collections"
+                        ' returned by the metadata query of "/seq/ont/"'
+                    ),
                     "timestamp_value": timestamp,
                 },
             )
         ],
     )
+
+
+def update_stored_max_modified(client, max_modified):
+    if isinstance(max_modified, str):
+        max_modified = datetime.fromisoformat(max_modified)
+    stored_max = get_irods_ont_last_modified(client)
+    if not stored_max or max_modified > stored_max:
+        store_irods_ont_last_modified(client, max_modified)
 
 
 def merge_by_data_id(study_data):
@@ -412,14 +428,15 @@ def mlwh_ont_info_sql(count):
           , sample.accession_number AS biosample_accession
           , sample.donor_id AS biospecimen_accession
           , sample.common_name AS scientific_name
-          , sample.taxon_id AS taxon_id
+          , sample.taxon_id
           , flowcell.experiment_name
           , flowcell.flowcell_id
           , flowcell.instrument_slot
           , flowcell.tag_identifier
           , flowcell.tag2_identifier
           , flowcell.instrument_name
-          , flowcell.pipeline_id_lims AS pipeline_id_lims
+          , COALESCE(flowcell.pipeline_id_lims, 'ONT') AS pipeline_id_lims
+          , COALESCE(flowcell.library_tube_barcode, sample.name) AS library_id
         FROM sample
         LEFT JOIN oseq_flowcell AS flowcell USING (id_sample_tmp)
         WHERE sample.name IN ({placeholders})
@@ -438,8 +455,6 @@ def add_mlwh_sample_data(ont_rows):
             mlwh_by_data_id[data_id] = row
 
     for row in ont_rows:
-        sample_name = row["sample_name"]
-        data_id = row["data_id"]
         merge_mlwh_data(row, mlwh_by_data_id, mlwh_by_sample)
 
 
@@ -463,6 +478,7 @@ DATA_ID_FIELDS = (
     *SAMPLE_FIELDS,
     "instrument_name",
     "pipeline_id_lims",
+    "library_id",
 )
 
 
@@ -493,24 +509,89 @@ def merge_data(row, mlwh_row, fields):
 def store_ont_data(client, ont_rows):
     mlwh_rows = []
     data_files = []
+    max_modified = None
+    study_data_ids = {}  # List of data_id in each study
     for row in ont_rows:
         data_id = row["data_id"]
+        study_data_ids.setdefault(row["study_id"], []).append(data_id)
         store = {}
-        mlwh_rows.append(store)
         for k, v in row.items():
             if k == "files":
-                for f in v:
+                for file in v:
                     data_files.append(
                         {
-                            "data_id": data_id,
-                            **f,
+                            "data.id": data_id,
+                            **file,
                         }
                     )
             else:
                 store[k] = v
-    rspns = client.ndjson_post("loader/seq-data", [ndjson_row(x) for x in mlwh_rows])
-    click.echo(formatted_response(rspns, "1000", "ONT"), nl=False)
+                if k == "qc_date" and (not max_modified or v > max_modified):
+                    max_modified = v
+        mlwh_rows.append(store)
 
+    # Create or update the sequence data
+    rspns = client.ndjson_post("loader/seq-data", [ndjson_row(x) for x in mlwh_rows])
+
+    # Store any ONT file entries whose "remote_path" values aren't in the
+    # database
     upsrtr = TableUpserter(client)
     upsrtr.build_table_upserts("file", data_files, key="remote_path")
-    upsrtr.apply_upserts()
+
+    # Build lists of new file table entries indexed by data_id
+    data_id_files = {}
+    for file in upsrtr.apply_upserts():
+        data_id_files.setdefault(file.data.id, []).append(file)
+
+    # Build dicts of new and updated data indexed by data_id
+    new_by_data_id = response_field_dict_by_data_id(rspns, "new")
+    upd_by_data_id = response_field_dict_by_data_id(rspns, "updated")
+
+    print_report(study_data_ids, data_id_files, new_by_data_id, upd_by_data_id)
+
+    if max_modified:
+        update_stored_max_modified(client, max_modified)
+
+
+def print_report(study_data_ids, data_id_files, new_by_data_id, upd_by_data_id):
+    """
+    Prints a report of new and updated ONT data grouped by study
+    """
+
+    out = sys.stdout
+    for study_id, data_id_list in study_data_ids.items():
+        new_data = []
+        upd_data = []
+        for data_id in data_id_list:
+            if new := new_by_data_id.get(data_id):
+                new_data.append(new)
+            elif upd := upd_by_data_id.get(data_id):
+                upd_data.append(upd)
+
+        if new_data:
+            study_name = new_data[0]["study"]
+            out.write(f"\n\nNew ONT data in '{study_name} ({study_id})':\n\n")
+            for row in new_data:
+                out.write(response_row_std_fields(row))
+                if file_list := data_id_files.get(row["data_id"]):
+                    for file in file_list:
+                        out.write(f"  New data: {file.file_type}\n")
+
+        if upd_data:
+            study_name = upd_data[0]["study"]
+            out.write(f"\n\nUpdated ONT data in '{study_name} ({study_id})':\n\n")
+            for row in upd_data:
+                out.write(response_row_std_fields(row))
+                for col, (old_val, new_val) in row["changes"].items():
+                    out.write(f"  {col} changed from {old_val!r} to {new_val!r}\n")
+                if file_list := data_id_files.get(row["data_id"]):
+                    for file in file_list:
+                        out.write(f"  New data: {file.file_type}\n")
+
+
+def response_field_dict_by_data_id(rspns, fld):
+    by_data_id = {}
+    if fld_list := rspns.get(fld):
+        for row in fld_list:
+            by_data_id[row["data_id"]] = row
+    return by_data_id
