@@ -141,7 +141,7 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
         ):
             continue
 
-        product = product_from_collection(coll)
+        product_dirs = product_from_collection(coll)
 
         avu_dict = {}
         for avu in coll.metadata(
@@ -175,7 +175,7 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
             "tag1_id":                avu_dict.get("tag_identifier"),
             "tag2_id":                avu_dict.get("tag2_identifier"),
             "collection":             coll_path,
-            "product":                product,
+            "product_dirs":           product_dirs,
         }
         # fmt: on
 
@@ -228,7 +228,7 @@ def update_stored_max_modified(client, max_modified):
 
 def merge_by_data_id(study_data):
     by_data_id = {}
-    skip_fields = {"collection", "product"}
+    skip_fields = {"collection", "product_dirs"}
     for row in study_data:
         data_id = row["data_id"]
         if xst := by_data_id.get(data_id):
@@ -237,9 +237,8 @@ def merge_by_data_id(study_data):
         else:
             # Create a new record, which will have any other rows with the
             # same data_id merged into it.
-            prod = row.get("product")
             xst = {k: v for k, v in row.items() if k not in skip_fields}
-            xst["files"] = [prod] if prod else []
+            xst["files"] = row["product_dirs"]
             by_data_id[data_id] = xst
 
     return list(by_data_id.values())
@@ -251,16 +250,16 @@ def merge_row_check_matches(data_id, skip_fields, xst, row):
     machine an the re-basecalled "offline" data. Checks that all fields,
     apart from the exceptions, match.
 
-    The "product" field is the location of ONT data on iRODS, so we extend
-    the "files" list.
+    The "product_dirs" field is the location of ONT data on iRODS, so we
+    extend the "files" list.
 
     For the datetime fields, the earliest "run_start" (created) will be the
     completion time of the sequencing run, and the latest "qc_date"
     (modified) will be when the re-basecalling finished.
     """
     for k, v in row.items():
-        if k == "product":
-            xst["files"].append(v)
+        if k == "product_dirs":
+            xst["files"].extend(v)
         elif k in skip_fields:
             continue
         elif v != (xst_v := xst.get(k)):
@@ -308,35 +307,46 @@ def product_from_collection(coll):
     """
     top_types, sub_names = sub_collection_names(coll)
 
-    type_prefix = "RECALL_" if "/offline-" in str(coll.path) else "RAW_"
-    product_dir = None
-    file_type = None
-    if "FASTQ" in top_types:
-        product_dir = coll.path
-        file_type = "FASTQ_DIR"
-    else:
-        # fmt: off
-        for dir_name, type_name in (
-            ("pass",        "FASTQ_DIR"),
-            ("pass_split",  "FASTQ_DIR"),
-            ("bam_pass",    "BAM_DIR"),
-            ("fastq_pass",  "FASTQ_DIR"),
-            ("pod5",        "POD5_DIR"),
-            ("reads",       "FAST5_TAR_DIR"),
-        ):
-            if dir_name in sub_names:
-                product_dir = coll.path / dir_name
-                file_type = type_name
-                break
-        # fmt: on
+    type_prefix = "RECALL" if "/offline-" in str(coll.path) else "RAW"
+    product_list = []
 
-    if product_dir:
-        return {
+    if "FASTQ" in top_types:
+        append_product_dir(
+            product_list,
+            coll.path,
+            type_prefix,
+            "FASTQ_DIR",
+        )
+
+    # fmt: off
+    for dir_name, dir_type in (
+        ("reads",       "FAST5_TAR_DIR"),
+        ("fast5_pass",  "FAST5_DIR"),
+        ("pod5",        "POD5_DIR"),
+        ("fastq_pass",  "FASTQ_DIR"),
+        ("pass",        "FASTQ_DIR"),
+        ("pass_split",  "FASTQ_DIR"),
+        ("bam_pass",    "BAM_DIR"),
+    ):
+        if dir_name in sub_names:
+            append_product_dir(
+                product_list,
+                coll.path / dir_name,
+                type_prefix,
+                dir_type,
+            )
+    # fmt: on
+
+    return product_list
+
+
+def append_product_dir(product_list, product_dir, type_prefix, dir_type):
+    product_list.append(
+        {
             "remote_path": f"irods:{product_dir}",
-            "file_type": type_prefix + file_type,
+            "file_type": f"{type_prefix}_{dir_type}",
         }
-    else:
-        return None
+    )
 
 
 def sub_collection_names(coll):
