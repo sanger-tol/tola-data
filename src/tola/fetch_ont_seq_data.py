@@ -88,8 +88,7 @@ def cli(
     database where "study.auto_sync = true".
     """
 
-    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
-
+    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=25)
     if since:
         since = utc_datetime(since)
 
@@ -103,7 +102,6 @@ def cli(
         force=True,
     )
 
-    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     if not study_id_list:
         study_id_list = client.list_auto_sync_study_ids()
 
@@ -530,15 +528,15 @@ def store_ont_data(client, ont_rows):
                     max_modified = v
         mlwh_rows.append(store)
 
-    # Create or update the sequence data
-    rspns = client.ndjson_post("loader/seq-data", [ndjson_row(x) for x in mlwh_rows])
-
-    # Store any ONT file entries whose "remote_path" values aren't in the
-    # database
+    # Prepare any ONT file entries whose "remote_path" values aren't in the
+    # database for storing.
     upsrtr = TableUpserter(client)
     upsrtr.build_table_upserts("file", data_files, key="remote_path")
 
-    # Build lists of new file table entries indexed by data_id
+    # Create or update the sequence data
+    rspns = client.ndjson_post("loader/seq-data", [ndjson_row(x) for x in mlwh_rows])
+
+    # Store new file table entries and index them by data_id
     data_id_files = {}
     for file in upsrtr.apply_upserts():
         data_id_files.setdefault(file.data.id, []).append(file)
