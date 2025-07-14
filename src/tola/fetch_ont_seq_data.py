@@ -99,7 +99,19 @@ def cli(
             # that any overlapping, potentially out of order, runs are
             # detected.
             since -= timedelta(days=40)
-    since_query = [Timestamp(since)] if since else None
+    since_query = (
+        [
+            # These are the defaults for event and operator, but are specified
+            # for clarity:
+            Timestamp(
+                since,
+                event=Timestamp.Event.MODIFIED,
+                operator="n>=",
+            )
+        ]
+        if since
+        else None
+    )
 
     logging.basicConfig(
         level=getattr(logging, log_level),
