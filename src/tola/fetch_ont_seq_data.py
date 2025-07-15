@@ -21,9 +21,6 @@ class MetadataMismatchError(ValueError):
     """
 
 
-IRODS_RETRY_COUNT = 3
-
-
 """
 Flowcells do get re-used between runs e.g. when a run is stopped for
 operational reasons and restarted in the same slot on the instrument, or
