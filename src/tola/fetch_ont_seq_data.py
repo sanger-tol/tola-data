@@ -3,7 +3,7 @@ import logging
 import pathlib
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import click
 import pytz
@@ -94,6 +94,11 @@ def cli(
 
     if not since and not write_to_stdout:
         since = get_irods_ont_last_modified(client)
+        if since:
+            # Subtract a slop factor from the last modification time to ensure
+            # that any overlapping, potentially out of order, runs are
+            # detected.
+            since -= timedelta(days=40)
     since_query = [Timestamp(since)] if since else None
 
     logging.basicConfig(
