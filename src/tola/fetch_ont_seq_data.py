@@ -181,7 +181,6 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
             "platform_type":          "ONT",
             "instrument_model":       avu_dict.get("device_type"),
             "instrument_name":        avu_dict.get("hostname"),
-            "element":                build_element(avu_dict),
             "run_id":                 run_id,
             "run_start":              coll.created(),
             # Not actually a QC date.  Destined for data.date:
@@ -385,7 +384,7 @@ def sub_collection_names(coll):
 def build_run_id(avu_dict):
     # Avoid using run IDs which are just an integer
     run_id = avu_dict.get("experiment_name")
-    if re.fullmatch(r"^\d+$", run_id):
+    if re.fullmatch(r"\d+", run_id):
         run_id = f"ONT-EARLY-{run_id}"
 
     return run_id
@@ -403,19 +402,6 @@ def build_data_id(avu_dict, run_id=None):
             data_id_components.append(str(cmpt))
 
     return "#".join(data_id_components) if data_id_components else None
-
-
-def build_element(avu_dict):
-    element_components = []
-    for field in (
-        "instrument_slot",
-        "tag_identifier",
-        "tag2_identifier",
-    ):
-        if cmpt := avu_dict.get(field):
-            element_components.append(str(cmpt))
-
-    return ".".join(element_components) if element_components else None
 
 
 def fetch_mlwh_info(sample_name_list, page_size=100):
