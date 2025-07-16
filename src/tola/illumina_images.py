@@ -1,11 +1,9 @@
-import os
 import subprocess
-from functools import cached_property
 from pathlib import Path
 from shutil import copy
 from tempfile import TemporaryDirectory
 
-from irods.session import iRODSSession
+from partisan.irods import DataObject
 
 
 class BamStatsImages:
@@ -26,19 +24,6 @@ class BamStatsImages:
 
 
 class PlotBamStatsRunner:
-    @cached_property
-    def irods_env_file(self):
-        return Path(
-            os.environ.get(
-                "IRODS_ENVIRONMENT_FILE",
-                "~/.irods/irods_environment.json",
-            )
-        ).expanduser()
-
-    @cached_property
-    def irods_session(self):
-        return iRODSSession(irods_env_file=self.irods_env_file)
-
     def run_bamstats_in_tmpdir(self, bam_file: str) -> BamStatsImages:
         self.tmp_dir = TemporaryDirectory()
         return self.run_bamstats(bam_file, run_path=Path(self.tmp_dir.name))
@@ -57,7 +42,7 @@ class PlotBamStatsRunner:
 
         if remote_path != local_path:
             if irods_remote:
-                self.irods_session.data_objects.get(str(remote_path), local_path)
+                DataObject(remote_path).get(local_path)
             else:
                 copy(remote_path, local_path)
 

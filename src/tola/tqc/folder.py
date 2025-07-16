@@ -7,10 +7,8 @@ from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import colour_pager
 from tola.store_folder import upload_files
-from tola.tqc.engine import (
-    input_objects_or_exit,
-    pretty_dict_itr,
-)
+from tola.terminal import pretty_dict_itr
+from tola.tqc.engine import input_objects_or_exit
 
 
 @click.command()
@@ -24,25 +22,22 @@ from tola.tqc.engine import (
 @click_options.input_files
 def store_folders(ctx, table, location, input_files):
     """
-    Upload files to S3 storage. Each row of the ND-JSON format INPUT_FILES
-    must contain a primary key value for the table, a `directory` entry with
-    the path to the local directory containging the files to be uploaded,
-    plus any key/value pairs for named format specifiers in the captions in
-    the template. e.g.
+    Upload files to S3 storage and store links in the `folder` table.
 
-        {
+    Each row of the ND-JSON format INPUT_FILES must contain a primary key
+    value for the table, a `directory` entry with the path to the local
+    directory containging the files to be uploaded, plus any key/value pairs
+    for named format specifiers in the captions in the template. e.g.
 
-            "pacbio_run_metrics.id": "m84098_240508_102324_s2",
+      \b
+      {
+        "data.id": "47478_3#1",
+        "directory": "/lustre/.../mOryCun1/hic-arima2/stats/47478_3#1",
+        "library_type": "Hi-C - Arima v2"
+      }
 
-            "directory": "",
-
-            "specimen": "mBalPhy2"
-
-        }
-
-    where the captions templates in `folder_location.files_template` contain `
-    {specimen}` strings.
-
+    where the captions templates in `folder_location.files_template` contain
+    `{library_type}` strings.
     """
 
     client = ctx.obj

@@ -19,19 +19,18 @@ def cli(tolqc_alias, tolqc_url, api_token, input_files):
     Runs plot-bamstats (in a temporary directory) on BAM stats files, uploads
     the images to the S3 location given in the "illumina_data_s3"
     `FolderLocation` and stores a folder in the ToLQC database to record
-    thier location.
+    their location.
 
-    Input is ND-JSON, each line of which contains:
+    Input is ND-JSON, each line of which is structured like this example:
 
-        {
+      \b
+      {
+        "data.id": "49524_4#6",
+        "bam_file": "irods:/seq/illumina/runs/49/49524/lane4/plex6/49524_4#6.cram",
+        "library_type": "Hi-C - Arima v2"
+      }
 
-          "data.id": "49524_4#6",
-
-          "library_type": "Hi-C - Arima v2",
-
-          "bam_file": "irods:/seq/illumina/runs/49/49524/lane4/plex6/49524_4#6.cram"
-
-        }
+    and can be either a list of files or STDIN.
 
     Files will be fetched from irods if the "bam_file" path begins with "irods:"
 

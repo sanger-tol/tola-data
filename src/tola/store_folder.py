@@ -1,7 +1,6 @@
 import logging
 import re
 from pathlib import Path
-from urllib.parse import quote
 
 from ulid import ULID
 
@@ -153,9 +152,7 @@ def upload_files(
     if not oid:
         msg = f"Missing expected value for '{id_key}' in row"
         raise ValueError(msg)
-    # Can remove call to `quote()` when ApiDataSource is fixed to
-    # correctly escape IDs
-    (entry,) = client.ads.get_by_ids(table, [quote(oid)])
+    (entry,) = client.ads.get_by_ids(table, [oid])
     if not entry:
         msg = f"Failed to fetch {table} with {id_key} = {oid!r}"
         raise ValueError(msg)
@@ -175,26 +172,17 @@ def upload_files(
                 client.s3.put_file(local.open("rb"), fldr_loc.s3_bucket, remote)
 
         # Store and link new Folder
-        obj_factory = client.ads.data_object_factory
-        fldr = obj_factory(
+        cdo = client.build_cdo
+        fldr = cdo(
             "folder",
-            id_=ulid,
-            attributes={
+            ulid,
+            {
                 "folder_location_id": folder_location_id,
                 **files,
             },
         )
         client.ads.upsert("folder", [fldr])
-        client.ads.upsert(
-            table,
-            [
-                obj_factory(
-                    table,
-                    id_=oid,
-                    attributes={"folder_ulid": ulid},
-                ),
-            ],
-        )
+        client.ads.upsert(table, [cdo(table, oid, {"folder_ulid": ulid})])
 
     # Delete S3 files in old Folder
     if old_fldr := entry.folder:

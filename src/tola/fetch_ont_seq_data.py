@@ -3,10 +3,9 @@ import logging
 import pathlib
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import click
-import pytz
 from partisan.irods import AVU, Collection, Timestamp, query_metadata
 
 from tola import click_options, db_connection, tolqc_client
@@ -48,8 +47,8 @@ experiment_name, flowcell_id and instrument_slot in oseq_flowcell
     "since",
     help="""
       Show data modified since a particular datetime, in ISO8601
-      (RFC3339) format. If there is no time zone it is assumed to be UTC /
-      GMT.
+      (RFC3339) format. If there is no time zone it is converted from the
+      local timezone to UTC / GMT.
     """,
 )
 @click.option(
@@ -199,16 +198,12 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
 
 
 def utc_datetime(txt):
-    dt = datetime.fromisoformat(txt)
-    if not dt.tzinfo or dt.tzinfo.utcoffset(dt) is None:
-        return pytz.timezone("UTC").localize(dt)
-    else:
-        return dt
+    return datetime.fromisoformat(txt).astimezone(UTC)
 
 
 def get_irods_ont_last_modified(client):
     (upd,) = client.ads.get_by_ids("metadata", ["irods.ont.last_modified"])
-    return upd.timestamp_value if upd else None
+    return upd.timestamp_value.astimezone(UTC) if upd else None
 
 
 def store_irods_ont_last_modified(client, timestamp):

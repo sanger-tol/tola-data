@@ -12,6 +12,7 @@ from tola.tqc.add import add
 from tola.tqc.dataset import dataset
 from tola.tqc.delete import delete
 from tola.tqc.edit import edit_col, edit_rows_cli
+from tola.tqc.folder import store_folders
 from tola.tqc.genomescope import genomescope
 from tola.tqc.rename import rename
 from tola.tqc.report import report
@@ -58,6 +59,7 @@ tqc_main.add_command(dataset)
 tqc_main.add_command(delete)
 tqc_main.add_command(edit_col)
 tqc_main.add_command(edit_rows_cli, name="edit-rows")
+tqc_main.add_command(store_folders)
 tqc_main.add_command(genomescope)
 tqc_main.add_command(rename)
 tqc_main.add_command(report)
