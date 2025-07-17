@@ -100,7 +100,7 @@ class GoaTResult:
         Returns a set of the scientific name and all `equivalent name`,
         `synonym` and `includes` class taxon name entries.
         """
-        synonyms = set(self.scientific_name)
+        synonyms = {self.scientific_name}
         for tn in self.taxon_names:
             if tn["class"] in {"equivalent name", "synonym", "includes"}:
                 synonyms.add(tn["name"])
