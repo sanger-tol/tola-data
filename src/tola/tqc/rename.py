@@ -33,8 +33,15 @@ class ToLQCRenameError(Exception):
     ),
     multiple=True,
 )
+@click.option(
+    "--ignore-species-check",
+    flag_value=True,
+    help="Ignore errors when checking species names against the GoAT database.",
+    default=False,
+    show_default=True,
+)
 @click_options.input_files
-def rename(ctx, table_names, input_files):
+def rename(ctx, table_names, input_files, ignore_species_check):
     """
     Rename ToLQC database entries
 
@@ -54,7 +61,9 @@ def rename(ctx, table_names, input_files):
 
     for table in table_names:
         try:
-            new_count, old_count = rename_records(client, table, input_obj)
+            new_count, old_count = rename_records(
+                client, table, input_obj, ignore_species_check
+            )
         except ToLQCRenameError as tre:
             err = "Error: " + bold("\n".join(tre.args))
             sys.exit(err)
@@ -65,7 +74,7 @@ def rename(ctx, table_names, input_files):
             )
 
 
-def rename_records(client, table, input_obj):
+def rename_records(client, table, input_obj, ignore_species_check):
     # Build a dictionary of renaming operations
     spec_dict = build_spec_dict(table, input_obj)
 
@@ -80,7 +89,9 @@ def rename_records(client, table, input_obj):
 
         # Create new species objects from GoaT via taxon_id (and check scientific
         # name matches the expected new species.id).
-        new_records = create_new_species_from_goat(client, spec_dict, records_by_id)
+        new_records = create_new_species_from_goat(
+            client, spec_dict, records_by_id, ignore_species_check
+        )
 
         # Avoid collisions in tolid_prefix
         rename_tolid_prefix_in_old_species(client, spec_dict, records_by_id)
@@ -238,7 +249,9 @@ def switch_to_many_entries(client, spec_dict, table, many_tbl):
     ads.upsert(table, switch_obj)
 
 
-def create_new_species_from_goat(client, spec_dict, species_by_id):
+def create_new_species_from_goat(
+    client, spec_dict, species_by_id, ignore_species_check
+):
     gc = GoaTClient()
     cdo = client.build_cdo
 
@@ -260,9 +273,11 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
         if new_id not in gr.synonyms:
             err += (
                 f"Species {new_id!r} with {taxon_id = }"
-                f" is named {goat_species!r} in GoaT\n"
+                f" is named {goat_species!r} in GoaT"
+                f" and is not in synonyms: {sorted(gr.synonyms)!r}\n"
             )
-            continue
+            if not ignore_species_check:
+                continue
 
         nso = cdo("species", new_id, info)
 
@@ -274,8 +289,12 @@ def create_new_species_from_goat(client, spec_dict, species_by_id):
             nso.location = client.fetch_or_store_one("location", loc_info, key="path")
 
         new_species.append(nso)
+
     if err:
-        raise ToLQCRenameError(err)
+        if ignore_species_check:
+            sys.stderr.write(f"Ignoring errors:\n{err}")
+        else:
+            raise ToLQCRenameError(err)
 
     return new_species
 
