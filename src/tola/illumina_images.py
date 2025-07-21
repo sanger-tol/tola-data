@@ -19,6 +19,24 @@ class BamStatsImages:
             image_list = [p for p in dir_path.iterdir() if p.suffix == ".png"]
         self.image_list = image_list
 
+    def parse_stats_file(self):
+        reads = None
+        bases = None
+        stats_file_path = self.dir_path / self.stats_file
+        for line in stats_file_path.open():
+            fields = line.rstrip("\r\n").split("\t")
+            if fields[0] == "SN":
+                name = fields[1].rstrip(":")
+                if name == "sequences":
+                    reads = int(fields[2])
+                elif name == "total length":
+                    bases = int(fields[2])
+            if reads is not None and bases is not None:
+                break
+
+        self.reads = reads
+        self.bases = bases
+
     def __str__(self):
         return f"{self.stats_file}\n" + "".join([f"  {x}\n" for x in self.image_list])
 
@@ -36,7 +54,7 @@ class PlotBamStatsRunner:
         bam_path = Path(bam_file)
 
         # Build Paths to local and remote stats files
-        stats_file = bam_path.stem + "_F0xB00.stats"
+        stats_file = Path(bam_path.stem + "_F0xB00.stats")
         remote_path = bam_path.parent / stats_file
         local_path = run_path / stats_file
 

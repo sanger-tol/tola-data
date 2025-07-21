@@ -11,9 +11,6 @@ from tola.store_folder import upload_files
 
 
 @click.command
-@click_options.tolqc_alias
-@click_options.tolqc_url
-@click_options.api_token
 @click.option(
     "--auto",
     "auto_flag",
@@ -26,7 +23,7 @@ from tola.store_folder import upload_files
     """,
 )
 @click_options.input_files
-def cli(tolqc_alias, tolqc_url, api_token, input_files, auto_flag):
+def load_illumina_images(ctx, input_files, auto_flag):
     """
     Runs plot-bamstats (in a temporary directory) on BAM stats files, uploads
     the images to the S3 location given in the "illumina_data_s3"
@@ -54,21 +51,37 @@ def cli(tolqc_alias, tolqc_url, api_token, input_files, auto_flag):
     Requires the Samtools `plot-bamstats` executable.
     """
 
-    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=100)
+    client = ctx.obj
+    ads = client.ads
+    cdo = client.build_cdo
+
     input_objects = report_iter(client) if auto_flag else get_input_objects(input_files)
     runner = PlotBamStatsRunner()
+
     for obj in input_objects:
         if oid := obj.get("data_id"):
             obj["data.id"] = oid
+        else:
+            oid = obj["data.id"]
+
         try:
             images = runner.run_bamstats_in_tmpdir(obj["remote_path"])
         except CalledProcessError:
             sys.stderr.write(f"Error running plot-bamstats on: {obj}\n")
             continue
         obj["directory"] = images.dir_path
-        sys.stdout.write(
-            ndjson_row(upload_files(client, "illumina_data_s3", "data", obj))
-        )
+        images.parse_stats_file()
+        if images.reads is not None and images.bases is not None:
+            ads.upsert(
+                "data",
+                [cdo("data", oid, {"reads": images.reads, "bases": images.bases})],
+            )
+
+        data = upload_files(client, "illumina_data_s3", "data", obj)
+        data["reads"] = images.reads
+        data["bases"] = images.bases
+
+        sys.stdout.write(ndjson_row(data))
 
 
 def report_iter(client):
@@ -82,6 +95,3 @@ def report_iter(client):
     ):
         yield json.loads(row)
 
-
-if __name__ == "__main__":
-    cli()
