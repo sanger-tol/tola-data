@@ -198,7 +198,7 @@ def attr_from_report(report):
         # Input parameters
         "kmer": param["kmer_length"],
         "ploidy": param["ploidy"],
-        "kcov_init": param["est_kmer_coverage"],
+        "kcov_init": param["initial_kmer_coverage"],
         # Results
         "homozygous": report["homozygous"]["avg"],
         "heterozygous": report["heterozygous"]["avg"],
