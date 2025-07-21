@@ -42,7 +42,7 @@ class PlotBamStatsRunner:
 
         if remote_path != local_path:
             if irods_remote:
-                DataObject(remote_path).get(local_path)
+                DataObject(remote_path).get(local_path, verify_checksum=True)
             else:
                 copy(remote_path, local_path)
 
@@ -53,7 +53,9 @@ class PlotBamStatsRunner:
                 str(run_path / local_path.stem),
                 str(local_path),
             ],
+            capture_output=True,
             check=True,
+            text=True,
         )
 
         return BamStatsImages(stats_file=stats_file, dir_path=run_path)
