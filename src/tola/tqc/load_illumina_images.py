@@ -4,13 +4,14 @@ from subprocess import CalledProcessError
 
 import click
 
-from tola import click_options, tolqc_client
+from tola import click_options
 from tola.illumina_images import PlotBamStatsRunner
 from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
 
 
 @click.command
+@click.pass_context
 @click.option(
     "--auto",
     "auto_flag",
