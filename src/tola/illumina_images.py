@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 
 from partisan.irods import DataObject
 
+from tola.tqc.engine import irods_path_dataobject
+
 
 class BamStatsImages:
     def __init__(
@@ -47,11 +49,7 @@ class PlotBamStatsRunner:
         return self.run_bamstats(bam_file, run_path=Path(self.tmp_dir.name))
 
     def run_bamstats(self, bam_file: str, run_path: Path = Path()) -> BamStatsImages:
-        irods_remote = False
-        if bam_file.startswith("irods:"):
-            irods_remote = True
-            bam_file = bam_file[6:]
-        bam_path = Path(bam_file)
+        bam_path, irods_obj = irods_path_dataobject(bam_file)
 
         # Build Paths to local and remote stats files
         stats_file = Path(bam_path.stem + "_F0xB00.stats")
@@ -59,7 +57,7 @@ class PlotBamStatsRunner:
         local_path = run_path / stats_file
 
         if remote_path != local_path:
-            if irods_remote:
+            if irods_obj:
                 DataObject(remote_path).get(local_path, verify_checksum=True)
             else:
                 copy(remote_path, local_path)

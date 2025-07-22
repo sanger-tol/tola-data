@@ -1,8 +1,11 @@
+import logging
 import re
 import sys
 from datetime import datetime
 from hashlib import md5
+from pathlib import Path
 
+from partisan.irods import DataObject
 from tol.core import DataSourceFilter
 
 from tola.ndjson import (
@@ -217,6 +220,44 @@ def id_iterator(key, id_list=None, file_list=None, file_format=None):
         else:
             for oid in ids_from_ndjson_stream(key, sys.stdin):
                 yield oid
+
+
+def irods_path_dataobject(txt):
+    irods_obj = None
+    if txt.startswith("irods:"):
+        path = Path(txt[6:])
+        irods_obj = DataObject(path)
+    else:
+        path = Path(txt)
+
+    return path, irods_obj
+
+
+def update_file_size_and_md5_if_missing(client, spec, irods_obj):
+    if not (spec.get("size_bytes") is None or spec.get("md5") is None):
+        return
+
+    if not irods_obj.exists():
+        logging.warning(f"No such iRODS file: '{irods_obj}'")
+        return
+    size_bytes = irods_obj.size()
+    md5 = irods_obj.checksum()
+    if not (size_bytes and md5):
+        logging.warning(
+            f"Missing iRODS data: Got size = {size_bytes!r}"
+            f" and checksum = {md5!r} for '{irods_obj}'"
+        )
+        return
+
+    cdo = client.build_cdo(
+        "file",
+        spec["file_id"],
+        {
+            "size_bytes": size_bytes,
+            "md5": md5,
+        },
+    )
+    client.ads.upsert("file", [cdo])
 
 
 def guess_file_type(file):

@@ -8,6 +8,7 @@ from tola import click_options
 from tola.illumina_images import PlotBamStatsRunner
 from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
+from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_missing
 
 
 @click.command
@@ -36,18 +37,28 @@ def load_illumina_images(ctx, input_files, auto_flag):
       \b
       {
         "data_id": "49524_4#6",
+        "lims_qc": "pass",
+        "reads": 819928808,
+        "bases": 123809250008,
+        "folder_ulid": "01J8HDZDM2F09ZF5YWMBZNPPTE",
         "remote_path": "irods:/seq/illumina/runs/49/49524/lane4/plex6/49524_4#6.cram",
+        "size_bytes": 38073830696,
+        "md5": "125d8ca94afca6148f332cb194b192ab",
+        "file_type": "CRAM",
         "library_type": "Hi-C - Arima v2"
       }
 
-    and can be either a list of files or STDIN.
-
-    Files will be fetched from irods if the "bam_file" path begins with "irods:"
+    Files will be fetched from iRODS if the "remote_path" path begins
+    with "irods:", in which case if either "size_bytes" or "md5" is missing
+    from the input they will be filled in from iRODS metadata.
 
     The stats file is expected to be alongside the BAM file with the
     suffix "_F0xB00.stats", so in the above example would be expected to be:
 
       irods:/seq/illumina/runs/49/49524/lane4/plex6/49524_4#6_F0xB00.stats
+
+    If "reads" or "bases" is missing from the input, it will be filled in from
+    the stats file.
 
     Requires the Samtools `plot-bamstats` executable.
     """
@@ -72,15 +83,21 @@ def load_illumina_images(ctx, input_files, auto_flag):
             continue
         obj["directory"] = images.dir_path
         images.parse_stats_file()
-        if images.reads is not None and images.bases is not None:
+        data = upload_files(client, "illumina_data_s3", "data", obj)
+
+        if (images.reads is not None and images.bases is not None) and (
+            obj.get("reads") is None or obj.get("bases") is None
+        ):
             ads.upsert(
                 "data",
                 [cdo("data", oid, {"reads": images.reads, "bases": images.bases})],
             )
+            data["reads"] = images.reads
+            data["bases"] = images.bases
 
-        data = upload_files(client, "illumina_data_s3", "data", obj)
-        data["reads"] = images.reads
-        data["bases"] = images.bases
+        bam_path, irods_obj = irods_path_dataobject(obj["remote_path"])
+        if irods_obj:
+            update_file_size_and_md5_if_missing(client, obj, irods_obj)
 
         sys.stdout.write(ndjson_row(data))
 
@@ -95,4 +112,3 @@ def report_iter(client):
         },
     ):
         yield json.loads(row)
-
