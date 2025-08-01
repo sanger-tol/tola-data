@@ -37,7 +37,6 @@ def load_illumina_images(ctx, input_files, auto_flag):
       \b
       {
         "data_id": "49524_4#6",
-        "lims_qc": "pass",
         "reads": 819928808,
         "bases": 123809250008,
         "folder_ulid": "01J8HDZDM2F09ZF5YWMBZNPPTE",
@@ -67,7 +66,7 @@ def load_illumina_images(ctx, input_files, auto_flag):
     ads = client.ads
     cdo = client.build_cdo
 
-    input_objects = report_iter(client) if auto_flag else get_input_objects(input_files)
+    input_objects = get_work(client) if auto_flag else get_input_objects(input_files)
     runner = PlotBamStatsRunner()
 
     for obj in input_objects:
@@ -102,13 +101,38 @@ def load_illumina_images(ctx, input_files, auto_flag):
         sys.stdout.write(ndjson_row(data))
 
 
-def report_iter(client):
-    for row in client.stream_lines(
-        "report/work-illumina-data-folders",
+def get_work(client):
+    """
+    Build a complete list of work to do and return it.  Do not yield each
+    individual record, because populating `data.folder_ulid` will change the
+    list of results from the database query, and the API's automatic paging
+    will cause records to be skipped!
+    """
+
+    spec_list = []
+    for data in client.ads_get_list(
+        "data",
         {
-            "folder_ulid": None,
-            "lims_qc": "pass",
-            "format": "NDJSON",
+            "run.platform.name": {
+                "eq": {"value": "Illumina"},
+            },
+            "folder_ulid": {
+                "exists": {"negate": True},
+            },
+            "files.remote_path": {
+                "exists": {},
+            },
         },
     ):
-        yield json.loads(row)
+        for file in data.files:
+            spec_list.append(
+                {
+                    "reads": data.reads,
+                    "bases": data.bases,
+                    "remote_path": file.remote_path,
+                    "size_bytes": file.size_bytes,
+                    "md5": file.md5,
+                }
+            )
+
+    return spec_list

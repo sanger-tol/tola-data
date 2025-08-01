@@ -62,6 +62,11 @@ class TolClient:
         core_data_object(tolqc)
         return tolqc
 
+    def ads_get_list(self, table, filter_spec):
+        yield from self.ads.get_list(
+            table, object_filters=DataSourceFilter(and_=filter_spec)
+        )
+
     @cached_property
     def build_cdo(self):
         """
