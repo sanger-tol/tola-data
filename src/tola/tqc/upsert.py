@@ -43,7 +43,7 @@ def upsert(ctx, table, key, apply_flag, input_files):
     ups.build_table_upserts(table, input_obj, key)
     if apply_flag:
         ups.apply_upserts()
-    ups.page_results()
+    ups.page_results(apply_flag)
 
 
 class TableUpserter:
