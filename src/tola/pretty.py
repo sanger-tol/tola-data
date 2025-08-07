@@ -83,7 +83,7 @@ def colour_pager(itr):
         itr = [itr]
 
     pager_cmd = [os.environ.get("PAGER", "less").strip()]
-    if pager_cmd == "less" and not os.environ.get("LESS"):
+    if pager_cmd[0] == "less" and not os.environ.get("LESS"):
         pager_cmd.extend(
             [
                 "--no-init",
