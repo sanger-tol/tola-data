@@ -1,11 +1,10 @@
-import json
 import sys
 from subprocess import CalledProcessError
 
 import click
 
 from tola import click_options
-from tola.illumina_images import PlotBamStatsRunner
+from tola.illumina_images import NoSuchIrodsFileError, PlotBamStatsRunner
 from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
 from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_missing
@@ -24,8 +23,18 @@ from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_m
       `work-illumina-data-folders` report
     """,
 )
+@click.option(
+    "--fetch-input",
+    flag_value=True,
+    default=False,
+    show_default=True,
+    help="""
+      Auto-fetch ND-JSON suitable for input from the database and print it to
+      STDOUT.
+    """,
+)
 @click_options.input_files
-def load_illumina_images(ctx, input_files, auto_flag):
+def load_illumina_images(ctx, input_files, auto_flag, fetch_input):
     """
     Runs plot-bamstats (in a temporary directory) on BAM stats files, uploads
     the images to the S3 location given in the "illumina_data_s3"
@@ -36,15 +45,14 @@ def load_illumina_images(ctx, input_files, auto_flag):
 
       \b
       {
-        "data_id": "49524_4#6",
+        "data.id": "49524_4#6",
         "reads": 819928808,
         "bases": 123809250008,
-        "folder_ulid": "01J8HDZDM2F09ZF5YWMBZNPPTE",
+        "file.id": '145847',
         "remote_path": "irods:/seq/illumina/runs/49/49524/lane4/plex6/49524_4#6.cram",
         "size_bytes": 38073830696,
         "md5": "125d8ca94afca6148f332cb194b192ab",
-        "file_type": "CRAM",
-        "library_type": "Hi-C - Arima v2"
+        "library_type": "Hi-C - Arima v2",
       }
 
     Files will be fetched from iRODS if the "remote_path" path begins
@@ -66,8 +74,15 @@ def load_illumina_images(ctx, input_files, auto_flag):
     ads = client.ads
     cdo = client.build_cdo
 
+    if fetch_input:
+        auto_flag = True
     input_objects = get_work(client) if auto_flag else get_input_objects(input_files)
     runner = PlotBamStatsRunner()
+
+    if fetch_input:
+        for obj in input_objects:
+            sys.stdout.write(ndjson_row(obj))
+        sys.exit()
 
     for obj in input_objects:
         if oid := obj.get("data_id"):
@@ -77,6 +92,9 @@ def load_illumina_images(ctx, input_files, auto_flag):
 
         try:
             images = runner.run_bamstats_in_tmpdir(obj["remote_path"])
+        except NoSuchIrodsFileError as err:
+            sys.stderr.write("\n".join(err.args))
+            continue
         except CalledProcessError:
             sys.stderr.write(f"Error running plot-bamstats on: {obj}\n")
             continue
@@ -113,6 +131,9 @@ def get_work(client):
     for data in client.ads_get_list(
         "data",
         {
+            "lims_qc": {
+                "eq": {"value": "pass"},
+            },
             "run.platform.name": {
                 "eq": {"value": "Illumina"},
             },
@@ -122,16 +143,22 @@ def get_work(client):
             "files.remote_path": {
                 "exists": {},
             },
+            "files.file_type": {
+                "eq": {"value": "CRAM"},
+            },
         },
     ):
         for file in data.files:
             spec_list.append(
                 {
+                    "data.id": data.id,
                     "reads": data.reads,
                     "bases": data.bases,
+                    "file.id": file.id,
                     "remote_path": file.remote_path,
                     "size_bytes": file.size_bytes,
                     "md5": file.md5,
+                    "library_type": data.library.library_type.id,
                 }
             )
 

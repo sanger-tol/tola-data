@@ -20,9 +20,9 @@ dependencies = [
     "python-ulid",
     "pytz",
     "requests",
-    "tol-sdk",
     'importlib-metadata; python_version >= "3.12"',
     "partisan",
+    "tol-sdk>=1.6.12",
 ]
 
 [project.scripts]
@@ -78,7 +78,6 @@ ignore = [
 "{test_*,*_test,conftest}.py" = ["E501", "S101"]
 
 [tool.uv.sources]
-tol-sdk = { git = "https://github.com/sanger-tol/tol-sdk" }
 partisan = { git = "https://github.com/wtsi-npg/partisan", rev = "3.3.0" }
 
 [dependency-groups]

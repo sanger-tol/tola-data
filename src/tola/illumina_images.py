@@ -43,6 +43,12 @@ class BamStatsImages:
         return f"{self.stats_file}\n" + "".join([f"  {x}\n" for x in self.image_list])
 
 
+class NoSuchIrodsFileError(Exception):
+    """
+    Requested iRODS file was not found
+    """
+
+
 class PlotBamStatsRunner:
     def run_bamstats_in_tmpdir(self, bam_file: str) -> BamStatsImages:
         self.tmp_dir = TemporaryDirectory()
@@ -58,7 +64,12 @@ class PlotBamStatsRunner:
 
         if remote_path != local_path:
             if irods_obj:
-                DataObject(remote_path).get(local_path, verify_checksum=True)
+                dobj = DataObject(remote_path)
+                if dobj.exists():
+                    dobj.get(local_path, verify_checksum=True)
+                else:
+                    msg = f"No such iRODS file: {remote_path}"
+                    raise NoSuchIrodsFileError(msg)
             else:
                 copy(remote_path, local_path)
 

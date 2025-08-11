@@ -249,9 +249,13 @@ def update_file_size_and_md5_if_missing(client, spec, irods_obj):
         )
         return
 
+    file_id =  spec.get("file.id") or spec.get("file_id")
+    if not file_id:
+        msg = f"Missing 'file.id' or 'file_id' field in: {spec}"
+        raise ValueError(msg)
     cdo = client.build_cdo(
         "file",
-        spec["file_id"],
+        file_id,
         {
             "size_bytes": size_bytes,
             "md5": md5,
