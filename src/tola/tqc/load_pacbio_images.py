@@ -1,4 +1,3 @@
-import json
 import logging
 import sys
 from pathlib import Path
@@ -27,31 +26,65 @@ from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_m
       `work-pacbio-run-metrics-folders` report
     """,
 )
+@click_options.fetch_input
+@click_options.quiet
 @click_options.input_files
-def load_pacbio_images(ctx, input_files, auto_flag):
+def load_pacbio_images(ctx, input_files, auto_flag, fetch_input, quiet):
     """
     Add folders of images from the `<RUN_ID>.reports.zip` file on iRODS to the
     `pacbio_run_metrics` table.
     """
+    if fetch_input:
+        auto_flag = True
 
     client = ctx.obj
 
-    input_objects = report_iter(client) if auto_flag else get_input_objects(input_files)
+    input_objects = get_work(client) if auto_flag else get_input_objects(input_files)
+
+    if fetch_input:
+        for obj in input_objects:
+            sys.stdout.write(ndjson_row(obj))
+        sys.exit()
+
     run_ids_loaded = set()
-    for spec in input_objects:
-        if data := load_pacbio_metrics_images(client, run_ids_loaded, spec):
-            sys.stdout.write(ndjson_row(data))
+
+    if quiet:
+        for spec in input_objects:
+            load_pacbio_metrics_images(client, run_ids_loaded, spec)
+    else:
+        for spec in input_objects:
+            if data := load_pacbio_metrics_images(client, run_ids_loaded, spec):
+                sys.stdout.write(ndjson_row(data))
 
 
-def report_iter(client):
-    for row in client.stream_lines(
-        "report/work-pacbio-run-metrics-folders",
+def get_work(client):
+    spec_list = []
+    for data in client.ads_get_list(
+        "data",
         {
-            "folder_ulid": None,
-            "format": "NDJSON",
+            "run.pacbio_run_metrics.folder_ulid": {
+                "exists": {"negate": True},
+            },
+            "files.remote_path": {
+                "exists": {},
+            },
         },
     ):
-        yield json.loads(row)
+        run = data.run
+        for file in data.files:
+            spec_list.append(
+                {
+                    "pacbio_run_metrics.id": run.id,
+                    "reads": data.reads,
+                    "bases": data.bases,
+                    "file.id": file.id,
+                    "remote_path": file.remote_path,
+                    "size_bytes": file.size_bytes,
+                    "md5": file.md5,
+                }
+            )
+
+    return spec_list
 
 
 def load_pacbio_metrics_images(client, run_ids_loaded, spec):
@@ -74,7 +107,7 @@ def load_pacbio_metrics_images(client, run_ids_loaded, spec):
     if irods_seq:
         reports_zip = DataObject(reports_zip)
     if not reports_zip.exists():
-        logging.info(f"No such file: {reports_zip}")
+        logging.warning(f"No such file: {reports_zip} for {ndjson_row(spec)}")
         return
     logging.info(f"Found: {reports_zip}")
 

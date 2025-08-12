@@ -66,6 +66,25 @@ input_files = click.argument(
     ),
 )
 
+fetch_input = click.option(
+    "--fetch-input",
+    flag_value=True,
+    default=False,
+    show_default=True,
+    help="""
+      Auto-fetch ND-JSON suitable for input from the database and print it to
+      STDOUT.
+    """,
+)
+
+quiet = click.option(
+    "--quiet",
+    flag_value=True,
+    default=False,
+    show_default=True,
+    help="Suppresses printing of loaded data as ND-JSON to STDOUT",
+)
+
 
 def default_diff_mlwh_duckdb():
     return pathlib.Path(f"diff_mlwh_{TODAY}.duckdb")

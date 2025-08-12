@@ -1,3 +1,4 @@
+import logging
 import sys
 from subprocess import CalledProcessError
 
@@ -23,18 +24,10 @@ from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_m
       `work-illumina-data-folders` report
     """,
 )
-@click.option(
-    "--fetch-input",
-    flag_value=True,
-    default=False,
-    show_default=True,
-    help="""
-      Auto-fetch ND-JSON suitable for input from the database and print it to
-      STDOUT.
-    """,
-)
+@click_options.fetch_input
+@click_options.quiet
 @click_options.input_files
-def load_illumina_images(ctx, input_files, auto_flag, fetch_input):
+def load_illumina_images(ctx, input_files, auto_flag, fetch_input, quiet):
     """
     Runs plot-bamstats (in a temporary directory) on BAM stats files, uploads
     the images to the S3 location given in the "illumina_data_s3"
@@ -93,10 +86,11 @@ def load_illumina_images(ctx, input_files, auto_flag, fetch_input):
         try:
             images = runner.run_bamstats_in_tmpdir(obj["remote_path"])
         except NoSuchIrodsFileError as err:
-            sys.stderr.write("\n".join(err.args))
+            msg = "\n".join(err.args)
+            logging.warning(f"{msg} on: {ndjson_row(obj)}")
             continue
         except CalledProcessError:
-            sys.stderr.write(f"Error running plot-bamstats on: {obj}\n")
+            logging.warning(f"Error running plot-bamstats on: {ndjson_row(obj)}")
             continue
         obj["directory"] = images.dir_path
         images.parse_stats_file()
@@ -116,7 +110,8 @@ def load_illumina_images(ctx, input_files, auto_flag, fetch_input):
         if irods_obj:
             update_file_size_and_md5_if_missing(client, obj, irods_obj)
 
-        sys.stdout.write(ndjson_row(data))
+        if not quiet:
+            sys.stdout.write(ndjson_row(data))
 
 
 def get_work(client):
