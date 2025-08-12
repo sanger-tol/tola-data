@@ -1,5 +1,6 @@
 import json
 import sys
+import textwrap
 
 import click
 import requests
@@ -42,18 +43,25 @@ def report(ctx, show_url, report_format, report_name, params):
     """
     Fetch data from ToLQC `/report` endpoints.
 
+    To see a list of available reports do:
+
+        tqc report list
+
     Supply an optional list of `key=value` PARAMS which will be correctly URL
     encoded before sending to the server.
 
+    \b
     e.g.
-
         tqc report pipeline-data species='Vulpes vulpes'
-
         tqc report folder/data data_id=48728_7-8#1
     """
 
     client = ctx.obj
     first_key, payload = build_payload(params, report_format)
+
+    if report_name == "list":
+        show_report_description(client)
+        return
 
     report = f"report/{report_name}"
     if show_url:
@@ -81,6 +89,33 @@ def report(ctx, show_url, report_format, report_name, params):
             out.write(first + b"\n")
             for line in itr:
                 out.write(line + b"\n")
+
+
+def show_report_description(client):
+    meta_id = "tqc.report.list"
+    (meta,) = client.ads.get_by_ids("metadata", [meta_id])
+    rep_list = None
+    if meta:
+        rep_list = meta.json_value
+    else:
+        sys.exit(f"Error: missing metadata table entry for '{meta_id}'")
+
+    rows = []
+    for avail in rep_list:
+        name = avail.get("name", "<NO_NAME>")
+        desc = avail.get("description", "<NO_DESCRIPTION>")
+        rows.append([name, desc])
+    max_name = max(len(x[0]) for x in rows)
+    desc_width = 67 - max_name
+
+    click.echo("Available reports:")
+    for name, desc in rows:
+        desc = desc.rstrip(".") + "."
+        first, *rest = textwrap.wrap(desc, width=desc_width)
+        click.echo(f"\n {name:>{max_name}}  {first}")
+        for txt in rest:
+            click.echo(f" {' ':>{max_name}}  {txt}")
+    click.echo("")
 
 
 def pretty_terminal_dict_itr(first, itr, first_key=None):
