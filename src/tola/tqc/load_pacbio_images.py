@@ -21,10 +21,7 @@ from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_m
     flag_value=True,
     default=False,
     show_default=True,
-    help="""
-      Query ToLQC for PacBio run metrics missing folders to work on using the
-      `work-pacbio-run-metrics-folders` report
-    """,
+    help="Query ToLQC for PacBio run metrics missing folders to work on",
 )
 @click_options.fetch_input
 @click_options.quiet
@@ -75,8 +72,6 @@ def get_work(client):
             spec_list.append(
                 {
                     "pacbio_run_metrics.id": run.id,
-                    "reads": data.reads,
-                    "bases": data.bases,
                     "file.id": file.id,
                     "remote_path": file.remote_path,
                     "size_bytes": file.size_bytes,
@@ -94,11 +89,12 @@ def load_pacbio_metrics_images(client, run_ids_loaded, spec):
         run_id = spec["pacbio_run_metrics.id"]
 
     seq_file = spec["remote_path"]
-
     seq_path, irods_seq = irods_path_dataobject(seq_file)
     if irods_seq:
-        update_file_size_and_md5_if_missing(client, spec, seq_path)
+        update_file_size_and_md5_if_missing(client, spec, irods_seq)
 
+    # One run can have many `data` rows, so don't waste time reloading the
+    # same data.
     if run_id in run_ids_loaded:
         return
     run_ids_loaded.add(run_id)
