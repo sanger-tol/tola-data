@@ -1,34 +1,38 @@
 {
-	"metadata.id": "tqc.report.list",
-	"description": "List of available reports displayed by `tqc report --list`",
-	"json_value": [
-		{
-			"name": "illumina-data",
-			"description": "Illumina data in ToLQC"
-		},
-		{
-			"name": "metagenome",
-			"description": "Megagenome assemblies"
-		},
-		{
-			"name": "metagenome-bin",
-			"description": "Binned contigs and assembled metagenomes"
-		},
-		{
-			"name": "mlwh-data",
-			"description": "Report of data from ToLQC the same format as `fetch-mlwh-data` fetches it from the MLWH"
-		},
-		{
-			"name": "pacbio-data",
-			"description": "PacBio data in ToLQC"
-		},
-		{
-			"name": "pipeline-data",
-			"description": "Report of all the sequencing data in ToLQC with useful fields and locations for feeding into other scripts"
-		},
-		{
-			"name": "folder/<TABLE_NAME>",
-			"description": "Show the contents of any table which has folders attached, together with each row's expanded paths to S3 images and data files in its attached folders"
-		}
-	]
+    "metadata.id": "tqc.report.list",
+    "description": "List of available reports displayed by `tqc report --list`",
+    "json_value": [
+        {
+            "name": "illumina-data",
+            "description": "Illumina data in ToLQC"
+        },
+        {
+            "name": "metagenome",
+            "description": "Megagenome assemblies"
+        },
+        {
+            "name": "metagenome-bin",
+            "description": "Binned contigs and assembled metagenomes"
+        },
+        {
+            "name": "mlwh-data",
+            "description": "Report of data from ToLQC the same format as `fetch-mlwh-data` fetches it from the MLWH"
+        },
+        {
+            "name": "pacbio-data",
+            "description": "PacBio data in ToLQC"
+        },
+        {
+            "name": "pipeline-data",
+            "description": "Report of all the sequencing data in ToLQC with useful fields and locations for feeding into other scripts"
+        },
+        {
+            "name": "specimen-status",
+            "description": "Status of specimens, listing species information, projects and sequencing data attached to the species"
+        },
+        {
+            "name": "folder/<TABLE_NAME>",
+            "description": "Show the contents of any table which has folders attached, together with each row's expanded paths to S3 images and data files in its attached folders"
+        }
+    ]
 }
