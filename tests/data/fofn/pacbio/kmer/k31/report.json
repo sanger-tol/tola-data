@@ -3,7 +3,7 @@
   "input_parameters": {
     "ploidy": 2,
     "kmer_length": 31,
-    "est_kmer_coverage": null,
+    "initial_kmer_coverage": null,
     "max_kmer_coverage": null,
     "advanced": {
       "topology": 0,
