@@ -78,6 +78,7 @@ class GoaTResult:
             "tolid_prefix": self.get_name("tolid_prefix"),
             "common_name": self.get_name("common name"),
             "taxon_id": self.taxon_id,
+            "family_taxon_id": self.get_lineage_taxon_id("family"),
             "taxon_family": self.get_lineage("family"),
             "taxon_order": self.get_lineage("order"),
             "taxon_phylum": self.get_lineage("phylum"),
@@ -110,6 +111,12 @@ class GoaTResult:
         for lg in self.lineage:
             if lg["taxon_rank"] == name:
                 return lg["scientific_name"]
+        return None
+
+    def get_lineage_taxon_id(self, name):
+        for lg in self.lineage:
+            if lg["taxon_rank"] == name:
+                return lg["taxon_id"]
         return None
 
     def get_value(self, name):
