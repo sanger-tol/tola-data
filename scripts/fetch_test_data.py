@@ -25,6 +25,7 @@ from tolqc.schema.folder_models import FolderLocation
 from tolqc.schema.sample_data_models import (
     CategoryDict,
     Centre,
+    ChemistryDict,
     Data,
     FileTypeDict,
     LibraryType,
@@ -132,6 +133,7 @@ def build_sample_data(ssn_maker):
         for cls in (
             AccessionTypeDict,
             CategoryDict,
+            ChemistryDict,
             LibraryType,
             Platform,
             Centre,
@@ -215,6 +217,7 @@ def fetch_species_data(session, species_list):
     Fetches a list of Species from the database, with all their data that
     we're interested in pre-fetched and attached via SELECT IN loads.
     """
+
     statement = (
         select(Species)
         .where(Species.species_id.in_(species_list))
@@ -222,6 +225,12 @@ def fetch_species_data(session, species_list):
         .options(selectinload(Species.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.accession))
+        .options(
+            selectinload(Species.data_accession)
+        )
+        .options(
+            selectinload(Species.umbrella_accession)
+        )
         .options(
             selectinload(Species.specimens)
             .selectinload(Specimen.samples)
@@ -272,7 +281,46 @@ def fetch_species_data(session, species_list):
             .selectinload(Data.folder)
         )
     )
-    species_data = session.scalars(statement).all()
+
+    data_patches = {
+        "35344_1#2": {"visibility": "Always", "processed": None},
+        "35344_1#3": {"visibility": "Always", "processed": 0},
+        "35344_1#4": {"visibility": "Testing", "processed": 0},
+        "37939_1#2": {"visibility": "Always", "processed": 0},
+        "m64089e_210601_133425#1022": {"visibility": "Always", "processed": None},
+        "m84309_250205_121831_s4#2076": {
+            "reads_discarded": 14187,
+            "reads_trimmed": 767,
+            "bases_removed": 128899080,
+        },
+    }
+
+    # Sort species, specimens, samples and data
+    species_data = sorted(session.scalars(statement).all(), key=lambda x: x.species_id)
+    run_folder_seen = set()
+    for species in species_data:
+        species.specimens = sorted(species.specimens, key=lambda x: x.specimen_id)
+        for spmn in species.specimens:
+            spmn.samples = sorted(spmn.samples, key=lambda x: x.sample_id)
+            for smpl in spmn.samples:
+                smpl.data = sorted(smpl.data, key=lambda x: x.data_id)
+
+                # Patch fields in data
+                for data in smpl.data:
+                    if patch := data_patches.get(data.data_id):
+                        for attr, new in patch.items():
+                            old = getattr(data, attr)
+                            if new != old:
+                                setattr(data, attr, new)
+
+                    # Filter out duplicate Folder objects
+                    if (run := data.run) and (pbrm_list := run.pacbio_run_metrics):
+                        for pbrm in pbrm_list:
+                            if fld_ulid := pbrm.folder_ulid:
+                                if fld_ulid in run_folder_seen:
+                                    del pbrm.folder
+                                else:
+                                    run_folder_seen.add(fld_ulid)
 
     # Check that we found all the requested species
     requested = set(species_list)
@@ -354,7 +402,15 @@ def code_string(obj, max_line_length=99):
         sorted(
             x
             for x in class_list
-            if x not in {"Folder", "FolderLocation", "Token", "User"}
+            if x
+            not in {
+                "Accession",
+                "AccessionTypeDict",
+                "Folder",
+                "FolderLocation",
+                "Token",
+                "User",
+            }
         )
     )
     imports_header = (
