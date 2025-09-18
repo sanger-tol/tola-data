@@ -116,7 +116,7 @@ class GoaTResult:
     def get_lineage_taxon_id(self, name):
         for lg in self.lineage:
             if lg["taxon_rank"] == name:
-                return lg["taxon_id"]
+                return int(lg["taxon_id"])
         return None
 
     def get_value(self, name):

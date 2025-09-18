@@ -9,7 +9,7 @@ def test_goat_fetch():
         "tolid_prefix": "mVulVul",
         "common_name": "silver fox",
         "taxon_id": 9627,
-        "family_taxon_id": "9608",
+        "family_taxon_id": 9608,
         "taxon_family": "Canidae",
         "taxon_order": "Carnivora",
         "taxon_phylum": "Chordata",
