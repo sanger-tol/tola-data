@@ -3,7 +3,7 @@ Create a non-ephermeral copy of the test data used for system tests in ToLQC.
 
 Recreate test data if required (under a venv with ToLQC API):
 
-  DB_URI=postgresql://tolqc-dev@127.0.0.1:5435/tolqc \
+  DB_URI="postgresql://tolqc-dev@127.0.0.1:5435/tolqc" \
     python3 scripts/fetch_test_data.py > \
     tolqc-api/app/test/system/data_objects.py
 
@@ -13,7 +13,7 @@ On the test server run:
 
 then run this script with a new `DB_URI`:
 
-  DB_URI=postgresql://tolqc-dev@127.0.0.1:5435/tolqc_test \
+  DB_URI="postgresql://tolqc-dev@127.0.0.1:5435/tolqc_test" \
     python3 scripts/create_test_database.py
 
 """

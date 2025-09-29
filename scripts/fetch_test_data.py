@@ -23,6 +23,7 @@ from tolqc.schema.assembly_models import Dataset, DatasetElement
 from tolqc.schema.base import Base
 from tolqc.schema.folder_models import FolderLocation
 from tolqc.schema.sample_data_models import (
+    Allocation,
     CategoryDict,
     Centre,
     ChemistryDict,
@@ -31,12 +32,14 @@ from tolqc.schema.sample_data_models import (
     LibraryType,
     PacbioRunMetrics,
     Platform,
+    Project,
     QCDict,
     Run,
     Sample,
     Sex,
     Species,
     Specimen,
+    SpecimenStatusType,
     Study,
     VisibilityDict,
 )
@@ -81,7 +84,7 @@ data_dir = pathlib.Path()
 )
 @click.option(
     "--create-db/--no-create-db",
-    help="Delete or keep database of sample data after creating SQL dump",
+    help="Create database of sample data",
     default=False,
     show_default=True,
 )
@@ -89,15 +92,14 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     # Fetch sample data
     engine = create_engine(db_uri, echo=echo_sql)
     ssn_maker = sessionmaker(bind=engine)
-    sample_data = (
+    sample_data = [
+        User(id=100, email="tester@sanger.ac.uk", name="test-user", registered=True),
+        Token(id=200, token="__TOKEN_PLACEHOLDER__", user_id=100),  # noqa: S106
+    ]
+    sample_data.extend(
         build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
     )
-    sample_data.extend(
-        [
-            User(id=100, email="test@nowhere.ac.uk", name="test-user", registered=True),
-            Token(id=200, token="__TOKEN_PLACEHOLDER__", user_id=100),  # noqa: S106
-        ]
-    )
+    sample_data.extend(build_project_associations())
     sys.stdout.write(code_string(sample_data))
 
     if create_db:
@@ -108,7 +110,7 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
         Base.metadata.create_all(build_engine)
 
         # Populate build database
-        populate_database(sessionmaker(bind=build_engine), sample_data)
+        populate_database(sessionmaker(bind=build_engine), code_string(sample_data))
 
 
 def make_sql_data_file(build_url, sql_data_file):
@@ -124,6 +126,94 @@ def make_sql_data_file(build_url, sql_data_file):
             check=False,
         )
         sql_dump.check_returncode()
+
+
+def build_project_associations():
+    return [
+        Project(project_id="britain_and_ireland"),
+        Project(project_id="darwin"),
+        Project(project_id="protist_microalgae"),
+        Project(project_id="tol"),
+        Allocation(data_id="35344_1#1", project_id="britain_and_ireland"),
+        Allocation(data_id="35344_1#1", project_id="darwin"),
+        Allocation(data_id="35344_1#1", project_id="protist_microalgae"),
+        Allocation(data_id="35344_1#1", project_id="tol"),
+        Allocation(data_id="35344_1#2", project_id="britain_and_ireland"),
+        Allocation(data_id="35344_1#2", project_id="darwin"),
+        Allocation(data_id="35344_1#2", project_id="protist_microalgae"),
+        Allocation(data_id="35344_1#2", project_id="tol"),
+        Allocation(data_id="35344_1#3", project_id="britain_and_ireland"),
+        Allocation(data_id="35344_1#3", project_id="darwin"),
+        Allocation(data_id="35344_1#3", project_id="protist_microalgae"),
+        Allocation(data_id="35344_1#3", project_id="tol"),
+        Allocation(data_id="35344_1#4", project_id="britain_and_ireland"),
+        Allocation(data_id="35344_1#4", project_id="darwin"),
+        Allocation(data_id="35344_1#4", project_id="protist_microalgae"),
+        Allocation(data_id="35344_1#4", project_id="tol"),
+        Allocation(data_id="35528_4#8", project_id="britain_and_ireland"),
+        Allocation(data_id="35528_4#8", project_id="darwin"),
+        Allocation(data_id="35528_4#8", project_id="protist_microalgae"),
+        Allocation(data_id="35528_4#8", project_id="tol"),
+        Allocation(data_id="36691_2#5", project_id="britain_and_ireland"),
+        Allocation(data_id="36691_2#5", project_id="darwin"),
+        Allocation(data_id="36691_2#5", project_id="tol"),
+        Allocation(data_id="36691_2#6", project_id="britain_and_ireland"),
+        Allocation(data_id="36691_2#6", project_id="darwin"),
+        Allocation(data_id="36691_2#6", project_id="tol"),
+        Allocation(data_id="36691_2#7", project_id="britain_and_ireland"),
+        Allocation(data_id="36691_2#7", project_id="darwin"),
+        Allocation(data_id="36691_2#7", project_id="tol"),
+        Allocation(data_id="36691_2#8", project_id="britain_and_ireland"),
+        Allocation(data_id="36691_2#8", project_id="darwin"),
+        Allocation(data_id="36691_2#8", project_id="tol"),
+        Allocation(data_id="36703_5#4", project_id="britain_and_ireland"),
+        Allocation(data_id="36703_5#4", project_id="darwin"),
+        Allocation(data_id="36703_5#4", project_id="protist_microalgae"),
+        Allocation(data_id="36703_5#4", project_id="tol"),
+        Allocation(data_id="36857#13", project_id="britain_and_ireland"),
+        Allocation(data_id="36857#13", project_id="darwin"),
+        Allocation(data_id="36857#13", project_id="protist_microalgae"),
+        Allocation(data_id="36857#13", project_id="tol"),
+        Allocation(data_id="37935_8#13", project_id="britain_and_ireland"),
+        Allocation(data_id="37935_8#13", project_id="darwin"),
+        Allocation(data_id="37935_8#13", project_id="tol"),
+        Allocation(data_id="37939_1#2", project_id="britain_and_ireland"),
+        Allocation(data_id="37939_1#2", project_id="darwin"),
+        Allocation(data_id="37939_1#2", project_id="protist_microalgae"),
+        Allocation(data_id="37939_1#2", project_id="tol"),
+        Allocation(data_id="40666_2#2", project_id="britain_and_ireland"),
+        Allocation(data_id="40666_2#2", project_id="darwin"),
+        Allocation(data_id="40666_2#2", project_id="tol"),
+        Allocation(data_id="48593_1#25", project_id="britain_and_ireland"),
+        Allocation(data_id="48593_1#25", project_id="darwin"),
+        Allocation(data_id="48593_1#25", project_id="tol"),
+        Allocation(
+            data_id="m64016_201115_112225#1022", project_id="britain_and_ireland"
+        ),
+        Allocation(data_id="m64016_201115_112225#1022", project_id="darwin"),
+        Allocation(
+            data_id="m64016_201115_112225#1022", project_id="protist_microalgae"
+        ),
+        Allocation(data_id="m64016_201115_112225#1022", project_id="tol"),
+        Allocation(
+            data_id="m64089e_210601_133425#1022", project_id="britain_and_ireland"
+        ),
+        Allocation(data_id="m64089e_210601_133425#1022", project_id="darwin"),
+        Allocation(
+            data_id="m64089e_210601_133425#1022", project_id="protist_microalgae"
+        ),
+        Allocation(data_id="m64089e_210601_133425#1022", project_id="tol"),
+        Allocation(
+            data_id="m64097e_210221_172213#1019", project_id="britain_and_ireland"
+        ),
+        Allocation(data_id="m64097e_210221_172213#1019", project_id="darwin"),
+        Allocation(data_id="m64097e_210221_172213#1019", project_id="tol"),
+        Allocation(
+            data_id="m84309_250205_121831_s4#2076", project_id="britain_and_ireland"
+        ),
+        Allocation(data_id="m84309_250205_121831_s4#2076", project_id="darwin"),
+        Allocation(data_id="m84309_250205_121831_s4#2076", project_id="tol"),
+    ]
 
 
 def build_sample_data(ssn_maker):
@@ -146,6 +236,8 @@ def build_sample_data(ssn_maker):
             entries = session.scalars(select(cls)).all()
             fetched.extend(entries)
 
+        # fetched.extend(status_types())
+
         # Studies required
         study_ids = 5822, 5901, 6327
         fetched.extend(fetch_studies(session, study_ids))
@@ -154,6 +246,18 @@ def build_sample_data(ssn_maker):
         species_list = "Juncus effusus", "Brachiomonas submarina"
         fetched.extend(fetch_species_data(session, species_list))
     return fetched
+
+
+def status_types():
+    return [
+        SpecimenStatusType(status_type_id="Submitted", assign_order=600),
+        SpecimenStatusType(status_type_id="Curated", assign_order=500),
+        SpecimenStatusType(status_type_id="Curation", assign_order=400),
+        SpecimenStatusType(status_type_id="Data Complete", assign_order=300),
+        SpecimenStatusType(status_type_id="Data Issue", assign_order=200),
+        SpecimenStatusType(status_type_id="Data Generation", assign_order=100),
+        SpecimenStatusType(status_type_id="Ignore", assign_order=10),
+    ]
 
 
 def build_dataset_data(ssn_maker):
@@ -225,12 +329,8 @@ def fetch_species_data(session, species_list):
         .options(selectinload(Species.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.accession))
-        .options(
-            selectinload(Species.data_accession)
-        )
-        .options(
-            selectinload(Species.umbrella_accession)
-        )
+        .options(selectinload(Species.data_accession))
+        .options(selectinload(Species.umbrella_accession))
         .options(
             selectinload(Species.specimens)
             .selectinload(Specimen.samples)
@@ -283,12 +383,33 @@ def fetch_species_data(session, species_list):
     )
 
     data_patches = {
-        "35344_1#2": {"visibility": "Always", "processed": None},
-        "35344_1#3": {"visibility": "Always", "processed": 0},
-        "35344_1#4": {"visibility": "Testing", "processed": 0},
-        "37939_1#2": {"visibility": "Always", "processed": 0},
-        "m64089e_210601_133425#1022": {"visibility": "Always", "processed": None},
+        "35344_1#2": {
+            "qc": "pass",
+            "visibility": "Always",
+            "processed": None,
+        },
+        "35344_1#3": {
+            "qc": "pass",
+            "visibility": "Always",
+            "processed": 0,
+        },
+        "35344_1#4": {
+            "qc": "pass",
+            "visibility": "Testing",
+            "processed": 0,
+        },
+        "37939_1#2": {
+            "qc": "fail",
+            "visibility": "Always",
+            "processed": 0,
+        },
+        "m64089e_210601_133425#1022": {
+            "qc": "pass",
+            "visibility": "Always",
+            "processed": None,
+        },
         "m84309_250205_121831_s4#2076": {
+            "qc": "pass",
             "reads_discarded": 14187,
             "reads_trimmed": 767,
             "bases_removed": 128899080,
@@ -301,6 +422,8 @@ def fetch_species_data(session, species_list):
     for species in species_data:
         species.specimens = sorted(species.specimens, key=lambda x: x.specimen_id)
         for spmn in species.specimens:
+            if spmn.specimen_id == "lpJunEffu1":
+                spmn.assigned_user_id = 100
             spmn.samples = sorted(spmn.samples, key=lambda x: x.sample_id)
             for smpl in spmn.samples:
                 smpl.data = sorted(smpl.data, key=lambda x: x.data_id)
