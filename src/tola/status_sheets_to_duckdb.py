@@ -43,8 +43,6 @@ def cli(duckdb_file):
         "binned_meta_sub": "688995138",
         "raw_data_sub": "249200423",
         "bio_projects": "728482940",
-        "metagenome_tmp": "1641921323",
-        "metagenome_bin": "688995138",
     }
 
     for sheet_table, gid in db_sheets_gid.items():
@@ -61,24 +59,6 @@ def cli(duckdb_file):
         ("statussummary", "status_summary"),
     ):
         conn.execute(f"ALTER TABLE status RENAME COLUMN {old_col} TO {new_col}")
-
-    # Split the run_accessions column into an array
-    conn.execute(
-        """
-        CREATE TABLE metagenome AS
-        SELECT * EXCLUDE run_accessions
-          , string_split(run_accessions, ',') AS run_accessions
-        FROM metagenome_tmp
-        """
-    )
-    conn.execute("DROP TABLE metagenome_tmp")
-
-    # Fix metagenome_bin.length which is a FLOAT in Mbp to INTEGER in bp
-    conn.execute("UPDATE metagenome_bin SET length = round(1e6 * length, 0)")
-    conn.execute("ALTER TABLE metagenome_bin ALTER COLUMN length TYPE INTEGER")
-    for col in ("23s", "16s", "5s"):
-        conn.execute(f'ALTER TABLE metagenome_bin ALTER COLUMN "{col}" TYPE BOOLEAN')
-        conn.execute(f'ALTER TABLE metagenome_bin RENAME COLUMN "{col}" TO has_{col}')
 
     conn.commit()
 
@@ -124,8 +104,8 @@ def create_table(conn, table_name, row_itr):
     os.fsync(tsv_tmp.fileno())
 
     # Import the data from the temporary CSV file into duckdb
-    stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto(?)"  # noqa: S608
-    conn.execute(stmt, (tsv_tmp.name,))
+    stmt = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv(?)"  # noqa: S608
+    conn.execute(stmt, [tsv_tmp.name])
 
 
 def fetch_sheet_lines(document_id, gid):
