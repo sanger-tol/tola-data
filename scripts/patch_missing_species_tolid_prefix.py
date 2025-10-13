@@ -10,7 +10,7 @@ from tola.tolqc_client import TolClient
 
 
 def main():
-    client = TolClient(tolqc_alias="tolqc-flask-ro")
+    client = TolClient()
     gc = GoaTClient()
     for species in client.ads.get_list(
         "species", object_filters=DataSourceFilter(exact={"tolid_prefix": None})
@@ -22,6 +22,12 @@ def main():
         diff = {}
         if not info["tolid_prefix"]:
             stderr.write(f"No tolid_prefix for {species.id} {species.taxon_id}\n")
+            continue
+        if info["species_id"] != species.id:
+            stderr.write(
+                f"For taxon_id {species.taxon_id}"
+                f" species '{info['species_id']}' does not match ToLQC '{species.id}'\n"
+            )
             continue
         for fld, val in info.items():
             if fld == "species_id":
