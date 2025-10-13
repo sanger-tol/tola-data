@@ -75,7 +75,7 @@ class GoaTResult:
     def make_info(self):
         info = {
             "species_id": self.scientific_name,
-            "tolid_prefix": self.get_name("tolid_prefix"),
+            "tolid_prefix": self.get_name("tolid prefix"),
             "common_name": self.get_name("common name"),
             "taxon_id": self.taxon_id,
             "family_taxon_id": self.get_lineage_taxon_id("family"),
@@ -157,7 +157,7 @@ class GoaTResult:
     }
 
     def get_taxon_group(self):
-        tol_id = self.get_name("tolid_prefix")
+        tol_id = self.get_name("tolid prefix")
         return self.LETTER_GROUP.get(tol_id[0]) if tol_id else None
 
 
