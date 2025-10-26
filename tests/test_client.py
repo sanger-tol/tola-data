@@ -55,6 +55,42 @@ def test_fetch_unfilled_species(ads):
     assert len(unfilled)
 
 
+def test_fetch_no_requested_fields(ads):
+    filt = DataSourceFilter()
+    filt.exact = {"species_id": "Juncus effusus"}
+    (rush,) = ads.get_list(
+        "species",
+        object_filters=filt,
+        requested_fields=[
+            "id",
+            "taxon_id",
+            "data_accession.id",
+            "data_accession.accession_type.id",
+            "umbrella_accession.id",
+            "umbrella_accession.accession_type.id",
+            # "specimens.sts_specimen",
+        ],
+    )
+    assert rush.id == "Juncus effusus"
+
+
+def test_fetch_multi_depth_requested_fields(ads):
+    filt = DataSourceFilter()
+    filt.exact = {"data_id": "m64097e_210221_172213#1019"}
+    (rush,) = ads.get_list(
+        "data",
+        object_filters=filt,
+        requested_fields=[
+            "bases",
+            "reads",
+            "sample.specimen.species.taxon_id",
+            "sample.specimen.species.id",
+            # "specimen.sts_specimen",
+        ],
+    )
+    assert rush.id == "Juncus effusus"
+
+
 def test_fetch_or_store_one(client):
     tbl = "library_type"
     spec = {

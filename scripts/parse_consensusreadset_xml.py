@@ -1,3 +1,8 @@
+"""
+Script which demonstrates use of Expat XML parser from the Python standard
+library.
+"""
+
 import sys
 import xml.parsers.expat
 from pathlib import Path
@@ -46,8 +51,10 @@ def parse_dynamic_loading_cognate(file: Path) -> bool | None:
                 case _:
                     msg = f"Unexpected value for 'SimpleValue' in {attrs = }"
                     raise ValueError(msg)
-            # Now we have the value, we unset the handler so that the parser
-            # will skip to the end of the file:
+            # Now we have the value, we can unset the handler so that the
+            # parser doesn't call it again, and the remainder of the document
+            # will be processed faster.  Will still raise an `ExpatError` if
+            # the XML is not well formed.
             parser.StartElementHandler = None
 
     parser.StartElementHandler = get_dynamic_loading_cognate
