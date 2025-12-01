@@ -4,7 +4,7 @@
     "json_value": [
         {
             "name": "illumina-data",
-            "description": "Illumina data in ToLQC"
+            "description": "Illumina sequencing data in ToLQC"
         },
         {
             "name": "metagenome",
@@ -19,8 +19,12 @@
             "description": "Report of data from ToLQC the same format as `fetch-mlwh-data` fetches it from the MLWH"
         },
         {
+            "name": "ont-data",
+            "description": "Oxford Nanopore Technology (ONT) sequencing data in ToLQC"
+        },
+        {
             "name": "pacbio-data",
-            "description": "PacBio data in ToLQC"
+            "description": "PacBio sequencing data in ToLQC"
         },
         {
             "name": "pipeline-data",
