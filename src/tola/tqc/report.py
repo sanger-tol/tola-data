@@ -142,7 +142,11 @@ def build_payload(params, report_format="NDJSON"):
     param_dict = {}
     first_key = None
     for spec in params:
-        k, v = spec.split("=", maxsplit=1)
+        if "=" in spec:
+            k, v = spec.split("=", maxsplit=1)
+        else:
+            k = spec
+            v = True
         param_dict[k] = v
         if first_key is None:
             first_key = k

@@ -133,6 +133,7 @@ def core_data_object_to_dict(cdo, show_modified=False):
 
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
+        logging.debug(f"{cdo = }")
         rltd = getattr(cdo, rel_name)
         if rel_name == "modified_user":
             modfd["modified_by"] = rltd.name if rltd else None

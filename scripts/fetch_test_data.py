@@ -18,18 +18,26 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import DetachedInstanceError
-from tolqc.schema.accession_models import AccessionTypeDict
+from tolqc.schema import Role, RoleBinding, Token, User
+from tolqc.schema.accession_models import (  # noqa: F401
+    Accession,
+    AccessionTypeDict,
+    SubmitterDict,
+)
 from tolqc.schema.assembly_models import Dataset, DatasetElement
 from tolqc.schema.base import Base
-from tolqc.schema.folder_models import FolderLocation
+from tolqc.schema.folder_models import Folder, FolderLocation  # noqa: F401
 from tolqc.schema.sample_data_models import (
     Allocation,
     CategoryDict,
     Centre,
     ChemistryDict,
     Data,
+    File,  # noqa: F401
     FileTypeDict,
+    Library,  # noqa: F401
     LibraryType,
+    Location,  # noqa: F401
     PacbioRunMetrics,
     Platform,
     Project,
@@ -43,7 +51,7 @@ from tolqc.schema.sample_data_models import (
     Study,
     VisibilityDict,
 )
-from tolqc.schema.system_models import Token, User
+from tolqc.schema.system_models import Metadata
 
 data_dir = pathlib.Path()
 
@@ -93,8 +101,11 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     engine = create_engine(db_uri, echo=echo_sql)
     ssn_maker = sessionmaker(bind=engine)
     sample_data = [
-        User(id=100, email="tester@sanger.ac.uk", name="test-user", registered=True),
+        User(id=100, name="tester", email="tester@sanger.ac.uk"),
         Token(id=200, token="__TOKEN_PLACEHOLDER__", user_id=100),  # noqa: S106
+        Role(id=300, name="editor"),
+        RoleBinding(user_id=100, role_id=300),
+        Metadata(name="location.root", string_value="/test/loc_root"),
     ]
     sample_data.extend(
         build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
@@ -109,8 +120,11 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
         build_engine = create_engine(build_url, echo=echo_sql)
         Base.metadata.create_all(build_engine)
 
+        ns = {}
+        exec(code_string(sample_data), globals(), ns)  # noqa: S102
+        test_data = ns["test_data"]
         # Populate build database
-        populate_database(sessionmaker(bind=build_engine), code_string(sample_data))
+        populate_database(sessionmaker(bind=build_engine), test_data("MyToken"))
 
 
 def make_sql_data_file(build_url, sql_data_file):
@@ -231,6 +245,7 @@ def build_sample_data(ssn_maker):
             FolderLocation,
             QCDict,
             Sex,
+            SubmitterDict,
             VisibilityDict,
         ):
             entries = session.scalars(select(cls)).all()
@@ -243,7 +258,7 @@ def build_sample_data(ssn_maker):
         fetched.extend(fetch_studies(session, study_ids))
 
         # Fetch data for a list of test species
-        species_list = "Juncus effusus", "Brachiomonas submarina"
+        species_list = "Juncus effusus", "Brachiomonas submarina", "Rallus aquaticus"
         fetched.extend(fetch_species_data(session, species_list))
     return fetched
 
@@ -282,7 +297,7 @@ def make_build_url(db_uri, build_db_uri):
     if build_db_uri:
         url = make_url(db_uri)
     else:
-        url = make_url(db_uri).set(database="test_data_build")
+        url = make_url(db_uri).set(database="tolqc_test")
     return url
 
 
@@ -416,6 +431,27 @@ def fetch_species_data(session, species_list):
         },
     }
 
+    file_patches = {
+        153425: {
+            "has_methylation": True,
+        },
+        143249: {
+            "has_methylation": True,
+        },
+        148709: {
+            "has_methylation": True,
+        },
+        154839: {
+            "has_methylation": False,
+        },
+        153247: {
+            "has_methylation": None,
+        },
+        153248: {
+            "has_methylation": None,
+        },
+    }
+
     # Sort species, specimens, samples and data
     species_data = sorted(session.scalars(statement).all(), key=lambda x: x.species_id)
     run_folder_seen = set()
@@ -444,6 +480,13 @@ def fetch_species_data(session, species_list):
                                     del pbrm.folder
                                 else:
                                     run_folder_seen.add(fld_ulid)
+
+                    for file in data.files:
+                        if patch := file_patches.get(file.id):
+                            for attr, new in patch.items():
+                                old = getattr(file, attr)
+                                if new != old:
+                                    setattr(file, attr, new)
 
     # Check that we found all the requested species
     requested = set(species_list)
@@ -527,20 +570,27 @@ def code_string(obj, max_line_length=99):
             for x in class_list
             if x
             not in {
+                # Models not in `sample_data_models`
                 "Accession",
                 "AccessionTypeDict",
                 "Folder",
                 "FolderLocation",
+                "Metadata",
+                "Role",
+                "RoleBinding",
+                "SubmitterDict",
                 "Token",
                 "User",
             }
         )
     )
     imports_header = (
-        f"\nfrom tolqc.schema.accession_models import Accession, AccessionTypeDict\n"
-        f"from tolqc.schema.folder_models import Folder, FolderLocation\n"
+        "\n\nfrom tolqc.schema import Role, RoleBinding, Token, User\n"
+        "from tolqc.schema.accession_models import "
+        "Accession, AccessionTypeDict, SubmitterDict\n"
+        "from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
-        f"from tolqc.schema.system_models import Token, User\n\n"
+        "from tolqc.schema.system_models import Metadata\n"
     )
     blk_fmt = black_formatted_string_io(
         (
