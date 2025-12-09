@@ -95,7 +95,7 @@ def fetch_list_or_exit(client, table, key, id_list):
     return [key_fetched[x] for x in id_list]
 
 
-def fetch_all(client, table, key, id_list):
+def fetch_all(client, table, key, id_list, show_modified=False):
     key = "id" if key == f"{table}.id" else key
 
     # Not using get_by_ids():
@@ -104,14 +104,18 @@ def fetch_all(client, table, key, id_list):
     #
     # because it does a separate GET for each ID
 
+    modified = {"requested_fields": ["modified_user"]} if show_modified else {}
+
     if id_list:
         fetched = []
         for req_list in client.pages(id_list):
             filt = DataSourceFilter(in_list={key: req_list})
-            fetched.extend(list(client.ads.get_list(table, object_filters=filt)))
+            fetched.extend(
+                list(client.ads.get_list(table, object_filters=filt, **modified))
+            )
         return fetched
     else:
-        return list(client.ads.get_list(table))
+        return list(client.ads.get_list(table, **modified))
 
 
 def cdo_type_id(cdo):
@@ -250,7 +254,7 @@ def update_file_size_and_md5_if_missing(client, spec, irods_obj):
         )
         return
 
-    file_id =  spec.get("file.id") or spec.get("file_id")
+    file_id = spec.get("file.id") or spec.get("file_id")
     if not file_id:
         msg = f"Missing 'file.id' or 'file_id' field in: {spec}"
         raise ValueError(msg)

@@ -42,7 +42,7 @@ def show(client, table, key, file_list, file_format, show_modified, id_list):
         key = f"{table}.id"
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
-    fetched = fetch_all(client, table, key, id_list)
+    fetched = fetch_all(client, table, key, id_list, show_modified=show_modified)
     if sys.stdout.isatty():
         colour_pager(pretty_cdo_itr(fetched, key, show_modified=show_modified))
     else:

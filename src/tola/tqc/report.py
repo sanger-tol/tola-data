@@ -93,7 +93,9 @@ def report(ctx, show_url, report_format, report_name, params):
 
 def show_report_description(client):
     meta_id = "tqc.report.list"
-    (meta,) = client.ads.get_by_ids("metadata", [meta_id])
+    (meta,) = client.ads.get_by_ids(
+        "metadata", [meta_id], requested_fields=["json_value"]
+    )
     rep_list = None
     if meta:
         rep_list = meta.json_value

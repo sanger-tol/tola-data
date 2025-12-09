@@ -1,6 +1,6 @@
 {
     "metadata.id": "tqc.report.list",
-    "description": "List of available reports displayed by `tqc report --list`",
+    "description": "List of available reports displayed by `tqc report list`",
     "json_value": [
         {
             "name": "illumina-data",
@@ -28,7 +28,7 @@
         },
         {
             "name": "pipeline-data",
-            "description": "Report of all the sequencing data in ToLQC with useful fields and locations for feeding into other scripts"
+            "description": "Report of all the sequencing data in ToLQC with useful fields and locations for feeding into other scripts. Pass the PARAM `root=true` (or just `root`) to prefix paths in the output with the `location.root` entry from the metadata table, or `root=<PATH>` to specify your own prefix."
         },
         {
             "name": "specimen-status",
