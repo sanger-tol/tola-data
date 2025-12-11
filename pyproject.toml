@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tola-data"
-version = "1.0.47"
+version = "1.0.48"
 readme = "README.md"
 requires-python = ">= 3.12"
 dependencies = [
@@ -22,7 +22,7 @@ dependencies = [
     "requests",
     'importlib-metadata; python_version >= "3.12"',
     "partisan",
-    "tol-sdk>=1.6.28",
+    "tol-sdk>=1.7.5b4",
 ]
 
 [project.scripts]

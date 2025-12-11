@@ -123,6 +123,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dacite"
+version = "1.9.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/55/a0/7ca79796e799a3e782045d29bf052b5cde7439a2bbb17f15ff44f7aacc63/dacite-1.9.2.tar.gz", hash = "sha256:6ccc3b299727c7aa17582f0021f6ae14d5de47c7227932c47fec4cdfefd26f09", size = 22420, upload-time = "2025-02-05T09:27:29.757Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/35/386550fd60316d1e37eccdda609b074113298f23cef5bddb2049823fe666/dacite-1.9.2-py3-none-any.whl", hash = "sha256:053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0", size = 16600, upload-time = "2025-02-05T09:27:24.345Z" },
+]
+
+[[package]]
 name = "dateparser"
 version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -638,12 +647,13 @@ wheels = [
 
 [[package]]
 name = "tol-sdk"
-version = "1.6.28"
+version = "1.7.5b4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
     { name = "case-converter" },
     { name = "click" },
+    { name = "dacite" },
     { name = "dateparser" },
     { name = "more-itertools" },
     { name = "pydantic" },
@@ -652,9 +662,9 @@ dependencies = [
     { name = "requests" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/55/54f01a6e951a1739c95cbe2dfb9227b93d554b9652afbf8b5bb1022c954e/tol_sdk-1.6.28.tar.gz", hash = "sha256:a71e232f274fc992079c83dde5d028f3ada108d9b137bbd06b6a7a1c574990e3", size = 337840, upload-time = "2025-09-03T21:08:26.372Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/37/f5f99e91a9a20b4e1ff6163044f815d23f69be04b43ee750ebcf53e47cd8/tol_sdk-1.7.5b4.tar.gz", hash = "sha256:1aca69cdbc4f05405a926e34006870c2563fd4268c7e1ce0891d565ac61143fb", size = 362060, upload-time = "2025-12-10T13:33:54.849Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/ac/1b39a86bdea6322b37f5cb1a451990176756663c012c216426d13965e5a0/tol_sdk-1.6.28-py3-none-any.whl", hash = "sha256:362bc4e4627ac923be650bfe64c7273d896f08a6ebf8dd797d10be5e55391dd7", size = 476967, upload-time = "2025-09-03T21:08:23.436Z" },
+    { url = "https://files.pythonhosted.org/packages/29/32/ae7e8052ed4ccda85a0ce78743dfda15bb2267009696421f6828f81ae8a4/tol_sdk-1.7.5b4-py3-none-any.whl", hash = "sha256:f5bd0ef18295e1da1ee149db88fe3e48c12058b867b728e01be5c5b2e7566868", size = 507527, upload-time = "2025-12-10T13:33:53.107Z" },
 ]
 
 [[package]]
@@ -696,7 +706,7 @@ requires-dist = [
     { name = "python-ulid" },
     { name = "pytz" },
     { name = "requests" },
-    { name = "tol-sdk", specifier = ">=1.6.28" },
+    { name = "tol-sdk", specifier = ">=1.7.5b4" },
 ]
 
 [package.metadata.requires-dev]
