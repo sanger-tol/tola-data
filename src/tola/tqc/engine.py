@@ -61,7 +61,7 @@ def key_list_search(client, table, key, key_id_list):
 
         for req_list in client.pages(key_id_list):
             filt = DataSourceFilter(in_list={search_key: req_list})
-            for cdo in client.ads.get_list(table, object_filters=filt):
+            for cdo in client.ads_ro.get_list(table, object_filters=filt):
                 val = getattr(cdo, obj_rel).id if obj_rel else getattr(cdo, search_key)
                 if not val:
                     sys.exit(f"No such key '{search_key}' in {cdo!r}")
@@ -111,11 +111,11 @@ def fetch_all(client, table, key, id_list, show_modified=False):
         for req_list in client.pages(id_list):
             filt = DataSourceFilter(in_list={key: req_list})
             fetched.extend(
-                list(client.ads.get_list(table, object_filters=filt, **modified))
+                list(client.ads_ro.get_list(table, object_filters=filt, **modified))
             )
         return fetched
     else:
-        return list(client.ads.get_list(table, **modified))
+        return list(client.ads_ro.get_list(table, **modified))
 
 
 def cdo_type_id(cdo):
@@ -140,18 +140,20 @@ def core_data_object_to_dict(cdo, show_modified=False):
         logging.debug(f"{cdo = }")
         rltd = getattr(cdo, rel_name)
         if rel_name == "modified_user":
-            modfd["modified_by"] = rltd.name if rltd else None
+            if show_modified:
+                modfd["modified_by"] = rltd.name if rltd else None
         else:
             flat[f"{rel_name}.id"] = rltd.id if rltd else None
 
     # The object's attributes
     for k, v in cdo.attributes.items():
         if k == "modified_at":
-            modfd[k] = v
+            if show_modified:
+                modfd[k] = v
             continue
         flat[k] = v
 
-    if show_modified and modfd:
+    if show_modified:
         for attr in ("modified_by", "modified_at"):
             flat[attr] = modfd.get(attr)
 

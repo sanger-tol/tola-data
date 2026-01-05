@@ -52,9 +52,16 @@ class TolClient:
 
     @cached_property
     def ads(self):
+        return self.__create_ads()
+
+    @cached_property
+    def ads_ro(self):
+        return self.__create_ads(read_only=True)
+
+    def __create_ads(self, read_only=False):
         tolqc = create_api_datasource(
             api_url="/".join((self.tolqc_url, self.api_path)),
-            token=self.api_token,
+            token=None if read_only else self.api_token,
             data_prefix="/data",
             retries=False,
             merge_collections=False,
@@ -64,7 +71,7 @@ class TolClient:
         return tolqc
 
     def ads_get_list(self, table, filter_spec):
-        yield from self.ads.get_list(
+        yield from self.ads_ro.get_list(
             table, object_filters=DataSourceFilter(and_=filter_spec)
         )
 
@@ -296,7 +303,7 @@ class TolClient:
     @cached_property
     def sex_table(self):
         tbl = {}
-        for obj in self.ads.get_list("sex"):
+        for obj in self.ads_ro.get_list("sex"):
             sex = obj.id
             tbl[uc_munge(sex)] = sex
         return tbl
