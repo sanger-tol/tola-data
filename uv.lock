@@ -650,7 +650,7 @@ wheels = [
 
 [[package]]
 name = "tol-sdk"
-version = "1.7.5b4"
+version = "1.8.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -665,9 +665,9 @@ dependencies = [
     { name = "requests" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/37/37/f5f99e91a9a20b4e1ff6163044f815d23f69be04b43ee750ebcf53e47cd8/tol_sdk-1.7.5b4.tar.gz", hash = "sha256:1aca69cdbc4f05405a926e34006870c2563fd4268c7e1ce0891d565ac61143fb", size = 362060, upload-time = "2025-12-10T13:33:54.849Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/92/2a1972b61929e3afdf8662a9cd8e79156545abe5976b685fdd737f0e7ecd/tol_sdk-1.8.3.tar.gz", hash = "sha256:8963088055acc56752c398d4fc2473a56dc617fb3aa9c8c4879bd63bc14a0dd6", size = 364971, upload-time = "2026-01-06T16:19:20.099Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/32/ae7e8052ed4ccda85a0ce78743dfda15bb2267009696421f6828f81ae8a4/tol_sdk-1.7.5b4-py3-none-any.whl", hash = "sha256:f5bd0ef18295e1da1ee149db88fe3e48c12058b867b728e01be5c5b2e7566868", size = 507527, upload-time = "2025-12-10T13:33:53.107Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/e8/ccadcd77923badfc08d08fdf1117e32b57a4db16babe56dea401b743dd96/tol_sdk-1.8.3-py3-none-any.whl", hash = "sha256:e9877aef22ddbf70711e920f5cddf3d55fe58d00c5f2678675844e96e55fd32c", size = 513310, upload-time = "2026-01-06T16:19:18.614Z" },
 ]
 
 [[package]]
@@ -709,7 +709,7 @@ requires-dist = [
     { name = "python-ulid" },
     { name = "pytz" },
     { name = "requests" },
-    { name = "tol-sdk", specifier = ">=1.7.5b4" },
+    { name = "tol-sdk", specifier = ">=1.8.3" },
 ]
 
 [package.metadata.requires-dev]
