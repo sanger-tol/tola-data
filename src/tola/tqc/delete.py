@@ -5,8 +5,8 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager, s
-from tola.terminal import pretty_cdo_itr
+from tola.pretty import bold, s
+from tola.terminal import colour_pager, pretty_cdo_itr
 from tola.tqc.engine import (
     core_data_object_to_dict,
     fetch_list_or_exit,

@@ -6,8 +6,7 @@ from tol.sources.portal import portal
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import colour_pager
-from tola.terminal import pretty_dict_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import uc_munge
 from tola.tqc.engine import core_data_object_to_dict, id_iterator
 from tola.tqc.upsert import TableUpserter

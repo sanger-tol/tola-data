@@ -4,8 +4,8 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import colour_pager
 from tola.terminal import (
+    colour_pager,
     dry_warning,
     pretty_changes_itr,
     pretty_dict_itr,

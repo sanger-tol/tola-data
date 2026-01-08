@@ -9,9 +9,8 @@ from tola.ndjson import (
     parse_ndjson_stream,
     pretty_row,
 )
-from tola.pretty import colour_pager
 from tola.subtrack import SubTrack
-from tola.terminal import pretty_dict_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tqc.engine import guess_file_type, parse_id_list_stream
 
 

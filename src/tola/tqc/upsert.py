@@ -4,10 +4,11 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager, plain_text_from_itr, s
+from tola.pretty import bold, plain_text_from_itr, s
 from tola.terminal import (
     TerminalDict,
     TerminalDiff,
+    colour_pager,
     dry_warning,
     pretty_terminal_itr,
 )

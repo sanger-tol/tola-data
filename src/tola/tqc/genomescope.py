@@ -7,9 +7,8 @@ from pathlib import Path
 import click
 
 from tola.ndjson import ndjson_row
-from tola.pretty import colour_pager
 from tola.store_folder import upload_files
-from tola.terminal import pretty_dict_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tqc.dataset import latest_dataset_id
 from tola.tqc.engine import core_data_object_to_dict
 

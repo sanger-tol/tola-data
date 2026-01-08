@@ -6,7 +6,8 @@ from typing import Any
 import click
 import pyarrow
 
-from tola.pretty import bg_green, bg_red, bold, colour_pager, field_style
+from tola.pretty import bg_green, bg_red, bold, field_style
+from tola.terminal import colour_pager
 
 
 class Mismatch:

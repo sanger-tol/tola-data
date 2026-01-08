@@ -4,8 +4,7 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import colour_pager
-from tola.terminal import pretty_cdo_itr
+from tola.terminal import colour_pager, pretty_cdo_itr
 from tola.tqc.engine import (
     core_data_object_to_dict,
     fetch_all,
@@ -42,6 +41,7 @@ def show(client, table, key, file_list, file_format, show_modified, id_list):
         key = f"{table}.id"
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
+
     fetched = fetch_all(client, table, key, id_list, show_modified=show_modified)
     if sys.stdout.isatty():
         colour_pager(pretty_cdo_itr(fetched, key, show_modified=show_modified))

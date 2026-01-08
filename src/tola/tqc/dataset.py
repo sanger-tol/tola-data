@@ -6,8 +6,8 @@ from ulid import ULID
 
 from tola import click_options
 from tola.ndjson import ndjson_row, parse_ndjson_stream
-from tola.pretty import bold, colour_pager, natural, s
-from tola.terminal import pretty_dict_itr
+from tola.pretty import bold, natural, s
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit
 
 

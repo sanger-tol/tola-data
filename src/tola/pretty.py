@@ -1,8 +1,6 @@
 import datetime
 import json
-import os
 import re
-import subprocess
 from io import StringIO
 
 import click
@@ -76,46 +74,6 @@ def s(x):
     """Formatting plurals. Argument can be an `int` or an iterable"""
     n = x if isinstance(x, int) else len(x)
     return "" if n == 1 else "s"
-
-
-def open_pager():
-    pager_cmd = [os.environ.get("PAGER", "less").strip()]
-    if pager_cmd[0] == "less" and not os.environ.get("LESS"):
-        pager_cmd.extend(
-            [
-                "--no-init",
-                "--quit-if-one-screen",
-                "--ignore-case",
-                "--RAW-CONTROL-CHARS",
-            ]
-        )
-
-    return subprocess.Popen(  # noqa: S602, S603
-        pager_cmd,
-        stdin=subprocess.PIPE,
-        text=True,
-    )
-
-
-def colour_pager(itr):
-    if isinstance(itr, str):
-        itr = [itr]
-
-    pager = open_pager()
-    try:
-        for text in itr:
-            pager.stdin.write(text)
-    except (OSError, KeyboardInterrupt):
-        pass
-    pager.stdin.close()
-
-    while True:
-        try:
-            pager.wait()
-        except KeyboardInterrupt:
-            pass
-        else:
-            break
 
 
 def natural(string):

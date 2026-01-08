@@ -1,5 +1,7 @@
 import io
 import json
+import os
+import subprocess
 import sys
 
 from tola.pretty import bold, bold_green, field_style, s
@@ -146,3 +148,45 @@ def dry_warning(count):
     return (
         f"Dry run. Use '--apply' flag to store {bold(count)} changed row{s(count)}.\n"
     )
+
+
+
+
+def open_pager():
+    pager_cmd = [os.environ.get("PAGER", "less").strip()]
+    if pager_cmd[0] == "less" and not os.environ.get("LESS"):
+        pager_cmd.extend(
+            [
+                "--no-init",
+                "--quit-if-one-screen",
+                "--ignore-case",
+                "--RAW-CONTROL-CHARS",
+            ]
+        )
+
+    return subprocess.Popen(  # noqa: S602, S603
+        pager_cmd,
+        stdin=subprocess.PIPE,
+        text=True,
+    )
+
+
+def colour_pager(itr):
+    if isinstance(itr, str):
+        itr = [itr]
+
+    pager = open_pager()
+    try:
+        for text in itr:
+            pager.stdin.write(text)
+    except (OSError, KeyboardInterrupt):
+        pass
+    pager.stdin.close()
+
+    while True:
+        try:
+            pager.wait()
+        except KeyboardInterrupt:
+            pass
+        else:
+            break

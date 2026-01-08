@@ -4,8 +4,8 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, colour_pager
-from tola.terminal import TerminalDict
+from tola.pretty import bold
+from tola.terminal import TerminalDict, colour_pager
 from tola.tqc.engine import (
     input_objects_or_exit,
     parse_datetime_fields,

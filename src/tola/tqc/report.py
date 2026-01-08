@@ -5,8 +5,8 @@ import textwrap
 import click
 import requests
 
-from tola.pretty import bold, colour_pager, s
-from tola.terminal import TerminalDict
+from tola.pretty import bold, s
+from tola.terminal import TerminalDict, colour_pager
 
 
 @click.command
