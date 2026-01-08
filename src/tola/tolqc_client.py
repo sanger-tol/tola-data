@@ -38,17 +38,17 @@ class TolClient:
         if conf := get_connection_params_entry(
             tolqc_alias, no_params_file_ok=(tolqc_alias == "tolqc")
         ):
-            self._tolqc_url = tolqc_url or conf.get("api_url")
+            self.__tolqc_url = tolqc_url or conf.get("api_url")
             self.api_token = api_token or conf.get("api_token")
-            self._set_proxy(conf)
+            self.__set_proxy(conf)
         else:
             # Set default URL if there is no config file
-            self._tolqc_url = tolqc_url or "https://qc.tol.sanger.ac.uk"
+            self.__tolqc_url = tolqc_url or "https://qc.tol.sanger.ac.uk"
             self.api_token = api_token
 
     @cached_property
     def tolqc_url(self):
-        return self._tolqc_url.rstrip("/")
+        return self.__tolqc_url.rstrip("/")
 
     @cached_property
     def ads(self):
@@ -151,7 +151,7 @@ class TolClient:
     def s3(self):
         return S3Client()
 
-    def _set_proxy(self, conf):
+    def __set_proxy(self, conf):
         if proxy := conf.get("proxy"):
             scheme = (
                 "HTTPS_PROXY" if self.tolqc_url.startswith("https") else "HTTP_PROXY"
@@ -171,14 +171,14 @@ class TolClient:
         return "/".join((self.tolqc_url, self.api_path, path))
 
     def json_get(self, path, payload=None):
-        enc = self._encode_payload(payload)
+        enc = self.__encode_payload(payload)
         r = requests.get(
             self.build_path(path),
             params=enc,
             timeout=120,
         )
         logging.debug(f"URL = {r.url}")
-        return self._check_response(r)
+        return self.__check_response(r)
 
     def json_post(self, path, data):
         r = requests.post(
@@ -187,7 +187,7 @@ class TolClient:
             data=data,
             timeout=120,
         )
-        return self._check_response(r)
+        return self.__check_response(r)
 
     def ndjson_post(self, path, ndjson_str_itr, max_request_size=2 * 1024**2):
         rspns = {}
@@ -217,7 +217,7 @@ class TolClient:
         r.raise_for_status()
 
         if not filename:
-            filename = self._content_disposition_filename(r)
+            filename = self.__content_disposition_filename(r)
 
         # Write the response to the file
         with open(filename, "wb") as fh:
@@ -227,7 +227,7 @@ class TolClient:
         return filename
 
     def stream_lines(self, path, payload=None):
-        enc = self._encode_payload(payload)
+        enc = self.__encode_payload(payload)
         r = requests.get(
             self.build_path(path),
             params=enc,
@@ -259,7 +259,7 @@ class TolClient:
         yield first
         yield from itr
 
-    def _content_disposition_filename(self, r):
+    def __content_disposition_filename(self, r):
         """Extracts the filename from the Content-Disposition header"""
 
         disposition_hdr = r.headers.get("content-disposition", "<MISSING>")
@@ -272,7 +272,7 @@ class TolClient:
             )
             raise ValueError(msg)
 
-    def _encode_payload(self, payload):
+    def __encode_payload(self, payload):
         enc = {}
         if not payload:
             return enc
@@ -283,7 +283,7 @@ class TolClient:
                 enc[k] = v
         return enc
 
-    def _check_response(self, response):
+    def __check_response(self, response):
         if response.status_code == requests.codes.ok:
             return response.json()
         else:
