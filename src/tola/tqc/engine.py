@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 import sys
@@ -13,6 +14,22 @@ from tola.ndjson import (
     parse_ndjson_stream,
 )
 from tola.pretty import bold
+
+
+def table_key(table, key):
+    """
+    Turn the key into "id" if it is in the flattened representation of the
+    table's primary key, e.g. "species.id"
+    """
+    return "id" if key == f"{table}.id" else key
+
+
+def cdo_type_id(cdo):
+    return f"{cdo.type}.id"
+
+
+def obj_rel_name(key):
+    return key[:-3] if key.endswith(".id") else None
 
 
 def parse_datetime_fields(field_list, input_obj):
@@ -56,7 +73,7 @@ def hash_dir(hash_me, sci_name):
 def key_list_search(client, table, key, key_id_list):
     db_obj_found = {}
     if key_id_list:
-        search_key = "id" if key == f"{table}.id" else key
+        search_key = table_key(table, key)
         obj_rel = obj_rel_name(search_key)
 
         for req_list in client.pages(key_id_list):
@@ -96,7 +113,7 @@ def fetch_list_or_exit(client, table, key, id_list):
 
 
 def fetch_all(client, table, key, id_list, show_modified=False):
-    key = "id" if key == f"{table}.id" else key
+    key = table_key(table, key)
 
     # Not using get_by_ids():
     #
@@ -104,7 +121,7 @@ def fetch_all(client, table, key, id_list, show_modified=False):
     #
     # because it does a separate GET for each ID
 
-    modified = {"requested_fields": ["modified_user"]} if show_modified else {}
+    modified = __req_fields_from_show_modified_flag(show_modified)
 
     if id_list:
         fetched = []
@@ -118,12 +135,56 @@ def fetch_all(client, table, key, id_list, show_modified=False):
         return list(client.ads_ro.get_list(table, **modified))
 
 
-def cdo_type_id(cdo):
-    return f"{cdo.type}.id"
+def async_fetch_all_itr(client, table, key, id_list, show_modified=False):
+    key = table_key(table, key)
+    modified = __req_fields_from_show_modified_flag(show_modified)
+
+    if id_list:
+        return async_query_id_list_pager(client, table, key, id_list, modified)
+    return async_cursor_list_pager(client, table, modified)
 
 
-def obj_rel_name(key):
-    return key[:-3] if key.endswith(".id") else None
+async def async_query_id_list_pager(client, table, key, id_list, modified):
+    loop = asyncio.get_running_loop()
+    ads_ro = client.ads_ro
+    for req_list in client.pages(id_list):
+        filt = DataSourceFilter(in_list={key: req_list})
+
+        def get_page(filt=filt):
+            return ads_ro.get_list(table, object_filters=filt, **modified)
+
+        yield await loop.run_in_executor(None, get_page)
+
+
+async def async_cursor_list_pager(client, table, modified):
+    loop = asyncio.get_running_loop()
+    ads_ro = client.ads_ro
+
+    # Should check that we can use cursor fetching, but cannot call private
+    # method `__can_cursor()` on `ApiDataSource`
+    search_after = None
+    page_size = client.page_size
+
+    while True:
+
+        def page_fetch(search_after=search_after):
+            return ads_ro.get_cursor_page(
+                table,
+                page_size=page_size,
+                search_after=search_after,
+                **modified,
+            )
+
+        obj_itr, search_after = await loop.run_in_executor(None, page_fetch)
+        fetched = list(obj_itr)
+        if fetched:
+            yield fetched
+        if len(fetched) < page_size:
+            break
+
+
+def __req_fields_from_show_modified_flag(show_modified=False):
+    return {"requested_fields": ["modified_user"]} if show_modified else {}
 
 
 def core_data_object_to_dict(cdo, show_modified=False):

@@ -150,6 +150,17 @@ def dry_warning(count):
     )
 
 
+def colour_pager(itr):
+    if isinstance(itr, str):
+        itr = [itr]
+
+    pager = open_pager()
+    try:
+        for text in itr:
+            pager.stdin.write(text)
+    except (OSError, KeyboardInterrupt):
+        pass
+    close_pager(pager)
 
 
 def open_pager():
@@ -171,16 +182,7 @@ def open_pager():
     )
 
 
-def colour_pager(itr):
-    if isinstance(itr, str):
-        itr = [itr]
-
-    pager = open_pager()
-    try:
-        for text in itr:
-            pager.stdin.write(text)
-    except (OSError, KeyboardInterrupt):
-        pass
+def close_pager(pager):
     pager.stdin.close()
 
     while True:
