@@ -31,6 +31,50 @@ class StoreGenomescopeError(Exception):
     ),
 )
 @click.option(
+    "--run",
+    "run_flag",
+    flag_value=True,
+    default=False,
+    help=(
+        """
+        Run genomescope in each directory in INPUT_DIRS.  (The default action
+        is to load existing genomescope results into the ToLQC database, not
+        to run genomescope.)
+        """
+    ),
+)
+@click.option(
+    "--lambda",
+    "initial_kmer_coverage",
+    default=None,
+    type=int,
+    help=(
+        """
+        Genomescope parameter for initial k-mer coverage.
+        """
+    ),
+)
+@click.option(
+    "--ploidy",
+    default=None,
+    type=int,
+    help=(
+        """
+        Genomescope parameter for which ploidy model to use.
+        """
+    ),
+)
+@click.option(
+    "--max-kmer-coverage",
+    default=None,
+    type=int,
+    help=(
+        """
+        Genomescope parameter for intial k-mer coverage.
+        """
+    ),
+)
+@click.option(
     "--rerun-if-no-json",
     flag_value=True,
     default=False,
@@ -54,8 +98,7 @@ class StoreGenomescopeError(Exception):
     show_default=True,
     help=(
         """
-        Genomescope command for rerunning genomescope when there is no
-        `results.json` file.
+        Command for running genomescope.
         """
     ),
 )
@@ -72,6 +115,10 @@ class StoreGenomescopeError(Exception):
 def genomescope(
     ctx,
     dataset_id,
+    run_flag,
+    initial_kmer_coverage,
+    ploidy,
+    max_kmer_coverage,
     rerun_if_no_json,
     folder_location_id,
     genomescope_cmd,
@@ -94,18 +141,40 @@ def genomescope(
             " Can only specify one input directory if a --dataset-id argument is set"
         )
 
+    if (initial_kmer_coverage or ploidy or max_kmer_coverage) and not run_flag:
+        sys.exit(
+            "Must specify --run if setting any of"
+            " --lambda, --ploidy or --max-kmer-coverage"
+        )
+
+    if rerun_if_no_json and run_flag:
+        sys.exit("Cannot set --rerun-if-no-json with the --run flag.")
+
     results = []
     failures = []
+
     for rdir in input_dirs:
         try:
-            rslt = store_genomescope_results(
-                client,
-                rdir,
-                dataset_id,
-                rerun_if_no_json,
-                folder_location_id,
-                genomescope_cmd,
-            )
+            if run_flag:
+                rslt = run_genomescope_and_store_results(
+                    client,
+                    rdir,
+                    dataset_id=dataset_id,
+                    folder_location_id=folder_location_id,
+                    genomescope_cmd=genomescope_cmd,
+                    initial_kmer_coverage=initial_kmer_coverage,
+                    ploidy=ploidy,
+                    max_kmer_coverage=max_kmer_coverage,
+                )
+            else:
+                rslt = store_genomescope_results(
+                    client,
+                    rdir,
+                    dataset_id=dataset_id,
+                    rerun_if_no_json=rerun_if_no_json,
+                    folder_location_id=folder_location_id,
+                    genomescope_cmd=genomescope_cmd,
+                )
         except StoreGenomescopeError as gsf:
             (msg,) = gsf.args
             failures.append(msg)
@@ -140,9 +209,25 @@ def genomescope(
         )
 
 
+def run_genomescope_and_store_results(
+    client,
+    rdir: Path,
+    *,
+    dataset_id=None,
+    folder_location_id="genomescope_s3",
+    genomescope_cmd=None,
+    initial_kmer_coverage=None,
+    ploidy=None,
+    max_kmer_coverage=None,
+):
+    if not dataset_id:
+        latest_dataset_id_or_raise(rdir)
+
+
 def store_genomescope_results(
     client,
     rdir: Path,
+    *,
     dataset_id=None,
     rerun_if_no_json=False,
     folder_location_id="genomescope_s3",
@@ -151,13 +236,7 @@ def store_genomescope_results(
     tbl_name = "genomescope_metrics"
 
     if not dataset_id:
-        dataset_id = latest_dataset_id(rdir)
-        if not dataset_id:
-            msg = (
-                "Failed to find dataset_id from a 'datasets.ndjson'"
-                f" file in or above directory '{rdir}'"
-            )
-            raise StoreGenomescopeError(msg)
+        latest_dataset_id_or_raise(rdir)
 
     report = report_json_contents(rdir, rerun_if_no_json, genomescope_cmd)
     attr = attr_from_report(report)
@@ -186,6 +265,17 @@ def store_genomescope_results(
             continue
         rslt[k] = v
     return rslt
+
+
+def latest_dataset_id_or_raise(rdir):
+    dataset_id = latest_dataset_id(rdir)
+    if not dataset_id:
+        msg = (
+            "Failed to find dataset_id from a 'datasets.ndjson'"
+            f" file in or above directory '{rdir}'"
+        )
+        raise StoreGenomescopeError(msg)
+    return dataset_id
 
 
 def attr_from_report(report):
