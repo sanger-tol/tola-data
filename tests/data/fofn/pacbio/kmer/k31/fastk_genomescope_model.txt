@@ -1,19 +1,28 @@
 
-Formula: y_transform ~ x^transform_exp * length * predict2_0(r1, k, d, 
-    kmercov, bias, x)
+Formula: y_transform ~ x^transform_exp * length * predict6_0(r1, r2, r3, 
+    r4, r5, r6, r7, r8, r9, r10, k, d, kmercov, bias, x)
 
 Parameters:
          Estimate Std. Error t value Pr(>|t|)    
-d       3.602e-02  8.109e-04   44.42   <2e-16 ***
-r1      1.436e-03  1.227e-04   11.70   <2e-16 ***
-kmercov 6.566e+00  8.292e-03  791.85   <2e-16 ***
-bias    2.674e-01  8.336e-03   32.08   <2e-16 ***
-length  4.130e+09  5.781e+06  714.42   <2e-16 ***
+d       2.462e-01  2.792e-02   8.816  < 2e-16 ***
+r1      1.637e-02  2.604e-03   6.287 4.89e-10 ***
+r2      2.861e-02  6.047e+00   0.005    0.996    
+r3      1.300e-02  1.304e-02   0.997    0.319    
+r4      1.000e-05  6.043e+00   0.000    1.000    
+r5      3.779e-03  6.013e+00   0.001    0.999    
+r6      7.407e-03  9.877e+00   0.001    0.999    
+r7      1.000e-05  6.010e+00   0.000    1.000    
+r8      1.917e-04  1.573e+01   0.000    1.000    
+r9      1.000e-05  6.571e+00   0.000    1.000    
+r10     1.000e-05  1.823e-03   0.005    0.996    
+kmercov 1.735e+01  8.687e-02 199.671  < 2e-16 ***
+bias    2.960e-01  2.547e-02  11.619  < 2e-16 ***
+length  6.079e+08  1.463e+07  41.544  < 2e-16 ***
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-Residual standard error: 13700000 on 1995 degrees of freedom
+Residual standard error: 28330000 on 966 degrees of freedom
 
-Number of iterations to convergence: 5 
+Number of iterations to convergence: 41 
 Achieved convergence tolerance: 1.49e-08
 

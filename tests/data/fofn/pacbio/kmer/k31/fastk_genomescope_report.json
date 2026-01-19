@@ -1,7 +1,8 @@
 {
-  "version": "2.0",
+  "version": "2.1.0",
+  "commandline_arguments": "--ploidy 6 --kmer_length 31 --name_prefix fastk_genomescope --input fastk.hist.txt --output . --json_report",
   "input_parameters": {
-    "ploidy": 2,
+    "ploidy": 6,
     "kmer_length": 31,
     "initial_kmer_coverage": null,
     "max_kmer_coverage": null,
@@ -15,81 +16,135 @@
       "typical_error": 15
     }
   },
-  "kcov": 6.56564770932383,
-  "dup": 0.267378881890947,
+  "kcov": 17.346385141911,
+  "dup": 0.295976662149449,
   "homozygous": {
-    "avg": 0.998564047901143,
-    "min": 0.998318634919461,
-    "max": 0.998809460882824
+    "avg": 0.93060537607628,
+    "min": null,
+    "max": null
   },
   "heterozygous": {
-    "avg": 0.00143595209885725,
-    "min": 0.00119053911717593,
-    "max": 0.00168136508053858
+    "avg": 0.0693946239237199,
+    "min": null,
+    "max": null
   },
   "repetitiveness": {
-    "avg": 0.0360214644973573,
-    "min": 0.0343996754849362,
-    "max": 0.0376432535097784
+    "avg": 0.246151413538066,
+    "min": 0.190308218378181,
+    "max": 0.301994608697952
   },
   "genome_haploid_length": {
-    "avg": 5878521033,
-    "min": 5863710795,
-    "max": 5893406274
+    "avg": 1443711482,
+    "min": 1429394003,
+    "max": 1458318684
   },
   "genome_repeat_length": {
-    "avg": 1897284651,
-    "min": 1892504667,
-    "max": 1902088842
+    "avg": 985471278,
+    "min": 975698229,
+    "max": 995442092
   },
   "genome_unique_length": {
-    "avg": 3981236382,
-    "min": 3971206128,
-    "max": 3991317432
+    "avg": 458240204,
+    "min": 453695775,
+    "max": 462876592
   },
   "model_fit": {
-    "all": 0.740156485175226,
-    "full": 0.992057997138315,
-    "unique": 0.995065445128859
+    "all": 0.744350705324236,
+    "full": 0.919504443600502,
+    "unique": 0.945520572801336
   },
-  "read_error_rate": 0.00269857308904897,
+  "read_error_rate": 0.00170901574325055,
   "model_summary": {
-    "formula": "y_transform ~ x^transform_exp * length * predict2_0(r1, k, d, kmercov, bias, x)",
+    "formula": "y_transform ~ x^transform_exp * length * predict6_0(r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, k, d, kmercov, bias, x)",
     "parameters": {
       "d": {
-        "estimate": 0.0360214644973573,
-        "std_error": 0.000810894506210558,
-        "t_value": 44.4218874606655,
-        "p_value": 3.07617519256022e-300
+        "estimate": 0.246151413538066,
+        "std_error": 0.0279215975799427,
+        "t_value": 8.8158069334431,
+        "p_value": 5.44689409676498e-18
       },
       "r1": {
-        "estimate": 0.00143595209885725,
-        "std_error": 0.000122706490840661,
-        "t_value": 11.7023320365497,
-        "p_value": 1.21336056712848e-30
+        "estimate": 0.0163698828306569,
+        "std_error": 0.00260369176496232,
+        "t_value": 6.28718155157426,
+        "p_value": 4.88839346071899e-10
+      },
+      "r2": {
+        "estimate": 0.0286079894534796,
+        "std_error": 6.04734784533238,
+        "t_value": 0.0047306670932714,
+        "p_value": 0.996226464571044
+      },
+      "r3": {
+        "estimate": 0.0129992285938854,
+        "std_error": 0.013042916126696,
+        "t_value": 0.996650478130334,
+        "p_value": 0.319183777472613
+      },
+      "r4": {
+        "estimate": 1e-05,
+        "std_error": 6.0433617547442,
+        "t_value": 1.65470815844339e-06,
+        "p_value": 0.999998680075547
+      },
+      "r5": {
+        "estimate": 0.0037789312228352,
+        "std_error": 6.01338417247612,
+        "t_value": 0.000628420056734735,
+        "p_value": 0.999498723118876
+      },
+      "r6": {
+        "estimate": 0.00740687764903654,
+        "std_error": 9.87664327572674,
+        "t_value": 0.000749938763834875,
+        "p_value": 0.999401790331108
+      },
+      "r7": {
+        "estimate": 1e-05,
+        "std_error": 6.00957930740644,
+        "t_value": 1.66400998946392e-06,
+        "p_value": 0.99999867265568
+      },
+      "r8": {
+        "estimate": 0.000191714173826222,
+        "std_error": 15.7281395503157,
+        "t_value": 1.21892467454851e-05,
+        "p_value": 0.999990276904868
+      },
+      "r9": {
+        "estimate": 1e-05,
+        "std_error": 6.57064508164624,
+        "t_value": 1.52192058401282e-06,
+        "p_value": 0.999998785997287
+      },
+      "r10": {
+        "estimate": 1e-05,
+        "std_error": 0.00182285275593114,
+        "t_value": 0.00548590661942515,
+        "p_value": 0.995624034426634
       },
       "kmercov": {
-        "estimate": 6.56564770932383,
-        "std_error": 0.00829157581374233,
-        "t_value": 791.84558602745,
+        "estimate": 17.346385141911,
+        "std_error": 0.0868747532534044,
+        "t_value": 199.671187454351,
         "p_value": 0
       },
       "bias": {
-        "estimate": 0.267378881890947,
-        "std_error": 0.0083359340809282,
-        "t_value": 32.075455407293,
-        "p_value": 2.0988003483351e-182
+        "estimate": 0.295976662149449,
+        "std_error": 0.0254745205554717,
+        "t_value": 11.6185370988612,
+        "p_value": 2.65724242561851e-29
       },
       "length": {
-        "estimate": 4130005218.62354,
-        "std_error": 5780935.70198816,
-        "t_value": 714.418120444266,
-        "p_value": 0
+        "estimate": 607867696.557046,
+        "std_error": 14631755.8579671,
+        "t_value": 41.5444121988993,
+        "p_value": 3.37384613380845e-217
       }
     },
-    "residual_std_error": 13703196.6789651,
-    "degrees_of_freedom": 1995,
-    "iter_to_convergence": 5,
+    "residual_std_error": 28328011.0922699,
+    "degrees_of_freedom": 966,
+    "iter_to_convergence": 41,
     "convergence_tolerance": 1.49011611938477e-08
   }
 }
