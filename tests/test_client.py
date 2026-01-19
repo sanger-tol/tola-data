@@ -55,9 +55,8 @@ def test_fetch_unfilled_species(ads):
     assert len(unfilled)
 
 
-def test_fetch_no_requested_fields(ads):
-    filt = DataSourceFilter()
-    filt.exact = {"species_id": "Juncus effusus"}
+def test_fetch_some_requested_fields(ads):
+    filt = DataSourceFilter(exact={"species_id": "Juncus effusus"})
     (rush,) = ads.get_list(
         "species",
         object_filters=filt,
@@ -68,27 +67,33 @@ def test_fetch_no_requested_fields(ads):
             "data_accession.accession_type.id",
             "umbrella_accession.id",
             "umbrella_accession.accession_type.id",
-            # "specimens.sts_specimen",
+            "specimens.sts_specimen",
         ],
     )
     assert rush.id == "Juncus effusus"
+    assert rush.taxon_id == 13579
+    assert rush.taxon_family is None  # Not requested
+    assert rush.data_accession.id == "PRJEB50167"
+    assert rush.umbrella_accession.id == "PRJEB50168"
+    assert rush.specimens[0].id == "lpJunEffu1"
+    assert rush.specimens[0].sts_specimen == "KDTOL10021"
 
 
 def test_fetch_multi_depth_requested_fields(ads):
-    filt = DataSourceFilter()
-    filt.exact = {"data_id": "m64097e_210221_172213#1019"}
-    (rush,) = ads.get_list(
+    filt = DataSourceFilter(exact={"data_id": "m64097e_210221_172213#1019"})
+    (pacbio,) = ads.get_list(
         "data",
         object_filters=filt,
         requested_fields=[
             "bases",
-            "reads",
             "sample.specimen.species.taxon_id",
             "sample.specimen.species.id",
             # "specimen.sts_specimen",
         ],
     )
-    assert rush.id == "Juncus effusus"
+    assert pacbio.bases == 22552841091
+    assert pacbio.reads is None  # Not requested
+    assert pacbio.sample.specimen.species.id == "Juncus effusus"
 
 
 def test_fetch_or_store_one(client):
