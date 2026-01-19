@@ -1,26 +1,42 @@
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 import click
+from tol.core import DataSourceFilter
 
 from tola.ndjson import ndjson_row
 from tola.store_folder import upload_files
 from tola.terminal import colour_pager, pretty_dict_itr
+from tola.tolqc_client import TolClient
 from tola.tqc.dataset import latest_dataset_id
 from tola.tqc.engine import core_data_object_to_dict
 
 
-class StoreGenomescopeError(Exception):
-    """Failure to store a genomescope result"""
+class GenomescopeError(Exception):
+    """Failure to run genomescope or storing a genomescope result"""
 
 
 @click.command()
 @click.pass_context
 @click.option(
+    "--run/--upload",
+    "run_flag",
+    default=True,
+    show_default=True,
+    help=(
+        """
+        Whether to run genomescope in each directory in INPUT_DIRS or upload
+        existing genomescope results to the ToLQC database.
+        """
+    ),
+)
+@click.option(
     "--dataset-id",
+    "cli_dataset_id",
     required=False,
     help=(
         """
@@ -31,22 +47,18 @@ class StoreGenomescopeError(Exception):
     ),
 )
 @click.option(
-    "--run",
-    "run_flag",
-    flag_value=True,
-    default=False,
+    "--genomescope-cmd",
+    default="genomescope.R",
+    show_default=True,
     help=(
         """
-        Run genomescope in each directory in INPUT_DIRS.  (The default action
-        is to load existing genomescope results into the ToLQC database, not
-        to run genomescope.)
+        Command for running genomescope.
         """
     ),
 )
 @click.option(
     "--lambda",
     "initial_kmer_coverage",
-    default=None,
     type=int,
     help=(
         """
@@ -56,21 +68,21 @@ class StoreGenomescopeError(Exception):
 )
 @click.option(
     "--ploidy",
-    default=None,
     type=int,
     help=(
         """
-        Genomescope parameter for which ploidy model to use.
+        Genomescope parameter for which ploidy model to use.  The default is
+        to use the value from the `specimen.ploidy` column in ToLQC, or 2 if
+        that is null.
         """
     ),
 )
 @click.option(
     "--max-kmer-coverage",
-    default=None,
     type=int,
     help=(
         """
-        Genomescope parameter for intial k-mer coverage.
+        Genomescope parameter for maximum k-mer coverage.
         """
     ),
 )
@@ -92,16 +104,6 @@ class StoreGenomescopeError(Exception):
     show_default=True,
     help="Folder location to save image and histogram data files to.",
 )
-@click.option(
-    "--genomescope-cmd",
-    default="genomescope.R",
-    show_default=True,
-    help=(
-        """
-        Command for running genomescope.
-        """
-    ),
-)
 @click.argument(
     "input_dirs",
     nargs=-1,
@@ -114,8 +116,8 @@ class StoreGenomescopeError(Exception):
 )
 def genomescope(
     ctx,
-    dataset_id,
     run_flag,
+    cli_dataset_id,
     initial_kmer_coverage,
     ploidy,
     max_kmer_coverage,
@@ -133,18 +135,19 @@ def genomescope(
     The dataset.id for each directory is automatically determined from the
     nearest "datasets.ndjson" within its hierachcy.
     """
-    client = ctx.obj
+    client: TolClient = ctx.obj
 
-    if dataset_id and len(input_dirs) != 1:
+    if cli_dataset_id and len(input_dirs) != 1:
         sys.exit(
-            f"dataset.id set to '{dataset_id}' but {len(input_dirs)} INPUT_DIRS given."
-            " Can only specify one input directory if a --dataset-id argument is set"
+            f"dataset.id set to '{cli_dataset_id}' but {len(input_dirs)} INPUT_DIRS"
+            " given.  Can only specify one input directory if a --dataset-id argument"
+            " is set."
         )
 
     if (initial_kmer_coverage or ploidy or max_kmer_coverage) and not run_flag:
         sys.exit(
-            "Must specify --run if setting any of"
-            " --lambda, --ploidy or --max-kmer-coverage"
+            "The --lambda, --ploidy or --max-kmer-coverage options are only used when"
+            " the --run flag is set."
         )
 
     if rerun_if_no_json and run_flag:
@@ -155,28 +158,40 @@ def genomescope(
 
     for rdir in input_dirs:
         try:
+            dataset_id = (
+                latest_dataset_id_or_raise(rdir)
+                if cli_dataset_id is None
+                else cli_dataset_id
+            )
             if run_flag:
-                rslt = run_genomescope_and_store_results(
-                    client,
+                report_file = new_genomescope_run(
                     rdir,
-                    dataset_id=dataset_id,
-                    folder_location_id=folder_location_id,
                     genomescope_cmd=genomescope_cmd,
                     initial_kmer_coverage=initial_kmer_coverage,
-                    ploidy=ploidy,
+                    ploidy=ploidy or fetch_specimen_ploidy(client, dataset_id),
                     max_kmer_coverage=max_kmer_coverage,
                 )
             else:
-                rslt = store_genomescope_results(
-                    client,
-                    rdir,
-                    dataset_id=dataset_id,
-                    rerun_if_no_json=rerun_if_no_json,
-                    folder_location_id=folder_location_id,
-                    genomescope_cmd=genomescope_cmd,
-                )
-        except StoreGenomescopeError as gsf:
-            (msg,) = gsf.args
+                report_file = find_report_file(rdir)
+
+            if not report_file and rerun_if_no_json:
+                params = genomescope_params_from_previous_run(rdir)
+                report_file = run_genomescope(params, rdir, genomescope_cmd)
+
+            if not report_file:
+                msg = f"Missing report.json file in directory '{rdir}'"
+                raise GenomescopeError(msg)
+
+            rslt = store_genomescope_results(
+                client,
+                rdir,
+                dataset_id,
+                report_file,
+                folder_location_id=folder_location_id,
+            )
+
+        except GenomescopeError as gse:
+            (msg,) = gse.args
             failures.append(msg)
             continue
         results.append(rslt)
@@ -209,36 +224,41 @@ def genomescope(
         )
 
 
-def run_genomescope_and_store_results(
-    client,
-    rdir: Path,
-    *,
-    dataset_id=None,
-    folder_location_id="genomescope_s3",
-    genomescope_cmd=None,
-    initial_kmer_coverage=None,
-    ploidy=None,
-    max_kmer_coverage=None,
-):
-    if not dataset_id:
-        latest_dataset_id_or_raise(rdir)
+def fetch_specimen_ploidy(client, dataset_id):
+    specimen_list = list(
+        client.ads.get_list(
+            "specimen",
+            object_filters=DataSourceFilter(
+                exact={"samples.data.dataset_assn.dataset.id": dataset_id}
+            ),
+        )
+    )
+    if len(specimen_list) == 1:
+        ploidy = specimen_list[0].ploidy
+        return None if ploidy is None else int(ploidy)
+
+    msg = "Fetching ploidy for dataset.id {dataset_id!r}"
+    if specimen_list:
+        found_ids = [s.id for s in specimen_list]
+        msg += f" found multiple specimens: {found_ids!r}"
+    else:
+        msg += " failed to find a specimen"
+    raise GenomescopeError(msg)
 
 
 def store_genomescope_results(
-    client,
+    client: TolClient,
     rdir: Path,
+    dataset_id: str,
+    report_file: Path,
     *,
-    dataset_id=None,
-    rerun_if_no_json=False,
     folder_location_id="genomescope_s3",
-    genomescope_cmd=None,
 ):
     tbl_name = "genomescope_metrics"
 
-    if not dataset_id:
-        latest_dataset_id_or_raise(rdir)
+    ### Test for matching `report_file` in ToLQC ###
 
-    report = report_json_contents(rdir, rerun_if_no_json, genomescope_cmd)
+    report = file_json_contents(report_file)
     attr = attr_from_report(report)
     attr["dataset_id"] = dataset_id
 
@@ -267,6 +287,10 @@ def store_genomescope_results(
     return rslt
 
 
+def file_json_contents(file: Path):
+    return json.loads(file.read_text())
+
+
 def latest_dataset_id_or_raise(rdir):
     dataset_id = latest_dataset_id(rdir)
     if not dataset_id:
@@ -274,7 +298,7 @@ def latest_dataset_id_or_raise(rdir):
             "Failed to find dataset_id from a 'datasets.ndjson'"
             f" file in or above directory '{rdir}'"
         )
-        raise StoreGenomescopeError(msg)
+        raise GenomescopeError(msg)
     return dataset_id
 
 
@@ -302,52 +326,73 @@ def attr_from_report(report):
     }
 
 
-def report_json_contents(rdir: Path, rerun_if_no_json=False, genomescope_cmd=None):
-    # Find report.json file
-    report_file = find_file(rdir, "*report.json")
-    if not report_file and rerun_if_no_json:
-        report_file = rerun_genomescope(rdir, genomescope_cmd)
-    if not report_file:
-        msg = f"Missing report.json file in directory '{rdir}'"
-        raise StoreGenomescopeError(msg)
+def new_genomescope_run(
+    rdir: Path,
+    *,
+    genomescope_cmd=None,
+    initial_kmer_coverage=None,
+    ploidy=None,
+    max_kmer_coverage=None,
+):
+    cli_opts = {
+        "--lambda": initial_kmer_coverage,
+        "--ploidy": ploidy,
+        "--max_kmercov": max_kmer_coverage,
+    }
+    params = {k: v for k, v in cli_opts.items() if v is not None}
 
-    return json.loads(report_file.read_text())
+    return run_genomescope(params, rdir, genomescope_cmd)
 
 
-def rerun_genomescope(rdir, genomescope_cmd):
-    cmd_line = build_genomescope_cmd_line(rdir, genomescope_cmd)
-    try:
-        subprocess.run(cmd_line, check=True, capture_output=True)  # noqa: S603
-    except subprocess.CalledProcessError as cpe:
-        msg = (
-            f"Error running {cmd_line} exit({cpe.returncode}):\n" + cpe.stderr.decode()
-        )
-        raise StoreGenomescopeError(msg) from None
+def find_report_file(rdir: Path):
     return find_file(rdir, "*report.json")
 
 
-def build_genomescope_cmd_line(rdir, genomescope_cmd="genomescope.R"):
-    params = get_genomescope_params(rdir)
-    params["--input"] = str(find_file(rdir, "*.hist.txt"))
-    params["--output"] = str(rdir)
-    params["--json_report"] = True
-
-    cmd_line = genomescope_cmd.split()
-    for prm, val in params.items():
-        cmd_line.append(prm)
-        if val is not True:
-            cmd_line.append(val)
-
-    return cmd_line
-
-
-def get_genomescope_params(rdir):
+def genomescope_params_from_previous_run(rdir):
     pattern = "*summary.txt"
     summary_file = find_file(rdir, pattern)
     if not summary_file:
         msg = f"No '{pattern}' file in directory '{rdir}'"
-        raise StoreGenomescopeError(msg)
+        raise GenomescopeError(msg)
     return parse_summary_txt(summary_file.read_text())
+
+
+def run_genomescope(params, rdir, genomescope_cmd):
+    cmd_line = build_genomescope_cmd_line(params, rdir, genomescope_cmd)
+    try:
+        subprocess.run(cmd_line, check=True, capture_output=True, cwd=rdir)  # noqa: S603
+    except subprocess.CalledProcessError as cpe:
+        msg = (
+            f"Error running {cmd_line} exit({cpe.returncode}):\n" + cpe.stderr.decode()
+        )
+        raise GenomescopeError(msg) from None
+    return find_report_file(rdir)
+
+
+def build_genomescope_cmd_line(params, rdir, genomescope_cmd="genomescope.R"):
+    params.setdefault("--ploidy", 2)
+    params.setdefault("--kmer_length", 31)
+    params.setdefault("--name_prefix", "fastk_genomescope")
+    params["--input"] = find_hist_txt_or_raise(rdir).relative_to(rdir)
+    params["--output"] = Path(".")
+    params["--json_report"] = True
+
+    cmd_line = shlex.split(genomescope_cmd)
+    for prm, val in params.items():
+        cmd_line.append(prm)
+        if val is not True:
+            cmd_line.append(str(val))
+
+    return cmd_line
+
+
+def find_hist_txt_or_raise(rdir):
+    hist_file_pattern = "*.hist.txt"
+    if hist_file := find_file(rdir, hist_file_pattern):
+        return hist_file
+
+    msg = f"Failed to find file matching '{hist_file_pattern}' in '{rdir}'"
+    raise GenomescopeError(msg)
 
 
 def parse_summary_txt(summary):
@@ -389,7 +434,7 @@ def find_file(rdir, pattern):
     for fn in rdir.glob(pattern):
         if found:
             msg = f"More than one '{pattern}' in '{rdir}': '{found}' and '{fn}'"
-            raise StoreGenomescopeError(msg)
+            raise GenomescopeError(msg)
         else:
             found = fn
     return found

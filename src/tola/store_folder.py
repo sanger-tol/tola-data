@@ -6,12 +6,13 @@ from ulid import ULID
 
 
 class FilePattern:
-    __slots__ = "is_image", "pattern", "caption"
+    __slots__ = "is_image", "pattern", "caption", "index"
 
-    def __init__(self, is_image=True, pattern=None, caption=None):
+    def __init__(self, is_image=True, pattern=None, caption=None, index=None):
         self.is_image = is_image
         self.pattern = re.compile(pattern)
         self.caption = caption
+        self.index = None if index is None else int(index)
 
     def __repr__(self):
         return str(
@@ -19,6 +20,7 @@ class FilePattern:
                 "is_image": self.is_image,
                 "pattern": self.pattern,
                 "caption": self.caption,
+                "index": self.index,
             }
         )
 
@@ -38,16 +40,36 @@ class FilePatternSet:
         if config:
             self.build_from_config(config)
 
+        # Give each pattern an index to sort on if not present, and check for
+        # clashes.
+        idx_seen = {}
+        for i, pat in enumerate(self.file_patterns):
+            idx = pat.index
+            if idx is None:
+                idx = pat.index = i
+            if idx < 0:
+                msg = f"Index {idx} for {pat!r} must not be negative"
+                raise ValueError(msg)
+            if other := idx_seen.get(idx):
+                msg = (
+                    f"Index {idx} for {pat!r} clashes with {other!r}\n"
+                    'Provide a unique "index" for each file pattern in the config to'
+                    " define a specific order, or for none of them to get the order"
+                    " in which they are specified."
+                )
+                raise ValueError(msg)
+            idx_seen[idx] = pat
+
     def add_file_pattern(self, fp: FilePattern):
         self.file_patterns.append(fp)
 
     def build_from_config(self, config):
-        if img_pattern_list := config.get("image_file_patterns"):
-            for img in img_pattern_list:
-                self.add_file_pattern(FilePattern(is_image=True, **img))
-        if othr_pattern_list := config.get("other_file_patterns"):
-            for othr in othr_pattern_list:
-                self.add_file_pattern(FilePattern(is_image=False, **othr))
+        if image_pattern_list := config.get("image_file_patterns"):
+            for image in image_pattern_list:
+                self.add_file_pattern(FilePattern(is_image=True, **image))
+        if other_pattern_list := config.get("other_file_patterns"):
+            for other in other_pattern_list:
+                self.add_file_pattern(FilePattern(is_image=False, **other))
 
     def scan_files(
         self,
@@ -57,8 +79,9 @@ class FilePatternSet:
         patterns = [*self.file_patterns]
         max_count = len(patterns)
         count = 0
-        found = {}
         size_bytes = 0
+        image_list = {}
+        other_list = {}
         for file in directory.iterdir():
             if not file.is_file():
                 continue
@@ -80,10 +103,16 @@ class FilePatternSet:
 
                     spec = {"file": file.name, "caption": caption}
                     if fp.is_image:
-                        found.setdefault("image_file_list", []).append(spec)
+                        image_list[fp.index] = spec
                     else:
-                        found.setdefault("other_file_list", []).append(spec)
+                        other_list[fp.index] = spec
                     break
+
+        found = {}
+        if image_list:
+            found["image_file_list"] = [image_list[i] for i in sorted(image_list)]
+        if other_list:
+            found["other_file_list"] = [other_list[i] for i in sorted(other_list)]
         found["files_total_bytes"] = size_bytes
 
         logging.debug(f"Found {count} files out of a possible {max_count} patterns")
