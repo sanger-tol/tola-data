@@ -235,7 +235,12 @@ def fetch_specimen_ploidy(client, dataset_id):
     )
     if len(specimen_list) == 1:
         ploidy = specimen_list[0].ploidy
-        return None if ploidy is None else int(ploidy)
+        if ploidy is None:
+            return None
+        else:
+            if m := re.search(r"\d+", ploidy):
+                return int(m.group(0))
+            return None
 
     msg = "Fetching ploidy for dataset.id {dataset_id!r}"
     if specimen_list:

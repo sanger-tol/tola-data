@@ -44,7 +44,7 @@ class GoaTClient:
     def taxon_id_payload(
         self,
         taxon_id,
-        fields=("genome_size", "chromosome_number"),
+        fields=("genome_size", "chromosome_number", "ploidy"),
     ):
         return {
             "query": f"tax_eq({taxon_id})",
@@ -85,6 +85,8 @@ class GoaTResult:
             "taxon_group": self.get_taxon_group(),
             "genome_size": self.get_value("genome_size"),
             "chromosome_number": self.get_value("chromosome_number"),
+            "ploidy": self.get_value("ploidy"),
+            "ploidy_sources": self.ploidy_sources(),
         }
         return info
 
@@ -124,6 +126,11 @@ class GoaTResult:
             return fld["value"]
         else:
             return None
+
+    def ploidy_sources(self):
+        if fld := self.fields.get("ploidy"):
+            val = fld["aggregation_source"]
+            return val if isinstance(val, list) else [val]
 
     # Sourced from:
     #   https://github.com/VGP/vgp-assembly/blob/master/VGP_specimen_naming_scheme.md

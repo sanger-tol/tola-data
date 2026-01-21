@@ -17,12 +17,12 @@ class S3Client:
         """
         Fetches configuration from the `s3cmd` format conifig file given
         in the `TOLA_S3_CONFIG_FILE` environment variable or the default
-        `~/.s3cfg_tola`
+        `~/.s3cfg`
         """
         cfg_path = (
             Path(env_def)
             if (env_def := os.getenv("TOLA_S3_CONFIG_FILE"))
-            else Path().home() / ".s3cfg_tola"
+            else Path().home() / ".s3cfg"
         )
         if not cfg_path.exists():
             msg = f"Config file {cfg_path} does not exist"

@@ -113,6 +113,7 @@ def cli(
                 click.echo(out)
 
         patch_species(client)
+        patch_specimens(client)
 
 
 def write_mlwh_data_to_filehandle(mlwh, study_id_list, fh):
@@ -473,6 +474,61 @@ def patch_species(client):
                 logging.debug(f"Updating Species '{sp.id}' fields: {changes}")
     for page in client.pages(updates):
         ads.upsert("species", page)
+
+
+def patch_specimens(client):
+    ads = client.ads
+    obj_factory = ads.data_object_factory
+    filt = DataSourceFilter(
+        exact={
+            "ploidy": None,
+        }
+    )
+    gc = GoaTClient()
+    updates = []
+    for spmn in ads.get_list(
+        "specimen",
+        object_filters=filt,
+        requested_fields=["species"],
+    ):
+        if not spmn.species or spmn.species.id == "unidentified":
+            continue
+        taxon_id = spmn.species.taxon_id
+        goat_info = gc.get_species_info(taxon_id) if taxon_id else None
+        ploidy = specimen_ploidy(spmn, goat_info) or 2
+        updates.append(
+            obj_factory("specimen", id_=spmn.id, attributes={"ploidy": ploidy})
+        )
+    for page in client.pages(updates):
+        ads.upsert("specimen", page)
+
+
+def specimen_ploidy(specimen, goat_info):
+    """
+    Set haploid for all male hymenoptera.
+
+    Set haploid for all mosses, hornworts and green algae unless a `direct`
+    estimate of ploidy is returned for that species by GoaT.
+    """
+
+    tol_id = specimen.id
+    prefix = tol_id[0:2]
+    sex = specimen.sex_id
+    if prefix == "iy" and sex == "Male":
+        # Male hymenoptera
+        return 1
+    elif prefix in {
+        "ca",  # Mosses / Bryophyta (Andreaeopsida only)
+        "cs",  # Mosses / Bryophyta (Sphagnopsida only)
+        "cb",  # Mosses / Bryophyta
+        "cn",  # Hornworts / Anthocerotophyta
+        "uk",  # Green algae / Charophyta
+    }:
+        if goat_info and "direct" in goat_info["ploidy_sources"]:
+            return goat_info["ploidy"]
+        return 1
+
+    return goat_info["ploidy"] if goat_info else None
 
 
 def reassign_species(client, bad_sp, spec_info):
