@@ -15,5 +15,9 @@ def test_goat_fetch():
         "taxon_phylum": "Chordata",
         "taxon_group": "mammals",
         "genome_size": 2787300000,
+        "ploidy": 2,
+        "ploidy_sources": [
+            "ancestor",
+        ],
         "chromosome_number": 34,
     }

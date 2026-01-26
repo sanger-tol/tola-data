@@ -367,8 +367,9 @@ def run_genomescope(params, rdir, genomescope_cmd):
     try:
         subprocess.run(cmd_line, check=True, capture_output=True, cwd=rdir)  # noqa: S603
     except subprocess.CalledProcessError as cpe:
+        sh_cmd = shlex.join(cmd_line)
         msg = (
-            f"Error running {cmd_line} exit({cpe.returncode}):\n" + cpe.stderr.decode()
+            f"Error running {sh_cmd!r}; exit({cpe.returncode}):\n" + cpe.stderr.decode()
         )
         raise GenomescopeError(msg) from None
     return find_report_file(rdir)
