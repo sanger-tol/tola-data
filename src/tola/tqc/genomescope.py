@@ -1,4 +1,3 @@
-import json
 import re
 import shlex
 import subprocess
@@ -6,13 +5,19 @@ import sys
 from pathlib import Path
 
 import click
-from tol.core import DataSourceFilter
 
+from tola.filesystem import (
+    TolFileSystemError,
+    file_json_contents,
+    find_file,
+    find_file_or_raise,
+    latest_dataset_id_or_raise,
+)
 from tola.ndjson import ndjson_row
+from tola.queries import TolQueryError, fetch_specimen_ploidy
 from tola.store_folder import upload_files
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
-from tola.tqc.dataset import latest_dataset_id
 from tola.tqc.engine import core_data_object_to_dict
 
 
@@ -190,7 +195,7 @@ def genomescope(
                 folder_location_id=folder_location_id,
             )
 
-        except GenomescopeError as gse:
+        except (GenomescopeError, TolQueryError, TolFileSystemError) as gse:
             (msg,) = gse.args
             failures.append(msg)
             continue
@@ -222,33 +227,6 @@ def genomescope(
                 ]
             )
         )
-
-
-def fetch_specimen_ploidy(client, dataset_id):
-    specimen_list = list(
-        client.ads.get_list(
-            "specimen",
-            object_filters=DataSourceFilter(
-                exact={"samples.data.dataset_assn.dataset.id": dataset_id}
-            ),
-        )
-    )
-    if len(specimen_list) == 1:
-        ploidy = specimen_list[0].ploidy
-        if ploidy is None:
-            return None
-        else:
-            if m := re.search(r"\d+", ploidy):
-                return int(m.group(0))
-            return None
-
-    msg = "Fetching ploidy for dataset.id {dataset_id!r}"
-    if specimen_list:
-        found_ids = [s.id for s in specimen_list]
-        msg += f" found multiple specimens: {found_ids!r}"
-    else:
-        msg += " failed to find a specimen"
-    raise GenomescopeError(msg)
 
 
 def store_genomescope_results(
@@ -290,21 +268,6 @@ def store_genomescope_results(
             continue
         rslt[k] = v
     return rslt
-
-
-def file_json_contents(file: Path):
-    return json.loads(file.read_text())
-
-
-def latest_dataset_id_or_raise(rdir):
-    dataset_id = latest_dataset_id(rdir)
-    if not dataset_id:
-        msg = (
-            "Failed to find dataset_id from a 'datasets.ndjson'"
-            f" file in or above directory '{rdir}'"
-        )
-        raise GenomescopeError(msg)
-    return dataset_id
 
 
 def attr_from_report(report):
@@ -350,7 +313,7 @@ def new_genomescope_run(
 
 
 def find_report_file(rdir: Path):
-    return find_file(rdir, "*report.json")
+    return find_file(rdir, "*genomescope_report.json")
 
 
 def genomescope_params_from_previous_run(rdir):
@@ -379,7 +342,7 @@ def build_genomescope_cmd_line(params, rdir, genomescope_cmd="genomescope.R"):
     params.setdefault("--ploidy", 2)
     params.setdefault("--kmer_length", 31)
     params.setdefault("--name_prefix", "fastk_genomescope")
-    params["--input"] = find_hist_txt_or_raise(rdir).relative_to(rdir)
+    params["--input"] = find_file_or_raise(rdir, "*.hist.txt").relative_to(rdir)
     params["--output"] = Path(".")
     params["--json_report"] = True
 
@@ -390,15 +353,6 @@ def build_genomescope_cmd_line(params, rdir, genomescope_cmd="genomescope.R"):
             cmd_line.append(str(val))
 
     return cmd_line
-
-
-def find_hist_txt_or_raise(rdir):
-    hist_file_pattern = "*.hist.txt"
-    if hist_file := find_file(rdir, hist_file_pattern):
-        return hist_file
-
-    msg = f"Failed to find file matching '{hist_file_pattern}' in '{rdir}'"
-    raise GenomescopeError(msg)
 
 
 def parse_summary_txt(summary):
@@ -433,14 +387,3 @@ def parse_summary_txt(summary):
             params[cli] = True if val == "TRUE" else val
 
     return params
-
-
-def find_file(rdir, pattern):
-    found = None
-    for fn in rdir.glob(pattern):
-        if found:
-            msg = f"More than one '{pattern}' in '{rdir}': '{found}' and '{fn}'"
-            raise GenomescopeError(msg)
-        else:
-            found = fn
-    return found

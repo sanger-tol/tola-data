@@ -5,7 +5,8 @@ import click
 from ulid import ULID
 
 from tola import click_options
-from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.filesystem import find_dataset_file, latest_dataset
+from tola.ndjson import ndjson_row
 from tola.pretty import bold, natural, s
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit
@@ -161,36 +162,6 @@ def dataset(ctx, info_flag, output, fofn_paths, dataset_name, noisy, input_files
 
         if noisy and str(output) != "-":
             echo_datasets(stored_datasets)
-
-
-def latest_dataset_id(path: Path):
-    ds_dir = path if path.is_dir() else path.parent
-    if (ds_file := find_dataset_file(ds_dir)) and (latest := latest_dataset(ds_file)):
-        return latest["dataset.id"]
-    return None
-
-
-def latest_dataset(ds_file):
-    latest = None
-    for ds in parse_ndjson_stream(ds_file.open()):
-        # `latest` will be set to the last dataset in the file
-        latest = ds
-    return latest
-
-
-def find_dataset_file(directory: Path):
-    """Searches up the directory path for file named `datasets.ndjson`"""
-    look = directory.absolute()
-    found = None
-    while not found:
-        dsf = look / "datasets.ndjson"
-        if dsf.exists():
-            found = dsf
-        elif str(look) == look.root:
-            break
-        else:
-            look = look.parent
-    return found
 
 
 def input_objects_from_fofn_or_exit(fofn_paths, dataset_name):

@@ -1,7 +1,7 @@
 import re
 from textwrap import dedent
 
-from tola.tqc.dataset import latest_dataset_id
+from tola.filesystem import latest_dataset_id
 from tola.tqc.tqc_cmd import tqc_main
 
 

@@ -19,6 +19,7 @@ from tola.tqc.load_pacbio_images import load_pacbio_images
 from tola.tqc.rename import rename
 from tola.tqc.report import report
 from tola.tqc.show import show
+from tola.tqc.smudgeplot import smudgeplot
 from tola.tqc.species import upsert_species
 from tola.tqc.status import status
 from tola.tqc.sts import sts_specimen
@@ -69,6 +70,7 @@ tqc_main.add_command(rename)
 tqc_main.add_command(report)
 tqc_main.add_command(show)
 tqc_main.add_command(upsert_species, name="species")
+tqc_main.add_command(smudgeplot)
 tqc_main.add_command(status)
 tqc_main.add_command(sts_specimen, name="sts-specimen")
 tqc_main.add_command(subtrack)

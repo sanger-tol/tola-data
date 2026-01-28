@@ -5,13 +5,13 @@ from textwrap import dedent
 
 import pytest
 
+from tola.filesystem import file_json_contents
 from tola.ndjson import ndjson_row
+from tola.queries import fetch_specimen_ploidy
 from tola.tqc.dataset import find_dataset_file, latest_dataset
 from tola.tqc.genomescope import (
     attr_from_report,
     build_genomescope_cmd_line,
-    fetch_specimen_ploidy,
-    file_json_contents,
     find_report_file,
     genomescope_params_from_previous_run,
     parse_summary_txt,
