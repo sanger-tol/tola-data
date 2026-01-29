@@ -5,6 +5,8 @@ import pytest
 
 from tola.store_folder import FilePatternSet, FolderLocation, upload_files
 
+log = logging.getLogger(__name__)
+
 
 @pytest.fixture(scope="session")
 def pacbio_data_dir(data_dir):
@@ -108,7 +110,7 @@ def test_scan_files(data_dir, pacbio_data_dir):
         fp_set.scan_files(pacbio_data_dir, {"x": "mBalPhy2"})
 
     found = fp_set.scan_files(pacbio_data_dir, {"specimen": "mBalPhy2"})
-    logging.debug(found)
+    log.debug(found)
     assert found
     assert found["files_total_bytes"] == 38  # Each test file is 2 bytes
 

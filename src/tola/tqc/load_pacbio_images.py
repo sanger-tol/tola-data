@@ -12,6 +12,8 @@ from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
 from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_missing
 
+log = logging.getLogger(__name__)
+
 
 @click.command
 @click.pass_context
@@ -103,9 +105,9 @@ def load_pacbio_metrics_images(client, run_ids_loaded, spec):
     if irods_seq:
         reports_zip = DataObject(reports_zip)
     if not reports_zip.exists():
-        logging.warning(f"No such file: {reports_zip} for {ndjson_row(spec)}")
+        log.warning(f"No such file: {reports_zip} for {ndjson_row(spec)}")
         return
-    logging.info(f"Found: {reports_zip}")
+    log.info(f"Found: {reports_zip}")
 
     tmp_dir = TemporaryDirectory()
     local_path = Path(tmp_dir.name)

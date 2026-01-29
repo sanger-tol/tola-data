@@ -10,6 +10,8 @@ from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
 from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_missing
 
+log = logging.getLogger(__name__)
+
 
 @click.command
 @click.pass_context
@@ -87,10 +89,10 @@ def load_illumina_images(ctx, input_files, auto_flag, fetch_input, quiet):
             images = runner.run_bamstats_in_tmpdir(obj["remote_path"])
         except NoSuchIrodsFileError as err:
             msg = "\n".join(err.args)
-            logging.warning(f"{msg} on: {ndjson_row(obj)}")
+            log.warning(f"{msg} on: {ndjson_row(obj)}")
             continue
         except CalledProcessError:
-            logging.warning(f"Error running plot-bamstats on: {ndjson_row(obj)}")
+            log.warning(f"Error running plot-bamstats on: {ndjson_row(obj)}")
             continue
         obj["directory"] = images.dir_path
         images.parse_stats_file()

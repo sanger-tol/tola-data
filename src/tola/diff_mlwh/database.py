@@ -9,6 +9,8 @@ from tola.diff_mlwh.column_definitions import json_cols, table_cols
 from tola.diff_mlwh.diff_store import DiffStore, Mismatch
 from tola.pretty import dim
 
+log = logging.getLogger(__name__)
+
 
 class MLWHDiffDB:
     def __init__(self, path, write_flag=True):
@@ -19,9 +21,9 @@ class MLWHDiffDB:
             self.create_diff_db_tables()
 
     def execute(self, sql, params=None):
-        logging.debug(
+        log.debug(
             f"{sql};\n"
-            + "".join(f"  p{i+1}: {p!r}\n" for i, p in enumerate(params or ()))
+            + "".join(f"  p{i + 1}: {p!r}\n" for i, p in enumerate(params or ()))
         )
         return self.conn.execute(sql, params)
 
@@ -79,7 +81,7 @@ class MLWHDiffDB:
         if "diff_reason" not in tables:
             self.create_reasons_tables()
 
-        for name in ('tolqc', 'mlwh'):
+        for name in ("tolqc", "mlwh"):
             if name not in tables:
                 self.create_data_table(name)
 
@@ -88,7 +90,7 @@ class MLWHDiffDB:
     def load_new_data(self, tqc, mlwh_ndjson):
         # Fetch the current MLWH data from ToLQC
         tolqc_tmp = NamedTemporaryFile("r", prefix="tolqc_", suffix=".ndjson")  # noqa: SIM115
-        logging.info(
+        log.info(
             f"Downloading current data from {tqc.tolqc_alias} into {tolqc_tmp.name}"
         )
         tqc.download_file("report/mlwh-data?format=NDJSON", tolqc_tmp.name)
@@ -106,19 +108,19 @@ class MLWHDiffDB:
     def store_diffs(self, ds):
         count = len(ds.data_id)
         if count == 0:
-            logging.info("No new differences found")
+            log.info("No new differences found")
             return
-        logging.info(f"Found {count} new differences")
+        log.info(f"Found {count} new differences")
         arrow_table = ds.arrow_table()  # noqa: F841
         sql = "INSERT INTO diff_store SELECT *, current_timestamp FROM arrow_table"
-        logging.debug(sql)
+        log.debug(sql)
         self.conn.execute(sql)
 
     def create_data_table(self, name):
         self.execute(f"CREATE OR REPLACE TABLE {name}({table_cols()})")
 
     def load_table_from_json(self, name, file):
-        logging.info(f"Loading {file} into {name} table")
+        log.info(f"Loading {file} into {name} table")
         self.create_data_table(name)
 
         # NDJSON from MLWH has different number of columns for Illumina and PacBio

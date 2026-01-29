@@ -15,6 +15,8 @@ from tola.ndjson import (
 )
 from tola.pretty import bold
 
+log = logging.getLogger(__name__)
+
 
 def table_key(table, key):
     """
@@ -198,7 +200,7 @@ def core_data_object_to_dict(cdo, show_modified=False):
 
     # The IDs of the object's to-one related objects
     for rel_name in cdo.to_one_relationships:
-        logging.debug(f"{cdo = }")
+        log.debug(f"{cdo = }")
         rltd = getattr(cdo, rel_name)
         if rel_name == "modified_user":
             if show_modified:
@@ -306,12 +308,12 @@ def update_file_size_and_md5_if_missing(client, spec, irods_obj):
         return
 
     if not irods_obj.exists():
-        logging.warning(f"No such iRODS file: '{irods_obj}'")
+        log.warning(f"No such iRODS file: '{irods_obj}'")
         return
     size_bytes = irods_obj.size()
     md5 = irods_obj.checksum()
     if not (size_bytes and md5):
-        logging.warning(
+        log.warning(
             f"Missing iRODS data: Got size = {size_bytes!r}"
             f" and checksum = {md5!r} for '{irods_obj}'"
         )

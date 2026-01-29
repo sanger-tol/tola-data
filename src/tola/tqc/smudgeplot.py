@@ -21,7 +21,7 @@ from tola.tolqc_client import TolClient
 from tola.tqc.engine import core_data_object_to_dict
 
 SMUDGE_ROOT = "fastk_smudgeplot"
-
+log = logging.getLogger(__name__)
 
 class SmudgeplotError(Exception):
     """Failure to run smudgeplot or storing a smudgeplot result"""
@@ -305,13 +305,13 @@ def run_hetmers(kmer_root: str, rdir: Path, threshold: int, smudgeplot_cmd):
     ktab_file = find_file_or_raise(rdir, "fastk.ktab").relative_to(rdir)
     with tempfile.TemporaryDirectory() as tmp_dir:
         cmd_line.extend(["-tmp", tmp_dir, str(ktab_file)])
-        logging.info(f"Running: {shlex.join(cmd_line)}")
-        logging.info(f"Running: {cmd_line!r}")
+        log.info(f"Running: {shlex.join(cmd_line)}")
         run_smudgeplot_process(rdir, cmd_line)
 
 
 def run_smudgeplot(params, rdir, smu_file, smudgeplot_cmd):
     cmd_line = build_smudgeplot_cmd_line(params, smu_file, smudgeplot_cmd)
+    log.info(f"Running: {shlex.join(cmd_line)}")
     run_smudgeplot_process(rdir, cmd_line)
     return find_report_file(rdir)
 

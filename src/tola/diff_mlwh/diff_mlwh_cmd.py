@@ -253,10 +253,10 @@ def cli(
 
 def update_diff_database(tqc, diff_db, mlwh_ndjson=None):
     if mlwh_ndjson and mlwh_ndjson.exists():
-        logging.info(f"Loading MLWH data from {mlwh_ndjson}")
+        log.info(f"Loading MLWH data from {mlwh_ndjson}")
     else:
         mlwh_tmp = NamedTemporaryFile("r", prefix="mlwh_", suffix=".ndjson")  # noqa: SIM115
-        logging.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
+        log.info(f"Downloading data from MLWH into {mlwh_tmp.name}")
         mlwh_ndjson = pathlib.Path(mlwh_tmp.name)
         fetch_mlwh_seq_data_to_file(tqc, mlwh_ndjson)
     diff_db.update(tqc, mlwh_ndjson)
@@ -270,6 +270,6 @@ def update_tolqc(tqc, diffs, tables_to_patch, apply_flag):
             sys.exit(f"No table patcher for table '{table}'")
         records = patcher(diffs)
         ups.build_table_upserts(table, records)
-    if (apply_flag):
+    if apply_flag:
         ups.apply_upserts()
     ups.page_results(apply_flag)

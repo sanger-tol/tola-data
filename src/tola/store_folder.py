@@ -4,6 +4,8 @@ from pathlib import Path
 
 from ulid import ULID
 
+log = logging.getLogger(__name__)
+
 
 class FilePattern:
     __slots__ = "is_image", "pattern", "caption", "index"
@@ -115,9 +117,9 @@ class FilePatternSet:
             found["other_file_list"] = [other_list[i] for i in sorted(other_list)]
         found["files_total_bytes"] = size_bytes
 
-        logging.debug(f"Found {count} files out of a possible {max_count} patterns")
+        log.debug(f"Found {count} files out of a possible {max_count} patterns")
         if patterns:
-            logging.debug(f"No files found for: {patterns!r}")
+            log.debug(f"No files found for: {patterns!r}")
 
         return found if count else None
 
@@ -197,7 +199,7 @@ def upload_files(
                 file = fs["file"]
                 local = directory / file
                 remote = "/".join((fldr_loc.prefix, ulid, file))
-                logging.info(f"Uploading: {local}\nTo: {remote}")
+                log.info(f"Uploading: {local}\nTo: {remote}")
                 client.s3.put_file(local.open("rb"), fldr_loc.s3_bucket, remote)
 
         # Store and link new Folder

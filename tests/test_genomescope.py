@@ -18,6 +18,8 @@ from tola.tqc.genomescope import (
 )
 from tola.tqc.tqc_cmd import tqc_main
 
+log = logging.getLogger(__name__)
+
 
 def gs_results_dir(base):
     return base / "pacbio" / "kmer" / "k31"
@@ -107,7 +109,7 @@ def test_get_params(fofn_dir):
 def test_build_genomescope_cmd_line(fofn_runner):  # noqa: ARG001
     rdir = gs_results_dir(Path("./fofn"))
     files = list(rdir.iterdir())
-    logging.info(files)
+    log.info(files)
     cmd_line = build_genomescope_cmd_line({}, rdir)
     assert cmd_line == [
         "genomescope.R",
@@ -191,7 +193,7 @@ def test_load_genomescope(dataset, fofn_runner, test_alias, gscope_fldr_loc):
     result = fofn_runner.invoke(tqc_main, args)
     assert result.exit_code == 0
     out = json.loads(result.stdout)
-    logging.info("\n" + json.dumps(out, indent=2))
+    log.info("\n" + json.dumps(out, indent=2))
     assert dataset["dataset.id"] == out["dataset.id"]
     assert len(out["image_file_list"]) == 4
     assert len(out["other_file_list"]) == 1
@@ -210,7 +212,7 @@ def test_run_genomescope(dataset, fofn_runner, test_alias, gscope_fldr_loc):
     result = fofn_runner.invoke(tqc_main, args)
     assert result.exit_code == 0
     out = json.loads(result.stdout)
-    logging.info("\n" + json.dumps(out, indent=2))
+    log.info("\n" + json.dumps(out, indent=2))
     assert dataset["dataset.id"] == out["dataset.id"]
     assert len(out["image_file_list"]) == 4
     assert len(out["other_file_list"]) == 1

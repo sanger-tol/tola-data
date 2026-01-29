@@ -13,6 +13,8 @@ from tola.fetch_mlwh_seq_data import response_row_std_fields
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 from tola.tqc.upsert import TableUpserter
 
+log = logging.getLogger(__name__)
+
 
 class MetadataMismatchError(ValueError):
     """
@@ -191,7 +193,7 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
         }
         # fmt: on
 
-        logging.debug(f"{row = }")
+        log.debug(f"{row = }")
         study_data.append(row)
 
     return merge_by_data_id(study_data)
@@ -367,7 +369,7 @@ def sub_collection_names(coll):
             # Upper-cased file extension, ignoring any ".gz" suffix
             top_types.add(m.group(1).upper())
 
-    logging.debug(
+    log.debug(
         f"In {coll.path} found:"
         f"\n  top_types = {sorted(top_types)}"
         f"\n  sub_names = {sorted(sub_names)}"
@@ -410,7 +412,7 @@ def fetch_mlwh_info(sample_name_list, page_size=100):
         count = len(book)
         if count != last_count:
             sql = mlwh_ont_info_sql(count)
-            logging.debug(sql)
+            log.debug(sql)
         crsr.execute(sql, book)
         for row in crsr:
             run_id = build_run_id(row)

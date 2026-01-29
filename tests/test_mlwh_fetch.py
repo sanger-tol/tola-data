@@ -3,11 +3,13 @@ from textwrap import dedent
 
 from tola.fetch_mlwh_seq_data import formatted_response
 
+log = logging.getLogger(__name__)
+
 
 def test_response_formatting():
     rspns = response_data()
     fmttd = formatted_response(rspns, 5901, "PacBio")
-    logging.debug(fmttd)
+    log.debug(fmttd)
     assert fmttd is not None
     assert fmttd == expected_formatted()
 

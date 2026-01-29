@@ -5,6 +5,8 @@ from subprocess import PIPE, Popen
 
 from tolqc.reports import mlwh_data_report_query_select
 
+log = logging.getLogger(__name__)
+
 
 def main():
     """
@@ -16,7 +18,8 @@ def main():
     query = mlwh_data_report_query_select()
 
     with Popen(  # noqa: S603
-        ["ruff", "format", "--silent", "--stdin-filename", "-"], stdin=PIPE  # noqa: S607
+        ["ruff", "format", "--silent", "--stdin-filename", "-"],
+        stdin=PIPE,  # noqa: S607
     ) as ruff_format:
         table_map = build_table_map(query)
         ruff_format.stdin.write(f"\n{table_map = }\n".encode())
@@ -49,7 +52,7 @@ def column_definitions(query):
         type_ = "TIMESTAMPTZ" if (s := str(col.type)) == "DATETIME" else s
         debug_str += f"  {name} = {type_}\n"
         col_defs[name] = type_
-    logging.debug(debug_str)
+    log.debug(debug_str)
 
     return col_defs
 

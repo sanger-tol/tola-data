@@ -5,6 +5,8 @@ from tol.core import DataSourceFilter
 
 from tola.tolqc_client import TolClientError
 
+log = logging.getLogger(__name__)
+
 
 def test_fetch_study(client):
     rspns = client.json_get("data/study", {"filter": {"exact": {"study_id": 5901}}})
@@ -39,7 +41,7 @@ def test_upsert(ads):
     )
 
     (res,) = ads.upsert(species.type, [species])
-    logging.info(res.attributes)
+    log.info(res.attributes)
     assert res
 
 

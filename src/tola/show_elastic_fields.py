@@ -4,10 +4,11 @@ import sys
 from tol.api_client import ApiDataSource
 from tol.core import DataSourceFilter
 
-logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 
 def main(args):
+    logging.basicConfig(level=logging.INFO)
     src = ApiDataSource({"url": "https://portal.tol.sanger.ac.uk/api/v1", "key": ""})
     filt = DataSourceFilter()
 
@@ -76,7 +77,7 @@ def main(args):
 
 def info(*args):
     for item in args:
-        logging.info(item)
+        log.info(item)
 
 
 if __name__ == "__main__":

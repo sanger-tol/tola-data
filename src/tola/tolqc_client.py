@@ -18,6 +18,8 @@ from tola.store_folder import FolderLocation
 from tola.terminal import TerminalDict
 from tola.tqc.engine import core_data_object_to_dict
 
+log = logging.getLogger(__name__)
+
 ca_file = Path("/etc/ssl/certs/ca-certificates.crt")
 if ca_file.exists():
     os.environ.setdefault("REQUESTS_CA_BUNDLE", str(ca_file))
@@ -177,7 +179,7 @@ class TolClient:
             params=enc,
             timeout=120,
         )
-        logging.debug(f"URL = {r.url}")
+        log.debug(f"URL = {r.url}")
         return self.__check_response(r)
 
     def json_post(self, path, data):

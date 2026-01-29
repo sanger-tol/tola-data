@@ -18,6 +18,8 @@ from tola.goat_client import GoaTClient
 from tola.ndjson import ndjson_row
 from tola.tqc.sts import fetch_specimen_info_for_specimens, update_specimen_fields
 
+log = logging.getLogger(__name__)
+
 
 @click.command()
 @click_options.tolqc_url
@@ -162,7 +164,7 @@ def response_row_std_fields(row):
 
 
 def illumina_fetcher(mlwh, study_id, save_data=None):
-    logging.info(f"Fetching Illumina data for study '{study_id}'")
+    log.info(f"Fetching Illumina data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(illumina_sql(), [str(study_id)])
     for row in crsr:
@@ -185,7 +187,7 @@ PIPELINE_TO_LIBRARY_TYPE = {
 
 
 def pacbio_fetcher(mlwh, study_id, save_data=None):
-    logging.info(f"Fetching PacBio data for study '{study_id}'")
+    log.info(f"Fetching PacBio data for study '{study_id}'")
     crsr = mlwh.cursor(dictionary=True)
     crsr.execute(pacbio_sql(), [str(study_id)])
     for row in crsr:
@@ -456,7 +458,7 @@ def patch_species(client):
         if spec_info := gc.get_species_info(sp.taxon_id):
             if sp.id != spec_info["species_id"]:
                 if not reassign_species(client, sp, spec_info):
-                    logging.info(
+                    log.info(
                         f"Species with taxon_id = '{sp.taxon_id}' should be"
                         f" named '{spec_info['species_id']}' not '{sp.id}'"
                     )
@@ -471,7 +473,7 @@ def patch_species(client):
                     changes[prop] = val
             if changes:
                 updates.append(obj_factory("species", id_=sp.id, attributes=changes))
-                logging.debug(f"Updating Species '{sp.id}' fields: {changes}")
+                log.debug(f"Updating Species '{sp.id}' fields: {changes}")
     for page in client.pages(updates):
         ads.upsert("species", page)
 
