@@ -23,6 +23,7 @@ from tola.tqc.engine import core_data_object_to_dict
 SMUDGE_ROOT = "fastk_smudgeplot"
 log = logging.getLogger(__name__)
 
+
 class SmudgeplotError(Exception):
     """Failure to run smudgeplot or storing a smudgeplot result"""
 
@@ -70,26 +71,40 @@ class SmudgeplotError(Exception):
     show_default=True,
     help=(
         """
-        Threshold passed to the `smudgeplot hetmers` command, the count below
-        which K-mers are considered erroneous.
+        Threshold for smudgeplot's `hetmers` command, the count below which
+        K-mers are considered erroneous.
+        """
+    ),
+)
+@click.option(
+    "--threads",
+    "thread_count",
+    type=int,
+    default=4,
+    show_default=True,
+    help=(
+        """
+        Number of threads for smudgeplot's `hetmers` command to use when
+        building the hetmer database.
         """
     ),
 )
 @click.option(
     "--min-coverage",
     type=int,
-    help=(
-        """
-        Smudgeplot min_cov parameter.
-        """
-    ),
+    help="Smudgeplot min_cov parameter",
 )
 @click.option(
     "--max-coverage",
     type=int,
+    help="Smudgeplot max_cov parameter.",
+)
+@click.option(
+    "--coverage",
+    type=float,
     help=(
         """
-        Smudgeplot max_cov parameter.
+        Smudgeplot assumed coverage parameter. (No inference of 1n coverage is made.)
         """
     ),
 )
@@ -117,6 +132,8 @@ def smudgeplot(
     threshold,
     min_coverage,
     max_coverage,
+    coverage,
+    thread_count,
     folder_location_id,
     smudgeplot_cmd,
     input_dirs,
@@ -160,6 +177,8 @@ def smudgeplot(
                     threshold=threshold,
                     min_coverage=min_coverage,
                     max_coverage=max_coverage,
+                    coverage=coverage,
+                    thread_count=thread_count,
                 )
             else:
                 report_file = find_report_file(rdir)
@@ -269,17 +288,26 @@ def new_smudgeplot_run(
     threshold=None,
     min_coverage=None,
     max_coverage=None,
+    coverage=None,
+    thread_count=None,
 ):
     cli_opts = {
         "-cov_min": min_coverage,
         "-cov_max": max_coverage,
+        "-cov": coverage,
     }
     params = {k: v for k, v in cli_opts.items() if v is not None}
 
     kmer_root = f"{SMUDGE_ROOT}.kmerpairs"
     smu_glob = f"{kmer_root}.smu"
     if not (smu_file := find_file(rdir, smu_glob)):
-        run_hetmers(kmer_root, rdir, threshold, smudgeplot_cmd)
+        run_hetmers(
+            kmer_root=kmer_root,
+            rdir=rdir,
+            threshold=threshold,
+            thread_count=thread_count,
+            smudgeplot_cmd=smudgeplot_cmd,
+        )
         smu_file = find_file_or_raise(rdir, smu_glob)
 
     return run_smudgeplot(params, rdir, smu_file, smudgeplot_cmd)
@@ -289,19 +317,33 @@ def find_report_file(rdir: Path):
     return find_file(rdir, "*smudgeplot_report.json")
 
 
-def run_hetmers(kmer_root: str, rdir: Path, threshold: int, smudgeplot_cmd):
+def stringify(cmd_line):
+    return [str(x) for x in cmd_line]
+
+
+def run_hetmers(
+    *,
+    kmer_root: str,
+    rdir: Path,
+    threshold: int,
+    thread_count: int,
+    smudgeplot_cmd: str,
+):
     binary, *other_args = shlex.split(smudgeplot_cmd)
-    cmd_line = [
-        binary,
-        "hetmers",
-        "-t",
-        "4",
-        "-L",
-        str(threshold),
-        "-o",
-        kmer_root,
-        *other_args,
-    ]
+    cmd_line = stringify(
+        [
+            binary,
+            "hetmers",
+            "-t",
+            thread_count,
+            "-L",
+            threshold,
+            "--json_report",
+            "-o",
+            kmer_root,
+            *other_args,
+        ]
+    )
     ktab_file = find_file_or_raise(rdir, "fastk.ktab").relative_to(rdir)
     with tempfile.TemporaryDirectory() as tmp_dir:
         cmd_line.extend(["-tmp", tmp_dir, str(ktab_file)])
@@ -310,7 +352,7 @@ def run_hetmers(kmer_root: str, rdir: Path, threshold: int, smudgeplot_cmd):
 
 
 def run_smudgeplot(params, rdir, smu_file, smudgeplot_cmd):
-    cmd_line = build_smudgeplot_cmd_line(params, smu_file, smudgeplot_cmd)
+    cmd_line = build_smudgeplot_cmd_line(params, rdir, smu_file, smudgeplot_cmd)
     log.info(f"Running: {shlex.join(cmd_line)}")
     run_smudgeplot_process(rdir, cmd_line)
     return find_report_file(rdir)
@@ -327,7 +369,7 @@ def run_smudgeplot_process(rdir: Path, cmd_line: list[str]):
         raise SmudgeplotError(msg) from None
 
 
-def build_smudgeplot_cmd_line(params, smu_file, smudgeplot_cmd="smudgeplot"):
+def build_smudgeplot_cmd_line(params, rdir, smu_file, smudgeplot_cmd="smudgeplot"):
     params["--json_report"] = True
     params["-o"] = SMUDGE_ROOT
 
@@ -336,8 +378,8 @@ def build_smudgeplot_cmd_line(params, smu_file, smudgeplot_cmd="smudgeplot"):
     for prm, val in params.items():
         cmd_line.append(prm)
         if val is not True:
-            cmd_line.append(str(val))
+            cmd_line.append(val)
     cmd_line.extend(other_args)
-    cmd_line.append(str(smu_file))
+    cmd_line.append(smu_file.relative_to(rdir))
 
-    return cmd_line
+    return stringify(cmd_line)
