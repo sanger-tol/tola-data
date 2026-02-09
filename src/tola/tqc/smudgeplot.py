@@ -60,7 +60,8 @@ class SmudgeplotError(Exception):
     show_default=True,
     help=(
         """
-        Command for running smudgeplot.
+        Command for running smudgeplot.  (Additional command line arguments
+        not exposed by `tqc smudgeplot` can be added to the command string.)
         """
     ),
 )
@@ -330,30 +331,38 @@ def run_hetmers(
     smudgeplot_cmd: str,
 ):
     binary, *other_args = shlex.split(smudgeplot_cmd)
-    cmd_line = stringify(
-        [
-            binary,
-            "hetmers",
-            "-t",
-            thread_count,
-            "-L",
-            threshold,
-            "--json_report",
-            "-o",
-            kmer_root,
-            *other_args,
-        ]
-    )
+    cmd_line = [
+        binary,
+        "hetmers",
+        "-t",
+        thread_count,
+        "-L",
+        threshold,
+        "--json_report",
+        "-o",
+        kmer_root,
+        *other_args,
+    ]
+
     ktab_file = find_file_or_raise(rdir, "fastk.ktab").relative_to(rdir)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        cmd_line.extend(["-tmp", tmp_dir, str(ktab_file)])
-        log.info(f"Running: {shlex.join(cmd_line)}")
+
+    # Make a temporary directory in the same directory as the ktab file and
+    # run `hetmers` there.  Temporary directory will be removed by its
+    # context manager.
+    with tempfile.TemporaryDirectory(dir=rdir) as tmp_dir:
+        # Shorten the temporary directory to its local, relative path to keep
+        # absolute paths out of the JSON report's "commandline_arguments"
+        # value.
+        local_tmp = Path(tmp_dir).relative_to(rdir)
+        cmd_line.extend(["-tmp", local_tmp, ktab_file])
+        cmd_line = stringify(cmd_line)
+        log.info(f"Running hetmers command: {shlex.join(cmd_line)}")
         run_smudgeplot_process(rdir, cmd_line)
 
 
 def run_smudgeplot(params, rdir, smu_file, smudgeplot_cmd):
     cmd_line = build_smudgeplot_cmd_line(params, rdir, smu_file, smudgeplot_cmd)
-    log.info(f"Running: {shlex.join(cmd_line)}")
+    log.info(f"Running plot command: {shlex.join(cmd_line)}")
     run_smudgeplot_process(rdir, cmd_line)
     return find_report_file(rdir)
 

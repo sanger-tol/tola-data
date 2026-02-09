@@ -1,0 +1,23 @@
+{
+  "folder_location.id": "smudgeplot_s3",
+  "uri_prefix": "s3://tolqc-dev/smudgeplot",
+  "files_template": {
+    "image_file_patterns": [
+      {
+        "caption": "Smudgeplot plot",
+        "pattern": ".*_smudgeplot_smudgeplot\\.png",
+        "index": 0
+      },
+      {
+        "caption": "Smudgeplot log plot",
+        "pattern": ".*_smudgeplot_smudgeplot_log10\\.png",
+        "index": 1
+      },
+      {
+        "caption": "Smudgeplot centralities",
+        "pattern": ".*_smudgeplot_centralities\\.png",
+        "index": 2
+      }
+    ]
+  }
+}

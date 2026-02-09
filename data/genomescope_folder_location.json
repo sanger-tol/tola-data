@@ -5,19 +5,23 @@
     "image_file_patterns": [
       {
         "caption": "Genomescope 2.0 transformed linear plot",
-        "pattern": ".*transformed_linear_plot\\.png"
+        "pattern": ".*_genomescope_transformed_linear_plot\\.png",
+        "index": 2
       },
       {
         "caption": "Genomescope 2.0 linear plot",
-        "pattern": ".*linear_plot\\.png"
+        "pattern": ".*_genomescope_linear_plot\\.png",
+        "index": 0
       },
       {
         "caption": "Genomescope 2.0 transformed log plot",
-        "pattern": ".*transformed_log_plot\\.png"
+        "pattern": ".*_genomescope_transformed_log_plot\\.png",
+        "index": 3
       },
       {
         "caption": "Genomescope 2.0 log plot",
-        "pattern": ".*log_plot\\.png"
+        "pattern": ".*_genomescope_log_plot\\.png",
+        "index": 1
       }
     ],
     "other_file_patterns": [
