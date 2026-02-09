@@ -6,6 +6,7 @@ from functools import cached_property
 from io import StringIO
 from json.decoder import JSONDecodeError
 from pathlib import Path
+from typing import Any
 
 import requests
 from tol.api_client import create_api_datasource
@@ -31,7 +32,7 @@ class TolClientError(Exception):
 
 class TolClient:
     def __init__(
-        self, tolqc_url=None, api_token=None, tolqc_alias="tolqc", page_size=200
+        self, tolqc_url=None, api_token=None, tolqc_alias="tolqc", page_size: int = 200
     ):
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
         self.page_size = page_size
@@ -84,7 +85,9 @@ class TolClient:
         """
         obj_bldr = self.ads.data_object_factory
 
-        def cdo_builder(table: str, name: str = None, attr: dict = None):
+        def cdo_builder(
+            table: str, name: str | None = None, attr: dict[str, Any] | None = None
+        ):
             return obj_bldr(table, id_=name, attributes=attr)
 
         return cdo_builder

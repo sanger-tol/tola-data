@@ -22,7 +22,7 @@ dependencies = [
     "requests",
     'importlib-metadata; python_version >= "3.12"',
     "partisan",
-    "tol-sdk>=1.8.8",
+    "tol-sdk>=1.8.11",
 ]
 
 [project.scripts]

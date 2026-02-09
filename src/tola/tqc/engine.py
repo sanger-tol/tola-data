@@ -7,7 +7,7 @@ from hashlib import md5
 from pathlib import Path
 
 from partisan.irods import DataObject
-from tol.core import DataSourceFilter
+from tol.core import DataSourceFilter, ReqFieldsTree
 
 from tola.ndjson import (
     get_input_objects,
@@ -123,7 +123,7 @@ def fetch_all(client, table, key, id_list, show_modified=False):
     #
     # because it does a separate GET for each ID
 
-    modified = __req_fields_from_show_modified_flag(show_modified)
+    modified = __req_tree_from_show_modified_flag(table, client.ads_ro, show_modified)
 
     if id_list:
         fetched = []
@@ -139,7 +139,7 @@ def fetch_all(client, table, key, id_list, show_modified=False):
 
 def async_fetch_all_itr(client, table, key, id_list, show_modified=False):
     key = table_key(table, key)
-    modified = __req_fields_from_show_modified_flag(show_modified)
+    modified = __req_tree_from_show_modified_flag(table, client.ads_ro, show_modified)
 
     if id_list:
         return async_query_id_list_pager(client, table, key, id_list, modified)
@@ -185,8 +185,18 @@ async def async_cursor_list_pager(client, table, modified):
             break
 
 
-def __req_fields_from_show_modified_flag(show_modified=False):
-    return {"requested_fields": ["modified_user"]} if show_modified else {}
+def __req_tree_from_show_modified_flag(table, ads, show_modified=False):
+    return (
+        {
+            "requested_tree": ReqFieldsTree(
+                object_type=table,
+                data_source=ads,
+                requested_fields=["modified_user"],
+            )
+        }
+        if show_modified
+        else {}
+    )
 
 
 def core_data_object_to_dict(cdo, show_modified=False):
