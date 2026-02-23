@@ -168,9 +168,10 @@ def open_pager():
     if pager_cmd[0] == "less" and not os.environ.get("LESS"):
         pager_cmd.extend(
             [
+                "--chop-long-lines",
+                "--ignore-case",
                 "--no-init",
                 "--quit-if-one-screen",
-                "--ignore-case",
                 "--RAW-CONTROL-CHARS",
             ]
         )

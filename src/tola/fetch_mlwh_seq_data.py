@@ -467,7 +467,7 @@ def patch_species(client):
             # Do not overwrite exisiting attributes but fill in any blanks
             changes = {}
             for prop, val in spec_info.items():
-                if prop == "species_id":
+                if prop in {"species_id", "ploidy", "ploidy_sources"}:
                     continue
                 if getattr(sp, prop) is None:
                     changes[prop] = val

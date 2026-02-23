@@ -19,6 +19,10 @@ class S3Client:
         in the `TOLA_S3_CONFIG_FILE` environment variable or the default
         `~/.s3cfg`
         """
+        self.host_base: str
+        self.secret_key: str
+        self.access_key: str
+
         cfg_path = (
             Path(env_def)
             if (env_def := os.getenv("TOLA_S3_CONFIG_FILE"))

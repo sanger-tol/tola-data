@@ -1,8 +1,12 @@
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ulid import ULID
+
+if TYPE_CHECKING:
+    from tola.tolqc_client import TolClient
 
 log = logging.getLogger(__name__)
 
@@ -159,10 +163,10 @@ class FolderLocation:
 
 
 def upload_files(
-    client,
-    folder_location_id: str = None,
-    table: str = None,
-    spec: dict = None,
+    client: 'TolClient',
+    folder_location_id: str,
+    table: str,
+    spec: dict,
 ):
     if dir_str := spec.get("directory"):
         directory = Path(dir_str)
