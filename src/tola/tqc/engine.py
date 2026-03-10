@@ -249,7 +249,8 @@ def dicts_to_core_data_objects(ads, table, flat_list):
                 if rn == table:
                     id_ = val
                 elif to_one_tbl := rel_conf.to_one.get(rn):
-                    to_one[rn] = obj_factory(to_one_tbl, id_=val)
+                    if val is not None:
+                        to_one[rn] = obj_factory(to_one_tbl, id_=val)
                 elif to_many_tbl := rel_conf.to_many.get(rn):
                     msg = (
                         f"to-many relationships not implemented"
