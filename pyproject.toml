@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tola-data"
-version = "1.0.51"
+version = "1.0.52"
 readme = "README.md"
 requires-python = ">= 3.12"
 dependencies = [
@@ -38,6 +38,7 @@ load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 ncbi-taxonomy-duckdb="tola.ncbi_taxonomy_duckdb:cli"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
+store-insdc-paths="tola.store_insdc_paths:cli"
 tqc="tola.tqc.tqc_cmd:cli"
 
 [tool.setuptools.packages.find]

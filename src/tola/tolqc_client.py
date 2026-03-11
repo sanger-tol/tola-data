@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from tol.api_client import create_api_datasource
+from tol.api_client import ApiDataSource, create_api_datasource
 from tol.core import DataSourceFilter, core_data_object
 from tol.core.datasource_error import DataSourceError
 
@@ -54,14 +54,14 @@ class TolClient:
         return self.__tolqc_url.rstrip("/")
 
     @cached_property
-    def ads(self):
+    def ads(self) -> ApiDataSource:
         return self.__create_ads()
 
     @cached_property
-    def ads_ro(self):
+    def ads_ro(self) -> ApiDataSource:
         return self.__create_ads(read_only=True)
 
-    def __create_ads(self, read_only=False):
+    def __create_ads(self, read_only=False) -> ApiDataSource:
         tolqc = create_api_datasource(
             api_url="/".join((self.tolqc_url, self.api_path)),
             token=None if read_only else self.api_token,
