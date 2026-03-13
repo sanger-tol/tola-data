@@ -34,9 +34,14 @@ def upsert_species(ctx, key, file_list, file_format, id_list, apply_flag):
         if taxon_id in seen_taxon:
             continue
         seen_taxon.add(taxon_id)
-        if sp_info := gc.get_species_info(taxon_id):
-            species_id = sp_info.pop("species_id")
-            species_info.append({"species.id": species_id, **sp_info})
+        if raw_info := gc.get_species_info(taxon_id):
+            sp_info = {}
+            for k, v in raw_info.items():
+                if k == "species_id":
+                    sp_info["species.id"] = v
+                elif k not in {'ploidy', 'ploidy_sources'}:
+                    sp_info[k] = v
+            species_info.append(sp_info)
 
     # Build the hashed paths for each species
     loc_info = []
