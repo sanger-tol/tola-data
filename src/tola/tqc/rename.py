@@ -270,6 +270,8 @@ def create_new_species_from_goat(
 
         info = gr.make_info()
         goat_species = info.pop("species_id")
+        info.pop("ploidy")
+        info.pop("ploidy_sources")
         if new_id not in gr.synonyms:
             err += (
                 f"Species {new_id!r} with {taxon_id = }"
