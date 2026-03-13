@@ -507,7 +507,7 @@ def patch_specimens(client):
 
 def specimen_ploidy(specimen, goat_info):
     """
-    Set haploid for all male hymenoptera.
+    Set haploid for all male hymenoptera or diploid for females.
 
     Set haploid for all mosses, hornworts and green algae unless a `direct`
     estimate of ploidy is returned for that species by GoaT.
@@ -516,9 +516,8 @@ def specimen_ploidy(specimen, goat_info):
     tol_id = specimen.id
     prefix = tol_id[0:2]
     sex = specimen.sex_id
-    if prefix == "iy" and sex == "Male":
-        # Male hymenoptera
-        return 1
+    if prefix == "iy":
+        return 1 if sex == "Male" else 2
     elif prefix in {
         "ca",  # Mosses / Bryophyta (Andreaeopsida only)
         "cs",  # Mosses / Bryophyta (Sphagnopsida only)
