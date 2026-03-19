@@ -6,7 +6,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 
 import click
-from partisan.irods import AVU, Collection, Timestamp, query_metadata
+from partisan.irods import AVU, Collection, DataObject, Timestamp, query_metadata
 
 from tola import click_options, db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import response_row_std_fields
@@ -28,7 +28,7 @@ operational reasons and restarted in the same slot on the instrument, or
 maybe is restarted in a different slot (perhaps the first slot had a
 temperature stability problem). To find things in iRODS we use a tuple of
 ont:experiment_name, ont:flowcell_id and ont:instrument_slot (which are
-experiment_name, flowcell_id and instrument_slot in oseq_flowcell
+experiment_name, flowcell_id and instrument_slot in oseq_flowcell).
 """
 
 
@@ -156,7 +156,9 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
         ):
             continue
 
-        product_dirs = product_from_collection(coll)
+        product_locs = product_from_collection(coll)
+        if not product_locs:
+            check_for_recall_bam(product_locs, coll)
 
         avu_dict = {}
         for avu in coll.metadata(
@@ -189,7 +191,7 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
             "tag1_id":                avu_dict.get("tag_identifier"),
             "tag2_id":                avu_dict.get("tag2_identifier"),
             "collection":             coll_path,
-            "product_dirs":           product_dirs,
+            "product_locs":           product_locs,
         }
         # fmt: on
 
@@ -238,7 +240,7 @@ def update_stored_max_modified(client, max_modified):
 
 def merge_by_data_id(study_data):
     by_data_id = {}
-    skip_fields = {"collection", "product_dirs"}
+    skip_fields = {"collection", "product_locs"}
     for row in study_data:
         data_id = row["data_id"]
         if xst := by_data_id.get(data_id):
@@ -248,7 +250,7 @@ def merge_by_data_id(study_data):
             # Create a new record, which will have any other rows with the
             # same data_id merged into it.
             xst = {k: v for k, v in row.items() if k not in skip_fields}
-            xst["files"] = row["product_dirs"]
+            xst["files"] = row["product_locs"]
             by_data_id[data_id] = xst
 
     return list(by_data_id.values())
@@ -260,7 +262,7 @@ def merge_row_check_matches(data_id, skip_fields, xst, row):
     machine an the re-basecalled "offline" data. Checks that all fields,
     apart from the exceptions, match.
 
-    The "product_dirs" field is the location of ONT data on iRODS, so we
+    The "product_locs" field is the location of ONT data on iRODS, so we
     extend the "files" list.
 
     For the datetime fields, the earliest "run_start" (created) will be the
@@ -268,7 +270,7 @@ def merge_row_check_matches(data_id, skip_fields, xst, row):
     (modified) will be when the re-basecalling finished.
     """
     for k, v in row.items():
-        if k == "product_dirs":
+        if k == "product_locs":
             xst["files"].extend(v)
         elif k in skip_fields:
             continue
@@ -318,11 +320,11 @@ def product_from_collection(coll):
     top_types, sub_names = sub_collection_names(coll)
 
     type_prefix = "RECALL" if "/offline-" in str(coll.path) else "RAW"
-    product_list = []
+    product_locs = []
 
     if "FASTQ" in top_types:
         append_product_dir(
-            product_list,
+            product_locs,
             coll.path,
             type_prefix,
             "FASTQ_DIR",
@@ -340,23 +342,44 @@ def product_from_collection(coll):
     ):
         if dir_name in sub_names:
             append_product_dir(
-                product_list,
+                product_locs,
                 coll.path / dir_name,
                 type_prefix,
                 dir_type,
             )
     # fmt: on
 
-    return product_list
+    return product_locs
 
 
-def append_product_dir(product_list, product_dir, type_prefix, dir_type):
-    product_list.append(
+def append_product_dir(product_locs, product_dir, type_prefix, dir_type):
+    product_locs.append(
         {
             "remote_path": f"irods:{product_dir}",
             "file_type": f"{type_prefix}_{dir_type}",
         }
     )
+
+
+def check_for_recall_bam(product_locs, coll):
+
+    # Check that this is re-basecalled data
+    if "/offline-" not in str(coll.path):
+        return
+
+    # The recall BAM is hidden in a subdirectory
+    rc_coll = Collection(coll.path / "output" / "pass")
+    if rc_coll.exists():
+        for obj in rc_coll.contents():
+            if isinstance(obj, DataObject) and re.search(
+                r"\.bam\b", obj.name, re.IGNORECASE
+            ):
+                product_locs.append(
+                    {
+                        "remote_path": f"irods:{obj.path}/{obj.name}",
+                        "file_type": "RECALL_BAM",
+                    }
+                )
 
 
 def sub_collection_names(coll):
