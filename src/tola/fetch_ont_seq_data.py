@@ -378,6 +378,8 @@ def check_for_recall_bam(product_locs, coll):
                     {
                         "remote_path": f"irods:{obj.path}/{obj.name}",
                         "file_type": "RECALL_BAM",
+                        "size_bytes": obj.size(),
+                        "md5": obj.checksum(),
                     }
                 )
 
