@@ -102,12 +102,13 @@ def cli(tolqc_alias):
                     }
                 )
 
-    # Pretty print the new insdc_path entries
-    itr = pretty_dict_itr(upsert_rslt, "data.id", head="Filled in {} new insdc_path{}:")
-    if sys.stdout.isatty():
-        colour_pager(itr)
-    else:
-        print(plain_text_from_itr(itr))
+    if upsert_rslt:
+        # Pretty print the new insdc_path entries
+        itr = pretty_dict_itr(upsert_rslt, "data.id", head="Filled in {} new insdc_path{}:")
+        if sys.stdout.isatty():
+            colour_pager(itr)
+        else:
+            print(plain_text_from_itr(itr))
 
 
 if __name__ == "__main__":
