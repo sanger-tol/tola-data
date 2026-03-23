@@ -1,9 +1,13 @@
+import sys
+
 import click
 import duckdb
 import pyarrow
-from tol.core import DataSourceFilter
+from tol.core import DataSourceFilter, ErrorObject
 
 from tola import click_options
+from tola.pretty import plain_text_from_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
 
 
@@ -73,13 +77,37 @@ def cli(tolqc_alias):
     # Store any new insdc_path values
     ads = client.ads
     cdo = client.build_cdo
+    upsert_rslt = []
     for batch in new_ftp.to_batches(page_size):
         ids = batch.column("file_id")
         ftp = batch.column("ftp")
         file_upd = []
         for i in range(batch.num_rows):
             file_upd.append(cdo("file", ids[i], {"insdc_path": ftp[i].as_py()}))
-        ads.upsert("file", file_upd)
+        for file in ads.upsert("file", file_upd):
+            if isinstance(file, ErrorObject):
+                err = file
+                upsert_rslt.append(
+                    {
+                        f"{err.object_type}.id": err.object_id,
+                        "error": err.details,
+                        "object": err.object_,
+                    }
+                )
+            else:
+                upsert_rslt.append(
+                    {
+                        "data.id": file.data.id,
+                        "insdc_path": file.insdc_path,
+                    }
+                )
+
+    # Pretty print the new insdc_path entries
+    itr = pretty_dict_itr(upsert_rslt, "data.id", head="Filled in {} new insdc_path{}:")
+    if sys.stdout.isatty():
+        colour_pager(itr)
+    else:
+        print(plain_text_from_itr(itr))
 
 
 if __name__ == "__main__":
