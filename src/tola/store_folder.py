@@ -86,8 +86,8 @@ class FilePatternSet:
         max_count = len(patterns)
         count = 0
         size_bytes = 0
-        image_list = {}
-        other_list = {}
+        image_dict = {}
+        other_dict = {}
         for file in directory.iterdir():
             if not file.is_file():
                 continue
@@ -109,16 +109,16 @@ class FilePatternSet:
 
                     spec = {"file": file.name, "caption": caption}
                     if fp.is_image:
-                        image_list[fp.index] = spec
+                        image_dict[fp.index] = spec
                     else:
-                        other_list[fp.index] = spec
+                        other_dict[fp.index] = spec
                     break
 
         found = {}
-        if image_list:
-            found["image_file_list"] = [image_list[i] for i in sorted(image_list)]
-        if other_list:
-            found["other_file_list"] = [other_list[i] for i in sorted(other_list)]
+        if image_dict:
+            found["image_file_list"] = [image_dict[i] for i in sorted(image_dict)]
+        if other_dict:
+            found["other_file_list"] = [other_dict[i] for i in sorted(other_dict)]
         found["files_total_bytes"] = size_bytes
 
         log.debug(f"Found {count} files out of a possible {max_count} patterns")
