@@ -1,3 +1,4 @@
+import re
 import sys
 
 import click
@@ -28,18 +29,21 @@ from tola.tolqc_client import TolClient
 )
 def cli(tolqc_alias, input_files, from_run_accessions):
     """
-    Populates `file.insdc_path` from the ENA filereport endpoint by matching
+    Populates `file.insdc_path` from the ENA "filereport" endpoint by matching
     md5 values.
 
     Looks for `accession.id`, `accession` or `run_accession` keys in the
-    ND-JSON in the INPUT_FILES.  Defaults to fetching accessions for all
+    ND-JSON in the INPUT_FILES.  Defaults to fetching paths for everything
+    under the ToL project accession.
     """
 
     if from_run_accessions:
+        # Will be filled in from querying ToLQC for run accessions
         search_accessions = []
     elif input_files:
         search_accessions = search_accessions_from_files(input_files)
     else:
+        # Sanger Tree of Life project accession
         search_accessions = ["PRJEB43745"]
 
     page_size = 1000
@@ -48,30 +52,8 @@ def cli(tolqc_alias, input_files, from_run_accessions):
         page_size=page_size,
     )
 
-    # Make a pyarrow table file.id and md5 for all file table rows missing the
-    # insdc_path.
-    miss_file_id = []
-    miss_md5 = []
-    miss_run_accession = []
-    for file in client.ads.get_list(
-        "file",
-        object_filters=DataSourceFilter(
-            and_={"insdc_path": {"eq": {"value": None}}},
-        ),
-        requested_fields=["md5", "data.id", "data.accession.id"],
-    ):
-        miss_file_id.append(file.id)
-        miss_md5.append(file.md5)
-        miss_run_accession.append(acc.id if (acc := file.data.accession) else None)
-    missing_insdc = pyarrow.Table.from_pydict(  # noqa: F841
-        {
-            "file_id": miss_file_id,
-            "md5": miss_md5,
-            "run_accession": miss_run_accession,
-        }
-    )
-
     conn = duckdb.connect()
+    create_missing_insdc_table(client, conn)
 
     if from_run_accessions:
         conn.execute("""
@@ -83,7 +65,7 @@ def cli(tolqc_alias, input_files, from_run_accessions):
 
     upsert_rslt = []
     for acc in search_accessions:
-        fetch_ebi_filereport_data(conn, client, missing_insdc, upsert_rslt, acc)
+        fetch_ebi_filereport_data(conn, client, acc, upsert_rslt)
 
     if upsert_rslt:
         # Pretty print the new insdc_path entries
@@ -96,7 +78,59 @@ def cli(tolqc_alias, input_files, from_run_accessions):
             print(plain_text_from_itr(itr))
 
 
+def create_missing_insdc_table(client, conn) -> None:
+    """
+    Queries ToLQC for all file table rows with an `md5` but without an
+    `insdc_path`
+    """
+
+    # Get the regular expression for run accessions
+    (run_acc_type,) = client.ads.get_by_ids("accession_type_dict", ["Run"])
+    if not run_acc_type:
+        sys.exit("Failed to fetch accession_type_dict entry for 'Run'")
+    run_regexp = re.compile(run_acc_type.regexp)
+
+    # Make a pyarrow table of file.id, md5 and run_accession for all file
+    # table rows without an insdc_path.
+    miss_file_id = []
+    miss_md5 = []
+    miss_run_accession = []
+    for file in client.ads.get_list(
+        "file",
+        object_filters=DataSourceFilter(
+            and_={
+                "insdc_path": {"exists": {"negate": True}},
+                "md5": {"exists": {}},
+            },
+        ),
+        requested_fields=["md5", "data.id", "data.accession.id"],
+    ):
+        miss_file_id.append(file.id)
+        miss_md5.append(file.md5)
+        if (acc := file.data.accession) and re.fullmatch(run_regexp, acc.id):
+            miss_run_accession.append(acc.id)
+        else:
+            miss_run_accession.append(None)
+
+    missing_arrow = pyarrow.Table.from_pydict(  # noqa: F841
+        {
+            "md5": miss_md5,
+            "file_id": miss_file_id,
+            "run_accession": miss_run_accession,
+        }
+    )
+
+    conn.execute("""
+      CREATE TABLE missing_insdc
+      AS FROM missing_arrow
+      ORDER BY md5
+    """)
+
+
 def search_accessions_from_files(input_files) -> list[str]:
+    """
+    Extracts a list of accessions from ND-JSON input files.
+    """
     search_acc = []
     for obj in get_input_objects(input_files):
         acc = (
@@ -107,13 +141,18 @@ def search_accessions_from_files(input_files) -> list[str]:
     return search_acc
 
 
-def fetch_ebi_filereport_data(conn, client, missing_insdc, upsert_rslt, accession):
+def fetch_ebi_filereport_data(conn, client, accession, upsert_rslt) -> None:
+    """
+    Fetches "FTP" paths from the EBI "filereport" endpoint for the given
+    `accession` and saves new `insdc_path` entries to ToLQC. Appends new
+    entries to the `upsert_rslt` array.
+    """
 
     # Build ENA filereport query URL
     params = "&".join(
         f"{k}={v}"
         for k, v in {
-            "accession": accession,  # Sanger Tree of Life
+            "accession": accession,
             "result": "read_run",
             "fields": "submitted_md5,submitted_ftp",
             "format": "json",
@@ -123,23 +162,27 @@ def fetch_ebi_filereport_data(conn, client, missing_insdc, upsert_rslt, accessio
 
     # Get new insdc_path values to load by joining pyarrow table to result
     # from ENA query.
-    conn.execute(
-        """
-        WITH ena AS (
-          SELECT
-            submitted_md5.regexp_split_to_table(';') AS md5,
-            submitted_ftp.regexp_split_to_table(';') AS ftp
-          FROM read_json(?)
+    try:
+        conn.execute(
+            """
+            WITH ena AS (
+              SELECT
+                submitted_md5.regexp_split_to_table(';') AS md5,
+                submitted_ftp.regexp_split_to_table(';') AS ftp
+              FROM read_json(?)
+            )
+            SELECT
+              file_id,
+              concat('https://', replace(ftp, '#', '%23')) AS ftp
+            FROM ena
+            JOIN missing_insdc USING (md5)
+            """,
+            [filereport_url],
         )
-        SELECT
-          file_id,
-          concat('https://', replace(ftp, '#', '%23')) AS ftp
-        FROM ena
-        JOIN missing_insdc USING (md5)
-        """,
-        [filereport_url],
-    )
-    new_ftp = conn.fetch_arrow_table()
+        new_ftp = conn.fetch_arrow_table()
+    except duckdb.BinderException:
+        # Empty result for accession
+        return
 
     # Store any new insdc_path values
     ads = client.ads
