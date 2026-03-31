@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from hashlib import md5
 from pathlib import Path
+from typing import Any
 
 from partisan.irods import DataObject
 from tol.core import DataSourceFilter, ReqFieldsTree
@@ -145,31 +146,39 @@ def fetch_all(client, table, key, id_list, show_modified=False):
 
 
 def async_fetch_all_itr(
-    client, table, key, id_list, show_modified=False, filter_dict=None,
+    client,
+    table,
+    key,
+    id_list,
+    requested_tree: ReqFieldsTree | None = None,
+    filter_dict=None,
 ):
     key = table_key(table, key)
-    modified = __req_tree_from_show_modified_flag(table, client.ads_ro, show_modified)
 
     if id_list:
-        return async_query_id_list_pager(
-            client, table, key, id_list, modified, filter_dict
+        return __async_query_id_list_pager(
+            client, table, key, id_list, requested_tree, filter_dict
         )
-    return async_cursor_list_pager(client, table, modified, filter_dict)
+    return __async_cursor_list_pager(client, table, requested_tree, filter_dict)
 
 
-async def async_query_id_list_pager(client, table, key, id_list, modified, filter_dict):
+async def __async_query_id_list_pager(
+    client, table, key, id_list, requested_tree, filter_dict
+):
     loop = asyncio.get_running_loop()
     ads_ro = client.ads_ro
     for req_list in client.pages(id_list):
         filt = DataSourceFilter(in_list={key: req_list}, and_=filter_dict)
 
         def get_page(filt=filt):
-            return ads_ro.get_list(table, object_filters=filt, **modified)
+            return ads_ro.get_list(
+                table, object_filters=filt, requested_tree=requested_tree
+            )
 
         yield await loop.run_in_executor(None, get_page)
 
 
-async def async_cursor_list_pager(client, table, modified, filter_dict):
+async def __async_cursor_list_pager(client, table, requested_tree, filter_dict):
     loop = asyncio.get_running_loop()
     ads_ro = client.ads_ro
 
@@ -188,7 +197,7 @@ async def async_cursor_list_pager(client, table, modified, filter_dict):
                 page_size=page_size,
                 search_after=search_after,
                 object_filters=filt,
-                **modified,
+                requested_tree=requested_tree,
             )
 
         obj_itr, search_after = await loop.run_in_executor(None, page_fetch)
@@ -213,7 +222,7 @@ def __req_tree_from_show_modified_flag(table, ads, show_modified=False):
     )
 
 
-def core_data_object_to_dict(cdo, show_modified=False):
+def core_data_object_to_dict(cdo, *, requested_tree=None, show_modified=False):
     """Flattens a CoreDataObject to a dict"""
 
     # The object's ID
@@ -229,8 +238,12 @@ def core_data_object_to_dict(cdo, show_modified=False):
         if rel_name == "modified_user":
             if show_modified:
                 modfd["modified_by"] = rltd.name if rltd else None
+        elif rltd:
+            flat[f"{rel_name}.id"] = rltd.id
+            if requested_tree and (sub := requested_tree.get_sub_tree(rel_name)):
+                add_sub_tree_data(flat, sub, rltd, rel_name)
         else:
-            flat[f"{rel_name}.id"] = rltd.id if rltd else None
+            flat[f"{rel_name}.id"] = None
 
     # The object's attributes
     for k, v in cdo.attributes.items():
@@ -245,6 +258,17 @@ def core_data_object_to_dict(cdo, show_modified=False):
             flat[attr] = modfd.get(attr)
 
     return flat
+
+
+def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
+    attr_names = tree.attribute_names or cdo.attributes
+    for attr in attr_names:
+        path_str = ".".join([*path, attr])
+        flat[path_str] = getattr(cdo, attr) if cdo else None
+    for rel_name, sub_tree in tree.sub_trees():
+        sub_cdo = getattr(cdo, rel_name)
+        flat[".".join([*path, rel_name, "id"])] = sub_cdo.id if sub_cdo else None
+        add_sub_tree_data(flat, sub_tree, sub_cdo, *path, rel_name)
 
 
 def dicts_to_core_data_objects(ads, table, flat_list):

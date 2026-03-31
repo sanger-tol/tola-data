@@ -2,6 +2,7 @@ import contextlib
 import sys
 
 import click
+from tol.core import ReqFieldsTree
 
 from tola import click_options
 from tola.ndjson import ndjson_row
@@ -77,6 +78,16 @@ def show(
     """
 
     fields = comma_split_list(fields_txt)
+    if show_modified:
+        fields.append("modified_user")
+    req_fields_tree = None
+    if fields:
+        req_fields_tree = ReqFieldsTree(
+            object_type=table,
+            data_source=client.ads_ro,
+            requested_fields=fields,
+        )
+
     filter_dict = None
     if queries_txt:
         filter_dict = QueryParser(queries_txt).filter_dict()
@@ -86,7 +97,7 @@ def show(
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
 
-    print_item, pager = build_printer(key, show_modified)
+    print_item, pager = build_printer(key, req_fields_tree, show_modified)
 
     query = AsyncQueryPager(
         query_itr=async_fetch_all_itr(
@@ -94,7 +105,7 @@ def show(
             table,
             key,
             id_list,
-            show_modified=show_modified,
+            requested_tree=req_fields_tree,
             filter_dict=filter_dict,
         ),
         output=print_item,
@@ -108,13 +119,15 @@ def show(
         close_pager(pager)
 
 
-def build_printer(key, show_modified=False):
+def build_printer(key, req_fields_tree=None, show_modified=False):
     if sys.stdout.isatty():
         pager = open_pager()
 
         def pretty_cdo_printer(cdo):
             text = TerminalDict(
-                core_data_object_to_dict(cdo, show_modified=show_modified),
+                core_data_object_to_dict(
+                    cdo, requested_tree=req_fields_tree, show_modified=show_modified
+                ),
                 key=key,
             ).pretty()
             try:
@@ -129,7 +142,11 @@ def build_printer(key, show_modified=False):
 
     def ndjson_row_printer(cdo):
         sys.stdout.write(
-            ndjson_row(core_data_object_to_dict(cdo, show_modified=show_modified))
+            ndjson_row(
+                core_data_object_to_dict(
+                    cdo, requested_tree=req_fields_tree, show_modified=show_modified
+                )
+            )
         )
         return True
 
