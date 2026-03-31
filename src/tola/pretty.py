@@ -70,6 +70,10 @@ def bg_red(txt):
     return click.style(txt, fg="black", bg=224)
 
 
+def italic(txt):
+    return click.style(txt, italic=True)
+
+
 def s(x):
     """Formatting plurals. Argument can be an `int` or an iterable"""
     n = x if isinstance(x, int) else len(x)

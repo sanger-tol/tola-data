@@ -103,6 +103,7 @@ diff_mlwh_duckdb = click.option(
 
 table = click.option(
     "--table",
+    "-t",
     required=True,
     help="Name of table in ToLQC database",
 )

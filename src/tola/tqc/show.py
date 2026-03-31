@@ -5,14 +5,16 @@ import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, s
+from tola.pretty import bold, italic, s
 from tola.terminal import TerminalDict, close_pager, open_pager
 from tola.tqc.async_pager import AsyncQueryPager
 from tola.tqc.engine import (
     async_fetch_all_itr,
+    comma_split_list,
     core_data_object_to_dict,
     id_iterator,
 )
+from tola.tqc.query_parser import QueryParser
 
 
 @click.command()
@@ -29,16 +31,55 @@ from tola.tqc.engine import (
     show_default=True,
     help="For LogBase derived tables, show who last modified row and when",
 )
+@click.option(
+    "--fields",
+    "-f",
+    "fields_txt",
+    multiple=True,
+    help=f"""
+      Fields to request from the server, which may be in separate objects.
+      {italic("e.g.")} `files.md5` would fetch a list of `md5` from the
+      `files` to-many relationship.
+    """,
+)
+@click.option(
+    "--query",
+    "-q",
+    "queries_txt",
+    multiple=True,
+    help=f"""
+      Filters to apply when querying the database. {italic("e.g.")}
+      `sample.specimen.species.id='Vulpes vulpes'` when showing rows from the
+      `data` table will return rows where the `sample` to-one relation links
+      to a `specimen` and the `specimen` links to the red fox `species`.
+    """,
+)
 @click_options.id_list
-def show(client, table, key, file_list, file_format, show_modified, id_list):
+def show(
+    client,
+    table,
+    key,
+    file_list,
+    file_format,
+    show_modified,
+    fields_txt,
+    queries_txt,
+    id_list,
+):
     """Show rows from a table in the ToLQC database
 
     ID_LIST is a list of IDs to operate on, which can additionally be provided
-    in --file arugments, or alternatively piped to STDIN.
+    in --file arugments (in ND-JSON or TXT format), or alternatively piped to
+    STDIN.
 
     Output is in human readable format if STOUT is a terminal, or ND-JSON if
     redirected to a file or UNIX pipe.
     """
+
+    fields = comma_split_list(fields_txt)
+    filter_dict = None
+    if queries_txt:
+        filter_dict = QueryParser(queries_txt).filter_dict()
 
     if key == "id":
         key = f"{table}.id"
@@ -49,7 +90,12 @@ def show(client, table, key, file_list, file_format, show_modified, id_list):
 
     query = AsyncQueryPager(
         query_itr=async_fetch_all_itr(
-            client, table, key, id_list, show_modified=show_modified
+            client,
+            table,
+            key,
+            id_list,
+            show_modified=show_modified,
+            filter_dict=filter_dict,
         ),
         output=print_item,
         queue_size=5 * client.page_size,
