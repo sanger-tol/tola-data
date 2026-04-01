@@ -50,6 +50,7 @@ from tola.tqc.query_parser import QueryParser
       "sample.specimen.species.id='Vulpes vulpes'" when showing rows from the
       "data" table will return rows where the "sample" to-one relation links
       to a "specimen" and the "specimen" links to that "species" of fox.
+      Multiple query terms can be given, which are combined by "AND".
 
       \b
       Available operators:
@@ -62,7 +63,7 @@ from tola.tqc.query_parser import QueryParser
         %   contains (case insensitive sub-string match)
         !%  does not contain
 
-      Query filters containing ">" or "<" require enclosing the query term in
+      Query filters containing "<" or ">" require enclosing the query term in
       single quotes to avoid shell redirection.
     """,
 )
@@ -72,7 +73,7 @@ from tola.tqc.query_parser import QueryParser
     "show_modified",
     flag_value=True,
     default=False,
-    help="For LogBase derived tables, show who last modified each row and when",
+    help="For LogBase derived tables, show who last modified each row and when.",
 )
 @click_options.id_list
 def show(
