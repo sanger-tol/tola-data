@@ -1,3 +1,4 @@
+from tol.core.requested_fields import ReqFieldsTree
 import json
 import logging
 import os
@@ -91,6 +92,21 @@ class TolClient:
             return obj_bldr(table, id_=name, attributes=attr)
 
         return cdo_builder
+
+    def build_req_fields_tree(
+        self,
+        table,
+        *,
+        data_source=None,
+        requested_fields=None,
+        include_all_to_ones=False,
+    ):
+        return ReqFieldsTree(
+            object_type=table,
+            data_source=data_source or self.ads_ro,
+            requested_fields=requested_fields,
+            include_all_to_ones=include_all_to_ones,
+        )
 
     def fetch_or_store_one(self, table: str, spec: dict, key=None):
         """

@@ -16,6 +16,7 @@ from tola.tqc.folder import store_folders
 from tola.tqc.genomescope import genomescope
 from tola.tqc.load_illumina_images import load_illumina_images
 from tola.tqc.load_pacbio_images import load_pacbio_images
+from tola.tqc.query_parser import QueryParserError
 from tola.tqc.rename import rename
 from tola.tqc.report import report
 from tola.tqc.show import show
@@ -35,6 +36,8 @@ def cli():
         sys.exit(f"{dse.status_code}: {dse.title} - {dse.detail}")
     except (HTTPError, ValueError) as err:
         sys.exit(f"{err.__class__.__name__}: {err}")
+    except QueryParserError as qpe:
+        sys.exit(qpe.args[0])
 
 
 @click.group

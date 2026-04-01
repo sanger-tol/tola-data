@@ -134,6 +134,7 @@ def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
 
 
 def show_sts_info(client, all_fields, specimen_names):
+    req_tree = client.build_req_fields_tree(table, requested_fields=fields)
     if all_fields:
         sts_info = [
             core_data_object_to_dict(x)

@@ -2,7 +2,6 @@ import contextlib
 import sys
 
 import click
-from tol.core import ReqFieldsTree
 
 from tola import click_options
 from tola.ndjson import ndjson_row
@@ -12,8 +11,8 @@ from tola.tqc.async_pager import AsyncQueryPager
 from tola.tqc.engine import (
     async_fetch_all_itr,
     comma_split_list,
-    core_data_object_to_dict,
     id_iterator,
+    req_fields_tree_cdo_to_dict,
 )
 from tola.tqc.query_parser import QueryParser
 
@@ -25,22 +24,19 @@ from tola.tqc.query_parser import QueryParser
 @click_options.file
 @click_options.file_format
 @click.option(
-    "--modified/--hide",
-    "-m/-M",
-    "show_modified",
-    default=False,
-    show_default=True,
-    help="For LogBase derived tables, show who last modified row and when",
-)
-@click.option(
     "--fields",
     "-f",
     "fields_txt",
     multiple=True,
+    metavar="<FIELD_PATH>",
     help=f"""
-      Fields to request from the server, which may be in separate objects.
-      {italic("e.g.")} `files.md5` would fetch a list of `md5` from the
-      `files` to-many relationship.
+      Fields to request from the server. Fields in related objects can be
+      requested using a "." separated list of relationship names followed by
+      the field.  {italic("e.g.")} "files.md5" would fetch a list of "md5"
+      from the "files" to-many relationship.  Can be given muliple times and
+      as comma separated lists.  A path ending in ".id" ensures that only
+      the ".id" field from that object is fetched if no other fields in the
+      object are requested.
     """,
 )
 @click.option(
@@ -48,12 +44,35 @@ from tola.tqc.query_parser import QueryParser
     "-q",
     "queries_txt",
     multiple=True,
+    metavar="<FIELD_PATH><OPERATOR><VALUE>",
     help=f"""
       Filters to apply when querying the database. {italic("e.g.")}
-      `sample.specimen.species.id='Vulpes vulpes'` when showing rows from the
-      `data` table will return rows where the `sample` to-one relation links
-      to a `specimen` and the `specimen` links to the red fox `species`.
+      "sample.specimen.species.id='Vulpes vulpes'" when showing rows from the
+      "data" table will return rows where the "sample" to-one relation links
+      to a "specimen" and the "specimen" links to that "species" of fox.
+
+      \b
+      Available operators:
+        =   equal (can use "null" as the VALUE)
+        !=  not-equal
+        <   less than
+        <=  less than or equal
+        >   greater than
+        >=  greater than or equal
+        %   contains (case insensitive sub-string match)
+        !%  does not contain
+
+      Query filters containing ">" or "<" require enclosing the query term in
+      single quotes to avoid shell redirection.
     """,
+)
+@click.option(
+    "--modified",
+    "-m",
+    "show_modified",
+    flag_value=True,
+    default=False,
+    help="For LogBase derived tables, show who last modified each row and when",
 )
 @click_options.id_list
 def show(
@@ -80,13 +99,10 @@ def show(
     fields = comma_split_list(fields_txt)
     if show_modified:
         fields.append("modified_user")
-    req_fields_tree = None
-    if fields:
-        req_fields_tree = ReqFieldsTree(
-            object_type=table,
-            data_source=client.ads_ro,
-            requested_fields=fields,
-        )
+    if not fields:
+        fields = None
+
+    req_fields_tree = client.build_req_fields_tree(table, requested_fields=fields)
 
     filter_dict = None
     if queries_txt:
@@ -97,7 +113,7 @@ def show(
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
 
-    print_item, pager = build_printer(key, req_fields_tree, show_modified)
+    print_item, pager = build_printer(key, req_fields_tree)
 
     query = AsyncQueryPager(
         query_itr=async_fetch_all_itr(
@@ -119,15 +135,13 @@ def show(
         close_pager(pager)
 
 
-def build_printer(key, req_fields_tree=None, show_modified=False):
+def build_printer(key, req_fields_tree):
     if sys.stdout.isatty():
         pager = open_pager()
 
         def pretty_cdo_printer(cdo):
             text = TerminalDict(
-                core_data_object_to_dict(
-                    cdo, requested_tree=req_fields_tree, show_modified=show_modified
-                ),
+                req_fields_tree_cdo_to_dict(req_fields_tree, cdo),
                 key=key,
             ).pretty()
             try:
@@ -141,13 +155,7 @@ def build_printer(key, req_fields_tree=None, show_modified=False):
         return pretty_cdo_printer, pager
 
     def ndjson_row_printer(cdo):
-        sys.stdout.write(
-            ndjson_row(
-                core_data_object_to_dict(
-                    cdo, requested_tree=req_fields_tree, show_modified=show_modified
-                )
-            )
-        )
+        sys.stdout.write(ndjson_row(req_fields_tree_cdo_to_dict(req_fields_tree, cdo)))
         return True
 
     return ndjson_row_printer, None

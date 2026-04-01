@@ -222,7 +222,7 @@ def __req_tree_from_show_modified_flag(table, ads, show_modified=False):
     )
 
 
-def core_data_object_to_dict(cdo, *, requested_tree=None, show_modified=False):
+def core_data_object_to_dict(cdo, show_modified=False):
     """Flattens a CoreDataObject to a dict"""
 
     # The object's ID
@@ -238,12 +238,8 @@ def core_data_object_to_dict(cdo, *, requested_tree=None, show_modified=False):
         if rel_name == "modified_user":
             if show_modified:
                 modfd["modified_by"] = rltd.name if rltd else None
-        elif rltd:
-            flat[f"{rel_name}.id"] = rltd.id
-            if requested_tree and (sub := requested_tree.get_sub_tree(rel_name)):
-                add_sub_tree_data(flat, sub, rltd, rel_name)
         else:
-            flat[f"{rel_name}.id"] = None
+            flat[f"{rel_name}.id"] = rltd.id if rltd else None
 
     # The object's attributes
     for k, v in cdo.attributes.items():
@@ -258,6 +254,90 @@ def core_data_object_to_dict(cdo, *, requested_tree=None, show_modified=False):
             flat[attr] = modfd.get(attr)
 
     return flat
+
+
+def req_fields_tree_cdo_to_dict(requested_tree: ReqFieldsTree, cdo):
+    """
+    Uses a `ReqFieldsTree` object to guide serialisation to a `dict`
+    """
+
+    flat = {}
+    flatten_cdo(flat, requested_tree, cdo)
+    return flat
+
+
+def flatten_cdo(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
+    """
+    Flattens a CoreDataObject to a dict, calling itself recursively on
+    requested, related objects.
+    """
+
+    # The object's ID
+    type_id = mk_path(*path, "id") if path else mk_path(cdo.type, "id")
+    flat[type_id] = cdo.id if cdo else None
+
+    # Save LogBase fields
+    modfd = {}
+    show_modified = False
+    if (modfd_tree := tree.get_sub_tree("modified_user")) and not modfd_tree.is_stub:
+        show_modified = True
+
+    # to-one related objects
+    for rel in tree.to_one_names():
+        rltd = cdo._to_one_objects.get(rel) if cdo else None
+        if rel == "modified_user":
+            if show_modified:
+                modfd[mk_path(*path, "modified_by")] = rltd.name if rltd else None
+        else:
+            flat[mk_path(*path, rel, "id")] = rltd.id if rltd else None
+            if sub_tree := tree.get_sub_tree(rel):
+                flatten_cdo(flat, sub_tree, rltd, *path, rel)
+
+    # The object's attributes
+    if not tree.is_stub:
+        if attr_names := tree.attribute_names:
+            if cdo:
+                attributes = {name: getattr(cdo, name) for name in attr_names}
+            else:
+                # Sets all the requested fields to `None`
+                attributes = dict.fromkeys(attr_names)
+        else:
+            # Add all attributes by default
+            attributes = cdo.attributes if cdo else None
+
+        if attributes:
+            for attr_name, value in attributes.items():
+                value = getattr(cdo, attr_name)
+                attr_path = mk_path(*path, attr_name)
+                if attr_name == "modified_at":
+                    modfd[attr_path] = value
+                else:
+                    flat[attr_path] = value
+
+    # Add LogBase info if requested
+    if show_modified:
+        for attr, val in modfd.items():
+            flat[attr] = val
+
+    # to-many related objects
+    for rel in tree.to_many_names():
+        sub_tree = tree.get_sub_tree(rel)
+        if not sub_tree:
+            continue
+
+        many = []
+        if cdo and rel in cdo._to_many_objects:
+            for mcdo in cdo._to_many_objects.get(rel):
+                sub_flat = {}
+                flatten_cdo(sub_flat, sub_tree, mcdo)
+                many.append(sub_flat)
+        flat[mk_path(*path, rel)] = many
+
+    return flat
+
+
+def mk_path(*path) -> str:
+    return ".".join(path)
 
 
 def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
