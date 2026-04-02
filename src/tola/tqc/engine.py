@@ -307,7 +307,6 @@ def flatten_cdo(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
 
         if attributes:
             for attr_name, value in attributes.items():
-                value = getattr(cdo, attr_name)
                 attr_path = mk_path(*path, attr_name)
                 if attr_name == "modified_at":
                     modfd[attr_path] = value

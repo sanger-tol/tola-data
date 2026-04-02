@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import json
 import re
 from io import StringIO
@@ -21,6 +21,21 @@ def plain_text_from_itr(itr):
     return out.getvalue()
 
 
+class JSONDateTimeEncoder(json.JSONEncoder):
+    """
+    Encode `date` and `datetime` objects in ISO 8601 format.
+    """
+
+    def default(self, obj):
+        if isinstance(obj, dt.datetime):
+            return obj.isoformat(sep=" ", timespec="seconds")
+        if isinstance(obj, dt.date | dt.time):
+            return obj.isoformat()
+
+        # This line means any exceptions raised will come from the base class
+        return json.JSONEncoder.default(self, obj)
+
+
 def field_style(column_name, val):
     """Returns a stringified field and style given a column name and value"""
 
@@ -28,9 +43,9 @@ def field_style(column_name, val):
         return "<empty_string>", bold_red
     if val is None:
         return "null", dim
-    if isinstance(val, datetime.datetime):
+    if isinstance(val, dt.datetime):
         return val.isoformat(sep=" ", timespec="seconds"), bold
-    if isinstance(val, datetime.date | datetime.time):
+    if isinstance(val, dt.date | dt.time):
         return val.isoformat(), bold
     if isinstance(val, int) and val >= 10_000 and not column_name.endswith("_id"):
         return f"{val:_}", bold
@@ -40,9 +55,9 @@ def field_style(column_name, val):
             and isinstance(val, list)
             and not isinstance(val[0], dict | list)
         ):
-            return json.dumps(val), bold
+            return json.dumps(val, cls=JSONDateTimeEncoder), bold
         else:
-            return json.dumps(val, indent=2), bold
+            return json.dumps(val, cls=JSONDateTimeEncoder, indent=2), bold
     return repr(val), bold
 
 
