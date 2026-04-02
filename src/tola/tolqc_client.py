@@ -1,4 +1,3 @@
-from tol.core.requested_fields import ReqFieldsTree
 import json
 import logging
 import os
@@ -13,6 +12,7 @@ import requests
 from tol.api_client import ApiDataSource, create_api_datasource
 from tol.core import DataSourceFilter, core_data_object
 from tol.core.datasource_error import DataSourceError
+from tol.core.requested_fields import ReqFieldsTree
 
 from tola.db_connection import get_connection_params_entry
 from tola.s3client import S3Client
@@ -100,13 +100,31 @@ class TolClient:
         data_source=None,
         requested_fields=None,
         include_all_to_ones=False,
+        all_attributes=False,
     ):
-        return ReqFieldsTree(
+        ads = data_source or self.ads_ro
+        rft = ReqFieldsTree(
             object_type=table,
-            data_source=data_source or self.ads_ro,
+            data_source=ads,
             requested_fields=requested_fields,
             include_all_to_ones=include_all_to_ones,
         )
+        if all_attributes:
+            self.__fillout_req_fields_tree_attributes(ads, rft)
+
+        return rft
+
+    def __fillout_req_fields_tree_attributes(
+        self,
+        ads: ApiDataSource,
+        tree: ReqFieldsTree,
+    ):
+        if not tree.attribute_names:
+            for attr_name in ads.attribute_types[tree.object_type]:
+                if attr_name != "id":
+                    tree.add_attribute(attr_name)
+        for _, sub_tree in tree.sub_trees():
+            self.__fillout_req_fields_tree_attributes(ads, sub_tree)
 
     def fetch_or_store_one(self, table: str, spec: dict, key=None):
         """

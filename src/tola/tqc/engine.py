@@ -273,7 +273,7 @@ def flatten_cdo(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
     """
 
     # The object's ID
-    type_id = mk_path(*path, "id") if path else mk_path(cdo.type, "id")
+    type_id = mk_path(*path, "id") if path else mk_path(tree.object_type, "id")
     flat[type_id] = cdo.id if cdo else None
 
     # Save LogBase fields
@@ -295,23 +295,19 @@ def flatten_cdo(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
 
     # The object's attributes
     if not tree.is_stub:
-        if attr_names := tree.attribute_names:
-            if cdo:
-                attributes = {name: getattr(cdo, name) for name in attr_names}
-            else:
-                # Sets all the requested fields to `None`
-                attributes = dict.fromkeys(attr_names)
+        attr_names = tree.attribute_names
+        if cdo:
+            attributes = {name: getattr(cdo, name) for name in attr_names}
         else:
-            # Add all attributes by default
-            attributes = cdo.attributes if cdo else None
+            # Sets all the requested fields to `None`
+            attributes = dict.fromkeys(attr_names)
 
-        if attributes:
-            for attr_name, value in attributes.items():
-                attr_path = mk_path(*path, attr_name)
-                if attr_name == "modified_at":
-                    modfd[attr_path] = value
-                else:
-                    flat[attr_path] = value
+        for attr_name, value in attributes.items():
+            attr_path = mk_path(*path, attr_name)
+            if attr_name == "modified_at":
+                modfd[attr_path] = value
+            else:
+                flat[attr_path] = value
 
     # Add LogBase info if requested
     if show_modified:

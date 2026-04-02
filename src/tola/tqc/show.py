@@ -7,6 +7,7 @@ from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.pretty import bold, italic, s
 from tola.terminal import TerminalDict, close_pager, open_pager
+from tola.tolqc_client import TolClient
 from tola.tqc.async_pager import AsyncQueryPager
 from tola.tqc.engine import (
     async_fetch_all_itr,
@@ -77,7 +78,7 @@ from tola.tqc.query_parser import QueryParser
 )
 @click_options.id_list
 def show(
-    client,
+    client: TolClient,
     table,
     key,
     file_list,
@@ -103,7 +104,19 @@ def show(
     if not fields:
         fields = None
 
-    req_fields_tree = client.build_req_fields_tree(table, requested_fields=fields)
+    req_fields_tree = client.build_req_fields_tree(
+        table,
+        requested_fields=fields,
+    )
+
+    # The filled `ReqFieldsTree` enumerates all of the attributes so that the
+    # output JSON can have the same shape on all rows even where related
+    # objects are missing.
+    filled_tree = client.build_req_fields_tree(
+        table,
+        requested_fields=fields,
+        all_attributes=True,
+    )
 
     filter_dict = None
     if queries_txt:
@@ -114,7 +127,7 @@ def show(
 
     id_list = tuple(id_iterator(key, id_list, file_list, file_format))
 
-    print_item, pager = build_printer(key, req_fields_tree)
+    print_item, pager = build_printer(key, filled_tree)
 
     query = AsyncQueryPager(
         query_itr=async_fetch_all_itr(
