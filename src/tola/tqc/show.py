@@ -65,7 +65,7 @@ from tola.tqc.query_parser import QueryParser
         !%  does not contain
 
       Query filters containing "<" or ">" require enclosing the query term in
-      single quotes to avoid shell redirection.
+      quotes to avoid shell redirection.
     """,
 )
 @click.option(
