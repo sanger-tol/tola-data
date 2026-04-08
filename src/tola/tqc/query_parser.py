@@ -24,7 +24,18 @@ class QueryParser:
         if not m:
             msg = f"Failed to parse query param {param!r}"
             raise QueryParserError(msg)
+
         field, operator, value = m.groups()
+
+        # ToL SDK's `and_` clause does not permit more than one filter on the
+        # same field.
+        if self.__filter_terms.get(field):
+            msg = (
+                f"More than one filter for field {field!r}\n"
+                f"  Found when parsing {param!r}"
+            )
+            raise QueryParserError(msg)
+
         op, negate = self._parse_operator(operator, param)
         if value.lower() == "null" and op == "eq":
             # !=null means exists
