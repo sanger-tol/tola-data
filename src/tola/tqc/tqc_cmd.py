@@ -25,6 +25,7 @@ from tola.tqc.species import upsert_species
 from tola.tqc.status import status
 from tola.tqc.sts import sts_specimen
 from tola.tqc.subtrack import subtrack
+from tola.tqc.table import table
 from tola.tqc.upsert import upsert
 from tola.tqc.view import view
 
@@ -77,5 +78,6 @@ tqc_main.add_command(smudgeplot)
 tqc_main.add_command(status)
 tqc_main.add_command(sts_specimen, name="sts-specimen")
 tqc_main.add_command(subtrack)
+tqc_main.add_command(table)
 tqc_main.add_command(upsert)
 tqc_main.add_command(view)
