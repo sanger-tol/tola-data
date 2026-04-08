@@ -3,7 +3,8 @@ from io import StringIO
 
 import click
 
-from tola.pretty import bold, bold_green
+from tola.pretty import bold, bold_green, strip_ansi
+from tola.terminal import colour_pager
 from tola.tolqc_client import TolClient
 
 
@@ -57,23 +58,30 @@ def table(ctx, show_edit_tables, table_names):
         output.append(format_table(table, attrs, rel_conf))
 
     if output:
-        out_fh = sys.stdout
-        for tbl in output:
-            out_fh.write(tbl)
-        out_fh.write("\n")
+        output.append("\n")
+        if sys.stdout.isatty():
+            colour_pager(output)
+        else:
+            out_fh = sys.stdout
+            for tbl in output:
+                out_fh.write(strip_ansi(tbl))
 
 
 def format_table(table, attributes, rel_conf):
     flds = {"id": bold(attributes.get("id"))}
+
     if rel_conf:
         for rel_name, tbl in rel_conf.to_one.items():
             flds[rel_name] = f"< {bold(tbl)}"
-        for rel_name, tbl in rel_conf.to_many.items():
-            flds[rel_name] = f"[ {bold(tbl)} ]"
+
     for attr, attr_type in attributes.items():
         if attr == "id":
             continue
         flds[attr] = bold(attr_type)
+
+    if rel_conf:
+        for rel_name, tbl in rel_conf.to_many.items():
+            flds[rel_name] = f"[ {bold(tbl)} ]"
 
     fmt = StringIO()
     fmt.write(f"\n{bold_green(table)}:\n")
