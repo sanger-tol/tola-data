@@ -13,6 +13,8 @@ def test_query_parser():
         "common_name!=null",
         "library_type_id%HiFi",
         "specimen.species.id!%corax",
+        "has_methylation=true",
+        "has_kinetics=false",
     ]
     qp = QueryParser(params)
     assert qp.filter_dict() == {
@@ -65,5 +67,15 @@ def test_query_parser():
                 "value": "corax",
                 "negate": True,
             },
+        },
+        "has_methylation": {
+            "eq": {
+                "value": True,
+            }
+        },
+        "has_kinetics": {
+            "eq": {
+                "value": False,
+            }
         },
     }

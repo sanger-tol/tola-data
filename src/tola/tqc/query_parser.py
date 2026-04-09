@@ -7,6 +7,18 @@ class QueryParserError(Exception):
     """Error parsing a `tqc` query param"""
 
 
+def string_to_type(txt: str) -> None | bool | str:
+    match txt.lower():
+        case "null":
+            return None
+        case "true":
+            return True
+        case "false":
+            return False
+        case _:
+            return txt
+
+
 class QueryParser:
     """
     Parses command line query filter options for `tqc`
@@ -37,7 +49,9 @@ class QueryParser:
             raise QueryParserError(msg)
 
         op, negate = self._parse_operator(operator, param)
-        if value.lower() == "null" and op == "eq":
+
+        value = string_to_type(value)
+        if value is None and op == "eq":
             # !=null means exists
             term = {"exists": {}} if negate is True else {"exists": {"negate": True}}
         else:

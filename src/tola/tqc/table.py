@@ -30,7 +30,7 @@ def table(ctx, show_edit_tables, table_names):
 
     Each attribute or relationship name is followed by the type of its value.
     For relationships the type is the name of the related table.  In the case
-    of to-one relationships it is preceeded by "<", and for to-many
+    of to-one relationships it is preceeded by ">", and for to-many
     relationships the type is surrounded by "[]".
 
     Shows all of the tables when called without any TABLE arguments.
@@ -72,7 +72,7 @@ def format_table(table, attributes, rel_conf):
 
     if rel_conf:
         for rel_name, tbl in rel_conf.to_one.items():
-            flds[rel_name] = f"< {bold(tbl)}"
+            flds[rel_name] = f"> {bold(tbl)}"
 
     for attr, attr_type in attributes.items():
         if attr == "id":
