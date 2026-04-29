@@ -6,6 +6,7 @@ from zipfile import ZipFile
 
 import click
 from partisan.irods import DataObject
+from tol.core import DataSourceFilter
 
 from tola import click_options
 from tola.ndjson import get_input_objects, ndjson_row
@@ -58,28 +59,36 @@ def load_pacbio_images(ctx, input_files, auto_flag, fetch_input, quiet):
 
 def get_work(client):
     spec_list = []
-    for data in client.ads_get_list(
-        "data",
-        {
-            "run.pacbio_run_metrics.folder_ulid": {
-                "exists": {"negate": True},
+    for pbrd in client.ads_ro.get_list(
+        "pacbio_run_metrics",
+        object_filters=DataSourceFilter(
+            and_={
+                "folder_ulid": {
+                    "exists": {"negate": True},
+                },
+                "run.data.files.remote_path": {
+                    "exists": {},
+                },
             },
-            "files.remote_path": {
-                "exists": {},
-            },
-        },
+        ),
+        requested_fields=[
+            "id",
+            "run.id",
+            "run.data.id",
+            "run.data.files",
+        ],
     ):
-        run = data.run
-        for file in data.files:
-            spec_list.append(
-                {
-                    "pacbio_run_metrics.id": run.id,
-                    "file.id": file.id,
-                    "remote_path": file.remote_path,
-                    "size_bytes": file.size_bytes,
-                    "md5": file.md5,
-                }
-            )
+        for data in pbrd.run.data:
+            for file in data.files:
+                spec_list.append(
+                    {
+                        "pacbio_run_metrics.id": pbrd.id,
+                        "file.id": file.id,
+                        "remote_path": file.remote_path,
+                        "size_bytes": file.size_bytes,
+                        "md5": file.md5,
+                    }
+                )
 
     return spec_list
 
