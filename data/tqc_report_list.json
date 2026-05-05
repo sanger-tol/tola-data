@@ -31,6 +31,10 @@
             "description": "Report of all the sequencing data in ToLQC with useful fields and locations for feeding into other scripts. Pass the PARAM `root=true` (or just `root`) to prefix paths in the output with the `location.root` entry from the metadata table, or `root=<PATH>` to specify your own prefix."
         },
         {
+            "name": "species-bioproject",
+            "description": "Bioproject accessions linked to each species. Suppressed links are not shown by default, but can be shown by using the `suppressed` PARAM. Add a PARAM `accession=<ACCN>` to search for a matching accession in any of the fields."
+        },
+        {
             "name": "specimen-status",
             "description": "Status of specimens, listing species information, projects and sequencing data attached to the species"
         },
