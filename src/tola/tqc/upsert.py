@@ -65,8 +65,9 @@ class TableUpserter:
         list of changes to be made.
         """
 
+        primary_key = f"{table}.id"
         if not key:
-            key = f"{table}.id"
+            key = primary_key
 
         idx_db_obj = key_list_search(
             self.client, table, key, [x[key] for x in input_obj]
@@ -93,7 +94,7 @@ class TableUpserter:
                 if attr:
                     self.diff_count += 1
                     changes.append(TerminalDiff(chng))
-                    upserts.append({key: oid, **attr})
+                    upserts.append({primary_key: flat[primary_key], **attr})
             else:
                 self.new_count += 1
                 changes.append(TerminalDict(inp))
