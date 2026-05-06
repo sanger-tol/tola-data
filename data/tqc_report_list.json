@@ -32,7 +32,7 @@
         },
         {
             "name": "species-bioproject",
-            "description": "Bioproject accessions linked to each species. Suppressed links are not shown by default, but can be shown by using the `suppressed` PARAM. Add a PARAM `accession=<ACCN>` to search for a matching accession in any of the fields."
+            "description": "Bioproject accessions linked to each species. Suppressed links are not shown by default, but can be shown by using the `include_suppressed` PARAM. Add a PARAM `accession=<ACCN>` to search for a matching accession in any of the fields."
         },
         {
             "name": "specimen-status",

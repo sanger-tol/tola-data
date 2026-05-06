@@ -11,6 +11,7 @@ from partisan.irods import AVU, Collection, DataObject, Timestamp, query_metadat
 from tola import click_options, db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import response_row_std_fields
 from tola.ndjson import ndjson_row, parse_ndjson_stream
+from tola.pretty import s, strip_ansi
 from tola.tqc.upsert import TableUpserter
 
 log = logging.getLogger(__name__)
@@ -577,13 +578,17 @@ def store_ont_data(client, ont_rows):
     new_by_data_id = response_field_dict_by_data_id(rspns, "new")
     upd_by_data_id = response_field_dict_by_data_id(rspns, "updated")
 
-    print_report(study_data_ids, data_id_files, new_by_data_id, upd_by_data_id)
+    print_report(
+        study_data_ids, data_id_files, new_by_data_id, upd_by_data_id, upsrtr.changes
+    )
 
     if max_modified:
         update_stored_max_modified(client, max_modified)
 
 
-def print_report(study_data_ids, data_id_files, new_by_data_id, upd_by_data_id):
+def print_report(
+    study_data_ids, data_id_files, new_by_data_id, upd_by_data_id, file_changes
+):
     """
     Prints a report of new and updated ONT data grouped by study
     """
@@ -617,6 +622,12 @@ def print_report(study_data_ids, data_id_files, new_by_data_id, upd_by_data_id):
                 if file_list := data_id_files.get(row["data_id"]):
                     for file in file_list:
                         out.write(f"  New data: {file.file_type}\n")
+
+    if file_changes:
+        n_changes = len(file_changes)
+        out.write(f"\n{n_changes} changed file{s(n_changes)}:\n")
+        for diff in file_changes:
+            out.write(strip_ansi(diff.pretty()))
 
 
 def response_field_dict_by_data_id(rspns, fld):
