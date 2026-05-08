@@ -22,6 +22,7 @@ from tolqc.schema import Role, RoleBinding, Token, User
 from tolqc.schema.accession_models import (  # noqa: F401
     Accession,
     AccessionTypeDict,
+    BioprojectLink,
     SubmitterDict,
 )
 from tolqc.schema.assembly_models import Dataset, DatasetElement
@@ -345,7 +346,16 @@ def fetch_species_data(session, species_list):
         .options(selectinload(Species.specimens).selectinload(Specimen.location))
         .options(selectinload(Species.specimens).selectinload(Specimen.accession))
         .options(selectinload(Species.data_accession))
-        .options(selectinload(Species.umbrella_accession))
+        .options(
+            selectinload(Species.umbrella_accession)
+            .selectinload(Accession.parent_assn)
+            .selectinload(BioprojectLink.parent)
+        )
+        .options(
+            selectinload(Species.umbrella_accession)
+            .selectinload(Accession.child_assn)
+            .selectinload(BioprojectLink.child)
+        )
         .options(
             selectinload(Species.specimens)
             .selectinload(Specimen.samples)
