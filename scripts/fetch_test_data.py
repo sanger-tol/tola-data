@@ -23,6 +23,7 @@ from tolqc.schema.accession_models import (  # noqa: F401
     Accession,
     AccessionTypeDict,
     BioprojectLink,
+    LinkStatusDict,
     SubmitterDict,
 )
 from tolqc.schema.assembly_models import Dataset, DatasetElement
@@ -102,7 +103,12 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     engine = create_engine(db_uri, echo=echo_sql)
     ssn_maker = sessionmaker(bind=engine)
     sample_data = [
-        User(id=100, name="tester", email="tester@sanger.ac.uk"),
+        User(
+            id=100,
+            oidc_id="tester@sanger.ac.uk",
+            email="tester@sanger.ac.uk",
+            name="tester",
+        ),
         Token(id=200, token="__TOKEN_PLACEHOLDER__", user_id=100),  # noqa: S106
         Role(id=300, name="editor"),
         RoleBinding(user_id=100, role_id=300),
@@ -111,7 +117,7 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     sample_data.extend(
         build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
     )
-    sample_data.extend(build_project_associations())
+    sample_data.extend(build_projects())
     sys.stdout.write(code_string(sample_data))
 
     if create_db:
@@ -143,91 +149,14 @@ def make_sql_data_file(build_url, sql_data_file):
         sql_dump.check_returncode()
 
 
-def build_project_associations():
+def build_projects():
     return [
-        Project(project_id="britain_and_ireland"),
+        Project(project_id="aegis"),
+        Project(project_id="britain-and-ireland"),
         Project(project_id="darwin"),
-        Project(project_id="protist_microalgae"),
+        Project(project_id="protist-microalgae"),
         Project(project_id="tol"),
-        Allocation(data_id="35344_1#1", project_id="britain_and_ireland"),
-        Allocation(data_id="35344_1#1", project_id="darwin"),
-        Allocation(data_id="35344_1#1", project_id="protist_microalgae"),
-        Allocation(data_id="35344_1#1", project_id="tol"),
-        Allocation(data_id="35344_1#2", project_id="britain_and_ireland"),
-        Allocation(data_id="35344_1#2", project_id="darwin"),
-        Allocation(data_id="35344_1#2", project_id="protist_microalgae"),
-        Allocation(data_id="35344_1#2", project_id="tol"),
-        Allocation(data_id="35344_1#3", project_id="britain_and_ireland"),
-        Allocation(data_id="35344_1#3", project_id="darwin"),
-        Allocation(data_id="35344_1#3", project_id="protist_microalgae"),
-        Allocation(data_id="35344_1#3", project_id="tol"),
-        Allocation(data_id="35344_1#4", project_id="britain_and_ireland"),
-        Allocation(data_id="35344_1#4", project_id="darwin"),
-        Allocation(data_id="35344_1#4", project_id="protist_microalgae"),
-        Allocation(data_id="35344_1#4", project_id="tol"),
-        Allocation(data_id="35528_4#8", project_id="britain_and_ireland"),
-        Allocation(data_id="35528_4#8", project_id="darwin"),
-        Allocation(data_id="35528_4#8", project_id="protist_microalgae"),
-        Allocation(data_id="35528_4#8", project_id="tol"),
-        Allocation(data_id="36691_2#5", project_id="britain_and_ireland"),
-        Allocation(data_id="36691_2#5", project_id="darwin"),
-        Allocation(data_id="36691_2#5", project_id="tol"),
-        Allocation(data_id="36691_2#6", project_id="britain_and_ireland"),
-        Allocation(data_id="36691_2#6", project_id="darwin"),
-        Allocation(data_id="36691_2#6", project_id="tol"),
-        Allocation(data_id="36691_2#7", project_id="britain_and_ireland"),
-        Allocation(data_id="36691_2#7", project_id="darwin"),
-        Allocation(data_id="36691_2#7", project_id="tol"),
-        Allocation(data_id="36691_2#8", project_id="britain_and_ireland"),
-        Allocation(data_id="36691_2#8", project_id="darwin"),
-        Allocation(data_id="36691_2#8", project_id="tol"),
-        Allocation(data_id="36703_5#4", project_id="britain_and_ireland"),
-        Allocation(data_id="36703_5#4", project_id="darwin"),
-        Allocation(data_id="36703_5#4", project_id="protist_microalgae"),
-        Allocation(data_id="36703_5#4", project_id="tol"),
-        Allocation(data_id="36857#13", project_id="britain_and_ireland"),
-        Allocation(data_id="36857#13", project_id="darwin"),
-        Allocation(data_id="36857#13", project_id="protist_microalgae"),
-        Allocation(data_id="36857#13", project_id="tol"),
-        Allocation(data_id="37935_8#13", project_id="britain_and_ireland"),
-        Allocation(data_id="37935_8#13", project_id="darwin"),
-        Allocation(data_id="37935_8#13", project_id="tol"),
-        Allocation(data_id="37939_1#2", project_id="britain_and_ireland"),
-        Allocation(data_id="37939_1#2", project_id="darwin"),
-        Allocation(data_id="37939_1#2", project_id="protist_microalgae"),
-        Allocation(data_id="37939_1#2", project_id="tol"),
-        Allocation(data_id="40666_2#2", project_id="britain_and_ireland"),
-        Allocation(data_id="40666_2#2", project_id="darwin"),
-        Allocation(data_id="40666_2#2", project_id="tol"),
-        Allocation(data_id="48593_1#25", project_id="britain_and_ireland"),
-        Allocation(data_id="48593_1#25", project_id="darwin"),
-        Allocation(data_id="48593_1#25", project_id="tol"),
-        Allocation(
-            data_id="m64016_201115_112225#1022", project_id="britain_and_ireland"
-        ),
-        Allocation(data_id="m64016_201115_112225#1022", project_id="darwin"),
-        Allocation(
-            data_id="m64016_201115_112225#1022", project_id="protist_microalgae"
-        ),
-        Allocation(data_id="m64016_201115_112225#1022", project_id="tol"),
-        Allocation(
-            data_id="m64089e_210601_133425#1022", project_id="britain_and_ireland"
-        ),
-        Allocation(data_id="m64089e_210601_133425#1022", project_id="darwin"),
-        Allocation(
-            data_id="m64089e_210601_133425#1022", project_id="protist_microalgae"
-        ),
-        Allocation(data_id="m64089e_210601_133425#1022", project_id="tol"),
-        Allocation(
-            data_id="m64097e_210221_172213#1019", project_id="britain_and_ireland"
-        ),
-        Allocation(data_id="m64097e_210221_172213#1019", project_id="darwin"),
-        Allocation(data_id="m64097e_210221_172213#1019", project_id="tol"),
-        Allocation(
-            data_id="m84309_250205_121831_s4#2076", project_id="britain_and_ireland"
-        ),
-        Allocation(data_id="m84309_250205_121831_s4#2076", project_id="darwin"),
-        Allocation(data_id="m84309_250205_121831_s4#2076", project_id="tol"),
+        Project(project_id="vgp"),
     ]
 
 
@@ -238,12 +167,13 @@ def build_sample_data(ssn_maker):
         for cls in (
             AccessionTypeDict,
             CategoryDict,
-            ChemistryDict,
-            LibraryType,
-            Platform,
             Centre,
+            ChemistryDict,
             FileTypeDict,
             FolderLocation,
+            LibraryType,
+            LinkStatusDict,
+            Platform,
             QCDict,
             Sex,
             SubmitterDict,
@@ -465,8 +395,25 @@ def fetch_species_data(session, species_list):
     # Sort species, specimens, samples and data
     species_data = sorted(session.scalars(statement).all(), key=lambda x: x.species_id)
     run_folder_seen = set()
+    accession_seen = set()
     for species in species_data:
         species.specimens = sorted(species.specimens, key=lambda x: x.specimen_id)
+
+        # Remove child and parent accessions already seen from BioprojectLinks
+        if umbrella_accn := species.umbrella_accession:
+            for link in umbrella_accn.child_assn:
+                child_acc = link.child_accession_id
+                if child_acc in accession_seen:
+                    link.child = None
+                else:
+                    accession_seen.add(child_acc)
+            for link in umbrella_accn.parent_assn:
+                parent_acc = link.parent_accession_id
+                if parent_acc in accession_seen:
+                    link.parent = None
+                else:
+                    accession_seen.add(parent_acc)
+
         for spmn in species.specimens:
             if spmn.specimen_id == "lpJunEffu1":
                 spmn.assigned_user_id = 100
@@ -583,8 +530,10 @@ def code_string(obj, max_line_length=99):
                 # Models not in `sample_data_models`
                 "Accession",
                 "AccessionTypeDict",
+                "BioprojectLink",
                 "Folder",
                 "FolderLocation",
+                "LinkStatusDict",
                 "Metadata",
                 "Role",
                 "RoleBinding",
@@ -597,7 +546,7 @@ def code_string(obj, max_line_length=99):
     imports_header = (
         "\n\nfrom tolqc.schema import Role, RoleBinding, Token, User\n"
         "from tolqc.schema.accession_models import "
-        "Accession, AccessionTypeDict, SubmitterDict\n"
+        "Accession, AccessionTypeDict, BioprojectLink, LinkStatusDict, SubmitterDict\n"
         "from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
         "from tolqc.schema.system_models import Metadata\n"
