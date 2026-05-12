@@ -1,0 +1,4 @@
+{"assembly_level_dict.id":"contig","description":"A list of contiguous nucleotide sequences"}
+{"assembly_level_dict.id":"scaffold","description":"Scaffolds of ordered and oriented contigs separated by gaps"}
+{"assembly_level_dict.id":"chromosome","description":"Contains scaffolds representing chromosomes"}
+{"assembly_level_dict.id":"complete genome","description":"A whole prokaryote or plastid genome, or a telomere-to-telomere quality chromosomal genome"}
