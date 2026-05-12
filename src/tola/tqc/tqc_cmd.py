@@ -16,6 +16,7 @@ from tola.tqc.folder import store_folders
 from tola.tqc.genomescope import genomescope
 from tola.tqc.load_illumina_images import load_illumina_images
 from tola.tqc.load_pacbio_images import load_pacbio_images
+from tola.tqc.project import project
 from tola.tqc.query_parser import QueryParserError
 from tola.tqc.rename import rename
 from tola.tqc.report import report
@@ -70,6 +71,7 @@ tqc_main.add_command(store_folders)
 tqc_main.add_command(genomescope)
 tqc_main.add_command(load_illumina_images)
 tqc_main.add_command(load_pacbio_images)
+tqc_main.add_command(project)
 tqc_main.add_command(rename)
 tqc_main.add_command(report)
 tqc_main.add_command(show)
