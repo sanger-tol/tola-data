@@ -12,6 +12,7 @@ from tola import click_options, db_connection, tolqc_client
 from tola.fetch_mlwh_seq_data import response_row_std_fields
 from tola.ndjson import ndjson_row, parse_ndjson_stream
 from tola.pretty import s, strip_ansi
+from tola.terminal import TerminalDiff
 from tola.tqc.upsert import TableUpserter
 
 log = logging.getLogger(__name__)
@@ -333,6 +334,7 @@ def product_from_collection(coll):
 
     # fmt: off
     for dir_name, dir_type in (
+        ("merged_pass", "BAM"),
         ("reads",       "FAST5_TAR_DIR"),
         ("fast5_pass",  "FAST5_DIR"),
         ("pod5",        "POD5_DIR"),
@@ -354,38 +356,32 @@ def product_from_collection(coll):
 
 
 def append_product_dir(product_locs, product_dir, type_prefix, dir_type):
-    product_locs.append(
-        {
-            "remote_path": f"irods:{product_dir}",
-            "file_type": f"{type_prefix}_{dir_type}",
-        }
-    )
+    file_type = f"{type_prefix}_{dir_type}"
+    if file_type == "RECALL_BAM":
+        rc_coll = Collection(product_dir)
+        if rc_coll.exists():
+            for obj in rc_coll.contents():
+                if isinstance(obj, DataObject) and re.search(
+                    r"\.bam\b", obj.name, re.IGNORECASE
+                ):
+                    product_locs.append(
+                        {
+                            "remote_path": f"irods:{obj.path}/{obj.name}",
+                            "file_type": file_type,
+                            "size_bytes": obj.size(),
+                            "md5": obj.checksum(),
+                        }
+                    )
+    else:
+        product_locs.append(
+            {
+                "remote_path": f"irods:{product_dir}",
+                "file_type": file_type,
+            }
+        )
 
 
-def check_for_recall_bam(product_locs, coll):
-
-    # Check that this is re-basecalled data
-    if "/offline-" not in str(coll.path):
-        return
-
-    # The recall BAM is hidden in a subdirectory
-    rc_coll = Collection(coll.path / "output" / "pass")
-    if rc_coll.exists():
-        for obj in rc_coll.contents():
-            if isinstance(obj, DataObject) and re.search(
-                r"\.bam\b", obj.name, re.IGNORECASE
-            ):
-                product_locs.append(
-                    {
-                        "remote_path": f"irods:{obj.path}/{obj.name}",
-                        "file_type": "RECALL_BAM",
-                        "size_bytes": obj.size(),
-                        "md5": obj.checksum(),
-                    }
-                )
-
-
-def sub_collection_names(coll):
+def sub_collection_names(coll: Collection) -> tuple[set[str], set[str]]:
     top_types = set()  # Set of file types found at the top level
     sub_names = set()  # Set of subdirectory names found
     for obj in coll.contents():
@@ -578,8 +574,10 @@ def store_ont_data(client, ont_rows):
     new_by_data_id = response_field_dict_by_data_id(rspns, "new")
     upd_by_data_id = response_field_dict_by_data_id(rspns, "updated")
 
+    file_changes = [x for x in upsrtr.changes if isinstance(x, TerminalDiff)]
+
     print_report(
-        study_data_ids, data_id_files, new_by_data_id, upd_by_data_id, upsrtr.changes
+        study_data_ids, data_id_files, new_by_data_id, upd_by_data_id, file_changes
     )
 
     if max_modified:
