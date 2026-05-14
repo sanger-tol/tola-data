@@ -159,8 +159,6 @@ def fetch_ont_irods_data_for_study(study_id, since_query):
             continue
 
         product_locs = product_from_collection(coll)
-        if not product_locs:
-            check_for_recall_bam(product_locs, coll)
 
         avu_dict = {}
         for avu in coll.metadata(
