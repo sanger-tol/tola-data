@@ -334,7 +334,7 @@ def product_from_collection(coll):
 
     # fmt: off
     for dir_name, dir_type in (
-        ("merged_pass", "BAM"),
+        ("merged",      "BAM"),
         ("reads",       "FAST5_TAR_DIR"),
         ("fast5_pass",  "FAST5_DIR"),
         ("pod5",        "POD5_DIR"),
@@ -358,7 +358,7 @@ def product_from_collection(coll):
 def append_product_dir(product_locs, product_dir, type_prefix, dir_type):
     file_type = f"{type_prefix}_{dir_type}"
     if file_type == "RECALL_BAM":
-        rc_coll = Collection(product_dir)
+        rc_coll = Collection(product_dir / "pass")
         if rc_coll.exists():
             for obj in rc_coll.contents():
                 if isinstance(obj, DataObject) and re.search(
