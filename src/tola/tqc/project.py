@@ -62,8 +62,8 @@ MODE = Literal["ADD", "REM", "PRI"] | None
     "force_primary_flag",
     flag_value=True,
     help="""
-      Unset the primary project for any rows where it is set to a different
-      project.
+      Allow switching of the primary project with the `--primary-project`
+      option.
     """,
 )
 @click_options.file
@@ -88,9 +88,10 @@ def project(
     ID_LIST can be supplied on the command line, or supplied in files given by
     `--file` arguments, or on STDIN.
 
-    Called without `--add-project` or `--remove-project` arguments will show
-    the currently allocated projects for each `data` table row found by the
-    list of input IDs.
+    The `--add-project`, `--remove-project` and `--primary-project` options
+    are mutually exclusive.  If none of these are given, the currently
+    allocated projects for each `data` table row found by the list of input
+    IDs will be shown.
     """
 
     all_project_names = fetch_all_project_names(client)
@@ -304,8 +305,9 @@ def filter_pri_project_allocations(
         primary_proj = set_to_sorted_string(projects)
         other_primary = set_to_sorted_string(others)
         sys.exit(
-            f"Error: Setting primary to {primary_proj} some data table entries"
-            f" currently have other primary project allocations: {other_primary}"
+            f"Error: Setting primary to {primary_proj}, but some data table entries"
+            f" have these primary project allocations: {other_primary}\n"
+            "Use `--force-primary` to switch primary projects."
         )
 
     return filt_values, unset_values
