@@ -33,16 +33,20 @@ from tola.tqc.upsert import TableUpserter
         path_type=pathlib.Path,
     ),
     envvar="MLWH_NDJSON",
-    help="""Name of ND-JSON file from fetch-mlwh-seq-data.
-      Taken from the MLWH_NDJSON environment variable if set""",
+    help="""
+      Name of ND-JSON file from fetch-mlwh-seq-data. Taken from the
+      MLWH_NDJSON environment variable if set.
+    """,
     hidden=True,
 )
 @click.option(
     "--new/--all",
     "show_new_diffs",
-    help="""Print the most recently detected mismatches to STDOUT
-      instead of the default of printing all stored mismatches.
-      Overridden by the --since or --today options""",
+    help="""
+      Print the most recently detected mismatches to STDOUT instead of the
+      default of printing all stored mismatches. Overridden by the --since
+      or --today options.
+    """,
     default=False,
     show_default=True,
 )
@@ -62,20 +66,26 @@ from tola.tqc.upsert import TableUpserter
 @click.option(
     "--show-classes",
     flag_value=True,
-    help="""Show the list of differences grouped by the names of columns
-      which differ and their counts""",
+    help="""
+      Show the list of differences grouped by the names of columns which
+      differ and their counts
+    """,
 )
 @click.option(
     "--class",
     "column_class",
-    help="""Show the differences with this combination of columns which differ.
-      (See output from --show-classes)""",
+    help="""
+      Show the differences with this combination of columns which differ.
+      (See output from --show-classes)
+    """,
 )
 @click.option(
     "--show-reason-dict",
     flag_value=True,
-    help="""Show the dictionary of reasons for differences between the MLWH and
-      ToLQC databases.""",
+    help="""
+      Show the dictionary of reasons for differences between the MLWH and
+      ToLQC databases.
+    """,
 )
 @click.option(
     "--add-reason-dict",
@@ -86,19 +96,21 @@ from tola.tqc.upsert import TableUpserter
 @click.option(
     "--reason",
     metavar="REASON",
-    help="""Show the differences tagged with this reason.
-      The value "NONE" will show any differences not tagged with a reason.
-      (See output from --show-reason-dict for the list of reasons)""",
+    help="""
+      Show the differences tagged with this reason. The value "NONE" will show
+      any differences not tagged with a reason.(See output
+      from --show-reason-dict for the list of reasons).
+    """,
 )
 @click.option(
     "--store-reason",
     metavar="REASON",
-    help="Store the reason for the list of `data_id` supplied",
+    help="Store the reason for the list of `data_id` supplied.",
 )
 @click.option(
     "--delete-reason",
     metavar="REASON",
-    help="Delete the reason for the list of `data_id` supplied",
+    help="Delete the reason for the list of `data_id` supplied.",
 )
 @click.option(
     "--format",
@@ -107,17 +119,20 @@ from tola.tqc.upsert import TableUpserter
         ["PRETTY", "NDJSON"],
         case_sensitive=False,
     ),
-    help="""Output differences found in either 'PRETTY'
-      (human readable) or 'NDJSON' format.
-      Defaults to 'PRETTY' if stdout is a terminal, else 'NDJSON'""",
+    help="""
+      Output differences found in either 'PRETTY' (human readable) or 'NDJSON'
+      format. Defaults to 'PRETTY' if stdout is a terminal, else 'NDJSON'.
+    """,
 )
 @click.option(
     "--show",
     "show_columns",
     multiple=True,
-    help="""Columns to show. Can be specified multiple time or as a comma
-      separated list. The value "ALL" will show all columns, except those
-      which are null in both MLWH and ToLQC.""",
+    help="""
+      Columns to show. Can be given multiple time or as a comma separated
+      list. The value "ALL" will show all columns, except those which are
+      null in both MLWH and ToLQC.
+    """,
 )
 @click.option(
     "--table",
@@ -155,7 +170,7 @@ def cli(
     update,
 ):
     """
-    Compare the contents of the MLWH to the ToLQC database
+    Compare the contents of the MLWH to the ToLQC database.
 
     DATA_ID_LIST is a list of `data_id` values to act on.
     """

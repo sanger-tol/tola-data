@@ -36,8 +36,8 @@ MODE = Literal["ADD", "REM", "PRI"] | None
     "add_options",
     multiple=True,
     help="""
-      Names of projects to add each of the input IDs to.  Can be speficied
-      multiple times or as a comma-separated list.
+      Names of projects to add each of the input IDs to.  Can be given
+      multiple times and as a comma-separated list.
     """,
 )
 @click.option(
@@ -45,16 +45,16 @@ MODE = Literal["ADD", "REM", "PRI"] | None
     "rem_options",
     multiple=True,
     help="""
-      Names of projects to remove each of the input IDs from.  Can be
-      speficied multiple times or as a comma-separated list.
+      Names of projects to remove each of the input IDs from.  Can be given
+      multiple times and as a comma-separated list.
     """,
 )
 @click.option(
     "--primary-project",
     "primary_project_name",
     help="""
-      Add this project if missing, and set it to the primary project for each
-      input ID.
+      For each input ID, add this project if missing and set it to the primary
+      project.
     """,
 )
 @click.option(

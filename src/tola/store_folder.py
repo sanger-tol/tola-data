@@ -61,7 +61,7 @@ class FilePatternSet:
                     f"Index {idx} for {pat!r} clashes with {other!r}\n"
                     'Provide a unique "index" for each file pattern in the config to'
                     " define a specific order, or for none of them to get the order"
-                    " in which they are specified."
+                    " in which they are supplied."
                 )
                 raise ValueError(msg)
             idx_seen[idx] = pat

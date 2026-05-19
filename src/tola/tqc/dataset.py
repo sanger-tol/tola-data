@@ -50,7 +50,7 @@ from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit
         If it is a dash character, ND-JSON will be printed to STDOUT. This
         will write both newly created and existing dataset to STDOUT.
 
-        Alternatively an "output" location can be specified in each line of
+        Alternatively an "output" location can be supplied in each line of
         the ND-JSON input.
         """
     ),
@@ -68,7 +68,7 @@ from tola.tqc.engine import fetch_list_or_exit, input_objects_or_exit
     help=(
         """
         File Of File Names input from which to create a single dataset. Can be
-        specified multiple times. Each line within the files becomes
+        given multiple times. Each line within the files becomes
         a "remote_path" in the list of elements of the dataset.
 
         PATH can be a file or a directory.
@@ -107,7 +107,7 @@ def dataset(ctx, info_flag, output, fofn_paths, dataset_name, noisy, input_files
 
       {"data.id": <str>, "remote_path": <str>}
 
-    where either "data.id" or "remote_path" must be specified. Each element is
+    where either "data.id" or "remote_path" must be given. Each element is
     resolved to an existing `data.data_id` via the supplied "data.id", or via
     `file.remote_path` if "remote_path" is supplied but "data.id" is not.
 

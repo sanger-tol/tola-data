@@ -64,20 +64,20 @@ data_dir = pathlib.Path()
 @click.option(
     "--db-uri",
     envvar="DB_URI",
-    help=(
-        "URI of the ToLQC source database."
-        " Uses DB_URI environment variable if not specified"
-    ),
+    help="""
+      URI of the ToLQC source database.  Uses DB_URI environment variable if
+      not given.
+    """,
     required=True,
 )
 @click.option(
     "--build-db-uri",
     envvar="BUILD_DB_URI",
-    help=(
-        "URI of the a database for building SQL dump which will be created"
-        " and dropped."
-        " Defaults to the --db-uri with the database name 'test_data_build'"
-    ),
+    help="""
+        URI of the a database for building SQL dump which will be created and
+        dropped. Defaults to the --db-uri with the database
+        name 'test_data_build'
+    """,
 )
 @click.option(
     "--samples/--datasets",

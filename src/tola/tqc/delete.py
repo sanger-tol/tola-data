@@ -25,7 +25,7 @@ def delete(ctx, table, apply_flag, file_list, file_format, id_list):
     """Delete rows from a table which match ND-JSON input lines
 
     The list of IDs provided must be the primary key of the table. If
-    specified in files each row must contain a value for `TABLE_NAME.id`
+    supplied in files each row must contain a value for `TABLE_NAME.id`
     """
 
     key = f"{table}.id"
