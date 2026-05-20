@@ -46,10 +46,9 @@ def cli(tolqc_alias, input_files, from_run_accessions):
         # Sanger Tree of Life project accession
         search_accessions = ["PRJEB43745"]
 
-    page_size = 1000
     client = TolClient(
         tolqc_alias=tolqc_alias,
-        page_size=page_size,
+        page_size=1000,
     )
 
     conn = duckdb.connect()

@@ -38,6 +38,7 @@ load-mlwh-seq-data="tola.load_mlwh_seq_data:main"
 ncbi-taxonomy-duckdb="tola.ncbi_taxonomy_duckdb:cli"
 pacbio-run-report="tola.pacbio_run_report:main"
 status-duckdb="tola.status_sheets_to_duckdb:cli"
+store-ena-assemblies="tola.store_ena_assemblies:cli"
 store-insdc-paths="tola.store_insdc_paths:cli"
 tqc="tola.tqc.tqc_cmd:cli"
 
