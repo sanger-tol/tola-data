@@ -1,0 +1,6 @@
+{"assembly_status_type.id":"Pending","description":"New entry waiting to be assembled","assign_order":10}
+{"assembly_status_type.id":"Hifiasm Complete","description":"Hifiasm assembly has finished","assign_order":20}
+{"assembly_status_type.id":"YaHS Complete","description":"YaHS assembly scaffolding has finished","assign_order":30}
+{"assembly_status_type.id":"Good Metrics","description":"The metrics of the assembly have passed","assign_order":40}
+{"assembly_status_type.id":"BUSCO Pass","description":"BUSCO genes assembly completeness check has passed","assign_order":50}
+{"assembly_status_type.id":"ENA Public","description":"Assembly is public with a GCA accession at the ENA","assign_order":60}

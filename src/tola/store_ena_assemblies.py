@@ -1,10 +1,8 @@
 import click
 import duckdb
-import pyarrow
-from tol.core import DataSourceFilter
 
 from tola import click_options
-from tola.ndjson import get_input_objects
+from tola.ndjson import get_input_objects, ndjson_row
 from tola.tolqc_client import TolClient
 
 
@@ -47,34 +45,29 @@ def search_accessions_from_files(input_files) -> list[str]:
 
 
 def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection):
-    filt = DataSourceFilter(
-        and_={
-            "genome_accession.id": {"exists": {"negate": True}},
-        }
+    sql = """
+      CREATE TABLE tolqc AS
+      FROM
+        read_json(
+          ?,
+          columns := {
+            specimen_biosample: 'VARCHAR',
+            specimen: 'VARCHAR',
+            assembly_bioproject: 'VARCHAR',
+            genome_accession_id: 'VARCHAR',
+            name: 'VARCHAR',
+            description: 'VARCHAR',
+            level: 'VARCHAR',
+            status: 'VARCHAR',
+            status_time: 'DATE',
+          }
+        );
+    """
+    url = client.report_url(
+        "ena-assembly",
+        params={"format": "NDJSON"},
     )
-
-    genome_acc = []
-    asm_id = []
-    for asm in client.ads_ro.get_list(
-        "assembly",
-        object_filters=filt,
-        requested_fields=["id"],
-    ):
-        genome_acc.append(asm.genome_accession.id)
-        asm_id.append(asm.id)
-
-    loaded_asm = pyarrow.Table.from_pydict(  # noqa: F841
-        {
-            "genome_accession_id": genome_acc,
-            "assembly_id": asm_id,
-        }
-    )
-
-    conn.execute("""
-      CREATE TABLE loaded_assemblies
-      AS FROM loaded_asm
-      ORDER BY genome_accession_id
-    """)
+    conn.execute(sql, [url])
 
 
 def load_ena_assemblies(
@@ -83,78 +76,136 @@ def load_ena_assemblies(
     accession: str,
     loaded: list,
 ):
-
     ena_fields = {
+        "specimen_biosample": "sample_accession",
         "genome_accession_id": "assembly_set_accession",
-        "bioproject_accession_id": "study_accession",
+        "assembly_bioproject": "study_accession",
         "name": "assembly_name",
         "description": "assembly_title",
         "level": "assembly_level",
         "status": "status",
-        "last_updated": "last_updated",
+        "status_time": "last_updated",
+        # "run_accession_list": "run_accession",
     }
 
     # Build ENA filereport query URL
     params = "&".join(
         f"{k}={v}"
         for k, v in {
-            "accession": accession,
             "result": "assembly",
-            "fields": ",".join(ena_fields.values()),
             "format": "CSV",
+            "accession": accession,
+            "fields": ",".join(ena_fields.values()),
         }.items()
     )
     filereport_url = f"https://www.ebi.ac.uk/ena/portal/api/filereport?{params}"
 
-    # Get new insdc_path values to load by joining pyarrow table to result
-    # from ENA query.
-    column_names = ", ".join(f"{col} AS {alias}" for alias, col in ena_fields.items())
-    try:
-        conn.execute(
-            f"""
-            WITH ena AS (
-              FROM read_csv(?)
-            )
-            SELECT
-              {column_names}
-            FROM ena
-            ANTI JOIN loaded_assemblies
-              ON ena.assembly_set_accession = loaded_assemblies.genome_accession_id
-            """,  # noqa: S608
-            [filereport_url],
+    # # Split run_accession_list string into a list
+    # ena_fields["run_accession_list"] = "string_split(run_accession, ';')"
+
+    # Get new ENA assembly records by joining to the cached tolqc table
+    column_specs = ",\n          ".join(
+        f"{col} AS {alias}" for alias, col in ena_fields.items()
+    )
+
+    # Filter results from ENA by those which have a matching BioSample
+    # accession in the ToLQC specimen table, then look for any GCA accessions
+    # which aren't in the assembly table.
+    sql = f"""
+      WITH
+        ena AS (
+          SELECT
+            {column_specs}
+          FROM
+            read_csv(?)
+        ),
+        sbs AS (
+          SELECT DISTINCT
+            specimen_biosample,
+            tolqc.specimen
+          FROM
+            ena
+            JOIN tolqc USING (specimen_biosample)
         )
-        new_asm = conn.fetch_arrow_table()
+      SELECT
+        sbs.specimen,
+        ena.*
+      FROM
+        ena
+        JOIN sbs USING (specimen_biosample)
+        LEFT JOIN tolqc USING (genome_accession_id)
+      WHERE
+        tolqc.genome_accession_id IS NULL;
+    """  # noqa: S608
+
+    try:
+        conn.execute(sql, [filereport_url])
     except duckdb.BinderException:
         # Empty result for accession
         return
 
-    # Store any new insdc_path values
+    # Mapping of ENA status names to our `assembly_status_id`
+    status_names = {"public": "ENA Public"}
+
     ads = client.ads
     cdo = client.build_cdo
-    for batch in new_asm.to_batches(client.page_size):
-        gen_acc_ver = batch.column("genome_accession_id")
-        bioproject_acc = batch.column("bioproject_accession_id")
+    for arrow_batch in conn.to_arrow_reader(client.page_size):
+        batch = arrow_batch.to_pydict()
+        accession_cdo = []
+        assembly_cdo = []
+        statuses = {}
+        for i in range(arrow_batch.num_rows):
+            # GenBank assembly accession
+            acc_sv = batch["genome_accession_id"][i]
+            accession_cdo.append(
+                cdo(
+                    "accession",
+                    acc_sv,
+                    {"accession_type_id": "GenBank Genome Assembly"},
+                )
+            )
 
-        for i in range(batch.num_rows):
-            print(f"{gen_acc_ver[i]}\t{bioproject_acc[i]}")
+            # Assembly BioProject accession
+            bio_acc = batch["assembly_bioproject"][i]
+            accession_cdo.append(
+                cdo(
+                    "accession",
+                    bio_acc,
+                    {"accession_type_id": "BioProject - Species Assembly"},
+                )
+            )
 
-        # file_upd = []
-        # for i in range(batch.num_rows):
-        #     file_upd.append(cdo("file", ids[i], {"insdc_path": ftp[i].as_py()}))
-        # for file in ads.upsert("file", file_upd):
-        #     if isinstance(file, ErrorObject):
-        #         err = file
-        #         upsert_rslt.append(
-        #             {
-        #                 f"{err.object_type}.id": err.object_id,
-        #                 "error": err.details,
-        #                 "object": err.object_,
-        #             }
-        #         )
-        #     else:
-        #         upsert_rslt.append(
-        #             {
-        #                 "data.id": file.data.id,
-        #                 "insdc_path": file.insdc_path,
-        #             }
-        #         )
+            # Assembly table entry
+            assembly_cdo.append(
+                cdo(
+                    "assembly",
+                    None,
+                    {
+                        "genome_accession_id": acc_sv,
+                        "bioproject_accession_id": bio_acc,
+                        "specimen_id": batch["specimen"][i],
+                        "name": batch["name"][i],
+                        "description": batch["description"][i],
+                        "level": batch["level"][i],
+                    },
+                )
+            )
+            status = batch["status"][i]
+
+            statuses[acc_sv] = {
+                "status_type.id": status_names.get(status, status),
+                "status_time": batch["status_time"][i],
+            }
+
+        # Use `upsert()` to insert the accessions in case any are already
+        # loaded.
+        ads.upsert("accession", accession_cdo)
+
+        # Insert will always work because we're
+        assemblies = ads.insert("assembly", assembly_cdo)
+        status_json = []
+        for asm in assemblies:
+            acc_sv = asm.genome_accession.id
+            status = statuses[acc_sv]
+            status_json.append(ndjson_row({"assembly.id": asm.id, **status}))
+        client.ndjson_post("loader/status/assembly", status_json)

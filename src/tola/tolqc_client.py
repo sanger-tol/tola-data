@@ -79,6 +79,13 @@ class TolClient:
             table, object_filters=DataSourceFilter(and_=filter_spec)
         )
 
+    def report_url(self, report_name, params=None):
+        report = f"report/{report_name}"
+        req = requests.Request(
+            "GET", self.build_path(report), params=params
+        ).prepare()
+        return req.url
+
     @cached_property
     def build_cdo(self):
         """

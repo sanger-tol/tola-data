@@ -3,7 +3,6 @@ import sys
 import textwrap
 
 import click
-import requests
 
 from tola.pretty import bold, s
 from tola.terminal import TerminalDict, colour_pager
@@ -63,15 +62,11 @@ def report(ctx, show_url, report_format, report_name, params):
         show_report_description(client)
         return
 
-    report = f"report/{report_name}"
     if show_url:
-        req = requests.Request(
-            "GET", client.build_path(report), params=payload
-        ).prepare()
-        print(req.url)
+        print(client.report_url(report_name, params=payload))
         return
 
-    itr = client.stream_lines(report, payload)
+    itr = client.stream_lines(f"report/{report_name}", payload)
 
     if report_format == "TSV":
         print_tsv(itr)

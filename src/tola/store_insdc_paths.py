@@ -178,7 +178,6 @@ def fetch_ebi_filereport_data(conn, client, accession, upsert_rslt) -> None:
             """,
             [filereport_url],
         )
-        new_ftp = conn.fetch_arrow_table()
     except duckdb.BinderException:
         # Empty result for accession
         return
@@ -186,7 +185,7 @@ def fetch_ebi_filereport_data(conn, client, accession, upsert_rslt) -> None:
     # Store any new insdc_path values
     ads = client.ads
     cdo = client.build_cdo
-    for batch in new_ftp.to_batches(client.page_size):
+    for batch in conn.to_arrow_reader(client.page_size):
         ids = batch.column("file_id")
         ftp = batch.column("ftp")
         file_upd = []
