@@ -1,8 +1,12 @@
+import sys
+
 import click
 import duckdb
 
 from tola import click_options
 from tola.ndjson import get_input_objects, ndjson_row
+from tola.pretty import plain_text_from_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
 
 
@@ -30,6 +34,14 @@ def cli(tolqc_alias, input_files):
     loaded = []
     for accession in search_accessions:
         load_ena_assemblies(client, conn, accession, loaded)
+
+    if loaded:
+        # Pretty print the new ENA assembly entries
+        itr = pretty_dict_itr(loaded, None, head="Stored {} new ENA assembly record{}:")
+        if sys.stdout.isatty():
+            colour_pager(itr)
+        else:
+            print(plain_text_from_itr(itr))
 
 
 def search_accessions_from_files(input_files) -> list[str]:
@@ -135,7 +147,10 @@ def load_ena_assemblies(
         JOIN sbs USING (specimen_biosample)
         LEFT JOIN tolqc USING (genome_accession_id)
       WHERE
-        tolqc.genome_accession_id IS NULL;
+        tolqc.genome_accession_id IS NULL
+      ORDER BY
+        specimen,
+        name
     """  # noqa: S608
 
     try:
@@ -196,6 +211,15 @@ def load_ena_assemblies(
                 "status_type.id": status_names.get(status, status),
                 "status_time": batch["status_time"][i],
             }
+
+            loaded.append(
+                {
+                    "specimen.id": batch["specimen"][i],
+                    "name": batch["name"][i],
+                    "bioproject_accession.id": bio_acc,
+                    "genome_accession.id": acc_sv,
+                }
+            )
 
         # Use `upsert()` to insert the accessions in case any are already
         # loaded.
