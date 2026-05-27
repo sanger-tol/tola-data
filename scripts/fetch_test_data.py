@@ -26,7 +26,14 @@ from tolqc.schema.accession_models import (  # noqa: F401
     LinkStatusDict,
     SubmitterDict,
 )
-from tolqc.schema.assembly_models import Dataset, DatasetElement
+from tolqc.schema.assembly_models import (
+    Assembly,
+    AssemblyLevelDict,
+    AssemblyStatus,  # noqa: F401
+    AssemblyStatusType,
+    Dataset,
+    DatasetElement,
+)
 from tolqc.schema.base import Base
 from tolqc.schema.folder_models import Folder, FolderLocation  # noqa: F401
 from tolqc.schema.sample_data_models import (
@@ -114,10 +121,10 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
         RoleBinding(user_id=100, role_id=300),
         Metadata(name="location.root", string_value="/test/loc_root"),
     ]
+    sample_data.extend(build_projects())
     sample_data.extend(
         build_sample_data(ssn_maker) if build_samples else build_dataset_data(ssn_maker)
     )
-    sample_data.extend(build_projects())
     sys.stdout.write(code_string(sample_data))
 
     if create_db:
@@ -166,6 +173,8 @@ def build_sample_data(ssn_maker):
         # Fetch data from all of the dictionary-like tables
         for cls in (
             AccessionTypeDict,
+            AssemblyLevelDict,
+            AssemblyStatusType,
             CategoryDict,
             Centre,
             ChemistryDict,
@@ -335,6 +344,21 @@ def fetch_species_data(session, species_list):
             .selectinload(Sample.data)
             .selectinload(Data.folder)
         )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.status_history)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.bioproject_accession)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.genome_accession)
+        )
     )
 
     data_patches = {
@@ -396,6 +420,7 @@ def fetch_species_data(session, species_list):
     species_data = sorted(session.scalars(statement).all(), key=lambda x: x.species_id)
     run_folder_seen = set()
     accession_seen = set()
+    current_assembly_status = {}
     for species in species_data:
         species.specimens = sorted(species.specimens, key=lambda x: x.specimen_id)
 
@@ -444,6 +469,11 @@ def fetch_species_data(session, species_list):
                                 old = getattr(file, attr)
                                 if new != old:
                                     setattr(file, attr, new)
+            # Work around double relationship to assemblies.
+            for assm in spmn.assemblies:
+                assm.status = None
+                current_assembly_status[assm.assembly_id] = assm.assembly_status_id
+                assm.assembly_status_id = None
 
     # Check that we found all the requested species
     requested = set(species_list)
@@ -451,6 +481,15 @@ def fetch_species_data(session, species_list):
     if miss := requested - fetched:
         msg = f"Failed to fetch species: {miss}"
         raise ValueError(msg)
+
+    # Add links to current assembly statuses
+    for asm_id, asm_status_id in current_assembly_status.items():
+        species_data.append(
+            Assembly(
+                assembly_id=asm_id,
+                assembly_status_id=asm_status_id,
+            )
+        )
 
     return species_data
 
@@ -530,7 +569,13 @@ def code_string(obj, max_line_length=99):
                 # Models not in `sample_data_models`
                 "Accession",
                 "AccessionTypeDict",
+                "Assembly",
+                "AssemblyLevelDict",
+                "AssemblyStatus",
+                "AssemblyStatusType",
                 "BioprojectLink",
+                "Dataset",
+                "DatasetElement",
                 "Folder",
                 "FolderLocation",
                 "LinkStatusDict",
@@ -547,6 +592,9 @@ def code_string(obj, max_line_length=99):
         "\n\nfrom tolqc.schema import Role, RoleBinding, Token, User\n"
         "from tolqc.schema.accession_models import "
         "Accession, AccessionTypeDict, BioprojectLink, LinkStatusDict, SubmitterDict\n"
+        "from tolqc.schema.assembly_models import "
+        "Assembly, AssemblyLevelDict,AssemblyStatus, AssemblyStatusType, "
+        "Dataset, DatasetElement\n"
         "from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
         "from tolqc.schema.system_models import Metadata\n"
