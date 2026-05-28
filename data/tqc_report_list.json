@@ -3,6 +3,10 @@
     "description": "List of available reports displayed by `tqc report list`",
     "json_value": [
         {
+            "name": "ena-assembly",
+            "description": "Returns a row for each assembly which is pubic in the ENA, or a row containing only the specimen's biosample accession and ToLID when there are no public assemblies for the specimen"
+        },
+        {
             "name": "illumina-data",
             "description": "Illumina sequencing data in ToLQC"
         },
