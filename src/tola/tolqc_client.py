@@ -8,6 +8,7 @@ from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import requests
 from tol.api_client import ApiDataSource, create_api_datasource
 from tol.core import DataSourceFilter, core_data_object
@@ -62,6 +63,19 @@ class TolClient:
     def ads_ro(self) -> ApiDataSource:
         return self.__create_ads(read_only=True)
 
+    def duckdb_connect(self, path: str = ":memory:") -> duckdb.DuckDBPyConnection:
+        """
+        Creates a DuckDB database connection, setting a CA certificates file
+        for the curl backend, or setting the httplib backend as a fallback.
+        """
+        conn = duckdb.connect(path)
+        if cert_file := os.environ.get("REQUESTS_CA_BUNDLE"):
+            conn.execute("SET ca_cert_file = ?", [cert_file])
+            conn.execute("SET enable_server_cert_verification = true")
+        else:
+            conn.execute("SET httpfs_client_implementation = httplib")
+        return conn
+
     def __create_ads(self, read_only=False) -> ApiDataSource:
         tolqc = create_api_datasource(
             api_url="/".join((self.tolqc_url, self.api_path)),
@@ -81,9 +95,7 @@ class TolClient:
 
     def report_url(self, report_name, params=None):
         report = f"report/{report_name}"
-        req = requests.Request(
-            "GET", self.build_path(report), params=params
-        ).prepare()
+        req = requests.Request("GET", self.build_path(report), params=params).prepare()
         return req.url
 
     @cached_property

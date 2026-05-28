@@ -29,7 +29,7 @@ def cli(tolqc_alias, input_files):
         page_size=1000,
     )
 
-    conn = duckdb.connect()
+    conn = client.duckdb_connect()
     cache_tolqc_assemblies(client, conn)
     loaded = []
     for accession in search_accessions:
