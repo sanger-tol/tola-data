@@ -126,7 +126,9 @@ def check_key_values_or_exit(input_obj, key, pk):
             # objects, return the list of keys
             return list(key_values_seen)
         else:
-            multi = "".join(f"  '{k}' = {n}\n" for k, n in key_values_seen if n > 1)
+            multi = "".join(
+                f"  '{k}' = {n}\n" for k, n in key_values_seen.items() if n > 1
+            )
             sys.exit(f"Some '{key}' values occur more than once:\n{multi}")
     elif key == pk:
         if null_key_count == input_count:

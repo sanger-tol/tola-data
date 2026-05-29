@@ -151,13 +151,15 @@ def show_sts_info(client, all_fields, specimen_names):
 
 
 def fetch_specimen_info_where_fields_are_null(client):
-    filt = DataSourceFilter()
-    filt.or_ = {
-        "sts_specimen": {"eq": {"value": None}},
-        "accession.id": {"eq": {"value": None}},
-        "sex.id": {"eq": {"value": None}},
-    }
-    return fetch_specimen_info_by_filter(client, filt)
+    info = {}
+    # No "or" filter in the API, so we have to make three API calls
+    for spec in (
+        {"sts_specimen": {"eq": {"value": None}}},
+        {"accession.id": {"eq": {"value": None}}},
+        {"sex.id": {"eq": {"value": None}}},
+    ):
+        info.update(fetch_specimen_info_by_filter(client, DataSourceFilter(and_=spec)))
+    return info
 
 
 def fetch_specimen_info_for_specimens(client, specimen_names):
