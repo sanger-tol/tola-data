@@ -330,6 +330,14 @@ def product_from_collection(coll):
             "FASTQ_DIR",
         )
 
+    if "BAM" in top_types:
+        append_product_dir(
+            product_locs,
+            coll.path,
+            type_prefix,
+            "BAM",
+        )
+
     # fmt: off
     for dir_name, dir_type in (
         ("merged",      "BAM"),
@@ -356,20 +364,21 @@ def product_from_collection(coll):
 def append_product_dir(product_locs, product_dir, type_prefix, dir_type):
     file_type = f"{type_prefix}_{dir_type}"
     if file_type == "RECALL_BAM":
-        rc_coll = Collection(product_dir / "pass")
-        if rc_coll.exists():
-            for obj in rc_coll.contents():
-                if isinstance(obj, DataObject) and re.search(
-                    r"\.bam\b", obj.name, re.IGNORECASE
-                ):
-                    product_locs.append(
-                        {
-                            "remote_path": f"irods:{obj.path}/{obj.name}",
-                            "file_type": file_type,
-                            "size_bytes": obj.size(),
-                            "md5": obj.checksum(),
-                        }
-                    )
+        for rc_coll in Collection(product_dir / "pass"), Collection(product_dir):
+            if rc_coll.exists():
+                for obj in rc_coll.contents():
+                    if isinstance(obj, DataObject) and re.search(
+                        r"\.bam\b", obj.name, re.IGNORECASE
+                    ):
+                        product_locs.append(
+                            {
+                                "remote_path": f"irods:{obj.path}/{obj.name}",
+                                "file_type": file_type,
+                                "size_bytes": obj.size(),
+                                "md5": obj.checksum(),
+                            }
+                        )
+                        break
     else:
         product_locs.append(
             {
