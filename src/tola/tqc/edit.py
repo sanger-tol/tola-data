@@ -64,7 +64,7 @@ def edit_col(
     ads = client.ads
     if set_value:
         # Leave value as a string if it is a .id field
-        py_value = set_value if key.endswith(".id") else convert_type(set_value)
+        py_value = convert_type(set_value)
         updates = []
         changes = []
         for obj in fetched:

@@ -3,4 +3,5 @@
 {"assembly_status_type.id":"YaHS Complete","description":"YaHS assembly scaffolding has finished","assign_order":30}
 {"assembly_status_type.id":"Good Metrics","description":"The metrics of the assembly have passed","assign_order":40}
 {"assembly_status_type.id":"BUSCO Pass","description":"BUSCO genes assembly completeness check has passed","assign_order":50}
-{"assembly_status_type.id":"ENA Public","description":"Assembly is public with a GCA accession at the ENA","assign_order":60}
+{"assembly_status_type.id":"Submitted","description":"Assembly has been passed to the Sanger data release team","assign_order":60}
+{"assembly_status_type.id":"ENA Public","description":"Assembly is public with a GCA accession at the ENA","assign_order":70}
