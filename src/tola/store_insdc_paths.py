@@ -185,7 +185,7 @@ def fetch_ebi_filereport_data(conn, client, accession, upsert_rslt) -> None:
     # Store any new insdc_path values
     ads = client.ads
     cdo = client.build_cdo
-    for batch in conn.to_arrow_reader(client.page_size):
+    for batch in conn.fetch_record_batch(client.page_size):
         ids = batch.column("file_id")
         ftp = batch.column("ftp")
         file_upd = []

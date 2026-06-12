@@ -5,7 +5,7 @@ import duckdb
 
 from tola import click_options
 from tola.ndjson import get_input_objects, ndjson_row
-from tola.pretty import bold, plain_text_from_itr, s, strip_ansi
+from tola.pretty import plain_text_from_itr
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
 
@@ -33,14 +33,10 @@ def cli(tolqc_alias, input_files):
     )
 
     conn = client.duckdb_connect()
-    conn.execute("SET force_download = true")
     cache_tolqc_assemblies(client, conn)
     loaded = []
-    asm_ds_links = 0
     for accession in search_accessions:
         load_ena_assemblies(client, conn, accession, loaded)
-        cache_tolqc_assembly_datasets(client, conn)
-        asm_ds_links += load_ena_assembly_datasets(client, conn)
 
     if loaded:
         # Pretty print the new ENA assembly entries
@@ -50,12 +46,21 @@ def cli(tolqc_alias, input_files):
         else:
             print(plain_text_from_itr(itr))
 
-    if asm_ds_links:
-        msg = f"\nStored {bold(asm_ds_links)} assembly_dataset link{s(asm_ds_links)}"
+    new_links = []
+    cache_tolqc_assemblies(client, conn)
+    cache_tolqc_assembly_datasets(client, conn)
+    load_ena_assembly_datasets(client, conn, new_links)
+
+    if new_links:
+        if loaded:
+            sys.stdout.write("\n")
+        itr = pretty_dict_itr(
+            new_links, None, head="Stored {} assembly_dataset link{}:"
+        )
         if sys.stdout.isatty():
-            print(msg)
+            colour_pager(itr)
         else:
-            print(strip_ansi(msg))
+            print(plain_text_from_itr(itr))
 
 
 def search_accessions_from_files(input_files) -> list[str]:
@@ -71,6 +76,7 @@ def search_accessions_from_files(input_files) -> list[str]:
 
 
 def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection):
+    conn.execute("DROP TABLE IF EXISTS tolqc")
     sql = """
       CREATE TABLE tolqc AS
       FROM
@@ -82,7 +88,7 @@ def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection):
             assembly_id: 'INT',
             assembly_bioproject: 'VARCHAR',
             genome_accession_id: 'VARCHAR',
-            name: 'VARCHAR',
+            assembly_name: 'VARCHAR',
             description: 'VARCHAR',
             level: 'VARCHAR',
             status: 'VARCHAR',
@@ -107,7 +113,7 @@ def load_ena_assemblies(
         "specimen_biosample": "sample_accession",
         "genome_accession_id": "assembly_set_accession",
         "assembly_bioproject": "study_accession",
-        "name": "assembly_name",
+        "assembly_name": "assembly_name",
         "description": "assembly_title",
         "level": "assembly_level",
         "status": "status",
@@ -173,12 +179,12 @@ def load_ena_assemblies(
       FROM
         ena
         JOIN sbs USING (specimen_biosample)
-        LEFT JOIN tolqc USING (genome_accession_id)
+        LEFT JOIN tolqc USING (specimen_biosample, assembly_name)
       WHERE
         tolqc.genome_accession_id IS NULL
       ORDER BY
-        specimen,
-        name
+        sbs.specimen,
+        assembly_name
     """)
 
     # Mapping of ENA status names to our `assembly_status_id`
@@ -186,7 +192,7 @@ def load_ena_assemblies(
 
     ads = client.ads
     cdo = client.build_cdo
-    for arrow_batch in conn.to_arrow_reader(client.page_size):
+    for arrow_batch in conn.fetch_record_batch(client.page_size):
         batch = arrow_batch.to_pydict()
         accession_cdo = []
         assembly_cdo = []
@@ -221,7 +227,7 @@ def load_ena_assemblies(
                         "genome_accession_id": acc_sv,
                         "bioproject_accession_id": bio_acc,
                         "specimen_id": batch["specimen"][i],
-                        "name": batch["name"][i],
+                        "name": batch["assembly_name"][i],
                         "description": batch["description"][i],
                         "level": batch["level"][i],
                     },
@@ -237,7 +243,7 @@ def load_ena_assemblies(
             loaded.append(
                 {
                     "specimen.id": batch["specimen"][i],
-                    "name": batch["name"][i],
+                    "assembly_name": batch["assembly_name"][i],
                     "bioproject_accession.id": bio_acc,
                     "genome_accession.id": acc_sv,
                 }
@@ -257,8 +263,9 @@ def load_ena_assemblies(
 
 
 def cache_tolqc_assembly_datasets(client: TolClient, conn: duckdb.DuckDBPyConnection):
+    conn.execute("DROP TABLE IF EXISTS asm_data")
     sql = """
-      CREATE OR REPLACE TABLE asm_data AS
+      CREATE TABLE asm_data AS
       FROM
         read_json(
           ?,
@@ -266,6 +273,7 @@ def cache_tolqc_assembly_datasets(client: TolClient, conn: duckdb.DuckDBPyConnec
             data_id:       'VARCHAR',
             run_accession: 'VARCHAR',
             dataset_id:    'VARCHAR',
+            dataset_name:  'VARCHAR',
             data_type:     'VARCHAR',
             assemblies:    'STRUCT(assembly_id INT, genome_accession_id VARCHAR)[]',
           }
@@ -279,8 +287,10 @@ def cache_tolqc_assembly_datasets(client: TolClient, conn: duckdb.DuckDBPyConnec
 
 
 def load_ena_assembly_datasets(
-    client: TolClient, conn: duckdb.DuckDBPyConnection
-) -> int:
+    client: TolClient,
+    conn: duckdb.DuckDBPyConnection,
+    new_links: list[dict[str, str]],
+):
     conn.execute("""
       WITH
         ena_run AS (
@@ -305,11 +315,13 @@ def load_ena_assembly_datasets(
         dataset_accn AS (
           SELECT
             dataset_id,
+            dataset_name,
             list_sort(array_agg(run_accession)) AS run_accession_list
           FROM
             asm_data
           GROUP BY
-            dataset_id
+            dataset_id,
+            dataset_name
         ),
         dataset_asm AS (
           SELECT DISTINCT
@@ -322,19 +334,23 @@ def load_ena_assembly_datasets(
         )
       SELECT
         assembly_id,
+        assembly_name,
+        dataset_name,
         dataset_id
       FROM
         ena_run_sets
         JOIN dataset_accn USING (run_accession_list)
         JOIN tolqc USING (genome_accession_id)
         ANTI JOIN dataset_asm USING (genome_accession_id, dataset_id)
+      ORDER BY
+        assembly_name,
+        dataset_name,
+        dataset_id
     """)
 
     ads = client.ads
     cdo = client.build_cdo
-    n_links = 0
-    for arrow_batch in conn.to_arrow_reader(client.page_size):
-        n_links += arrow_batch.num_rows
+    for arrow_batch in conn.fetch_record_batch(client.page_size):
         batch = arrow_batch.to_pydict()
         assembly_dataset_cdo = []
         for i in range(arrow_batch.num_rows):
@@ -348,5 +364,11 @@ def load_ena_assembly_datasets(
                     },
                 )
             )
+            new_links.append(
+                {
+                    "assembly.name": batch["assembly_name"][i],
+                    "dataset.name": batch["dataset_name"][i],
+                    "dataset.id": batch["dataset_id"][i],
+                }
+            )
         ads.upsert("assembly_dataset", assembly_dataset_cdo)
-    return n_links
