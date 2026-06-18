@@ -32,7 +32,10 @@ ALTER TABLE tol_sample_bioproject ADD COLUMN library_strategy varchar(40) DEFAUL
 COMMENT 'ENA LIBRARY_STRATEGY metadata field' AFTER library_selection;
 
 ALTER TABLE tol_sample_bioproject CHANGE COLUMN library_type library_type varchar(40) DEFAULT NULL
-COMMENT 'ENA LIBRARY_CONSTRUCTION_PROTOCOL metadata field';
+COMMENT 'Temporary home for ENA LIBRARY_CONSTRUCTION_PROTOCOL metadata field during migration to library_construction_protocol';
+
+ALTER TABLE tol_sample_bioproject ADD COLUMN library_construction_protocol varchar(40) DEFAULT NULL
+COMMENT 'ENA LIBRARY_CONSTRUCTION_PROTOCOL metadata field' AFTER library_type;
 
 ALTER TABLE tol_sample_bioproject ADD COLUMN design_description varchar(500) DEFAULT NULL
 COMMENT 'ENA DESCRIPTION metadata field. Free text description of the library' AFTER library_construction_protocol;
