@@ -28,11 +28,14 @@ from tolqc.schema.accession_models import (  # noqa: F401
 )
 from tolqc.schema.assembly_models import (
     Assembly,
+    AssemblyDataset,
     AssemblyLevelDict,
     AssemblyStatus,  # noqa: F401
     AssemblyStatusType,
     Dataset,
     DatasetElement,
+    DatasetStatus,
+    DatasetStatusType,
 )
 from tolqc.schema.base import Base
 from tolqc.schema.folder_models import Folder, FolderLocation  # noqa: F401
@@ -178,6 +181,7 @@ def build_sample_data(ssn_maker):
             CategoryDict,
             Centre,
             ChemistryDict,
+            DatasetStatusType,
             FileTypeDict,
             FolderLocation,
             LibraryType,
@@ -359,6 +363,22 @@ def fetch_species_data(session, species_list):
             .selectinload(Specimen.assemblies)
             .selectinload(Assembly.genome_accession)
         )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.samples)
+            .selectinload(Sample.data)
+            .selectinload(Data.dataset_assn)
+            .selectinload(DatasetElement.dataset)
+            .selectinload(Dataset.status_history)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.samples)
+            .selectinload(Sample.data)
+            .selectinload(Data.dataset_assn)
+            .selectinload(DatasetElement.dataset)
+            .selectinload(Dataset.assembly_assn)
+        )
     )
 
     data_patches = {
@@ -421,6 +441,7 @@ def fetch_species_data(session, species_list):
     run_folder_seen = set()
     accession_seen = set()
     current_assembly_status = {}
+    current_dataset_status = {}
     for species in species_data:
         species.specimens = sorted(species.specimens, key=lambda x: x.specimen_id)
 
@@ -469,7 +490,14 @@ def fetch_species_data(session, species_list):
                                 old = getattr(file, attr)
                                 if new != old:
                                     setattr(file, attr, new)
-            # Work around double relationship to assemblies.
+
+                    # Work around double relationship to dataset status
+                    for ds in data.datasets:
+                        ds.status = None
+                        current_dataset_status[ds.dataset_id] = ds.dataset_status_id
+                        ds.dataset_status_id = None
+
+            # Work around double relationship to assembly status.
             for assm in spmn.assemblies:
                 assm.status = None
                 current_assembly_status[assm.assembly_id] = assm.assembly_status_id
@@ -488,6 +516,15 @@ def fetch_species_data(session, species_list):
             Assembly(
                 assembly_id=asm_id,
                 assembly_status_id=asm_status_id,
+            )
+        )
+
+    # Add links to current dataset statuses
+    for ds_id, ds_status_id in current_dataset_status.items():
+        species_data.append(
+            Dataset(
+                dataset_id=ds_id,
+                dataset_status_id=ds_status_id,
             )
         )
 
@@ -570,12 +607,15 @@ def code_string(obj, max_line_length=99):
                 "Accession",
                 "AccessionTypeDict",
                 "Assembly",
+                "AssemblyDataset",
                 "AssemblyLevelDict",
                 "AssemblyStatus",
                 "AssemblyStatusType",
                 "BioprojectLink",
                 "Dataset",
                 "DatasetElement",
+                "DatasetStatus",
+                "DatasetStatusType",
                 "Folder",
                 "FolderLocation",
                 "LinkStatusDict",
@@ -593,8 +633,9 @@ def code_string(obj, max_line_length=99):
         "from tolqc.schema.accession_models import "
         "Accession, AccessionTypeDict, BioprojectLink, LinkStatusDict, SubmitterDict\n"
         "from tolqc.schema.assembly_models import "
-        "Assembly, AssemblyLevelDict,AssemblyStatus, AssemblyStatusType, "
-        "Dataset, DatasetElement\n"
+        "Assembly, AssemblyDataset, AssemblyLevelDict, AssemblyStatus, "
+        "AssemblyStatusType, Dataset, DatasetElement, DatasetStatus, "
+        "DatasetStatusType\n"
         "from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
         "from tolqc.schema.system_models import Metadata\n"
