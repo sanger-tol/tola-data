@@ -60,5 +60,7 @@ Example file contents for two services, `submissions` and `tolqc-test`:
 
 The [db_connection](../src/tola/db_connection.py) file contains code to return
 config params for a service name, and which checks for the correct file
-permissions.
+permissions.  It raises a `ConnectionParamsError` if syntax or permissions
+errors are encountered.  See example of catching errors in
+[`tqc_cmd`](../src/tola/tqc/tqc_cmd.py).
 
