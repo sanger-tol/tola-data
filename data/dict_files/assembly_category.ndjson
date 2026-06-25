@@ -1,0 +1,4 @@
+{"assembly_category.id": "working", "hierarchy_name": "working", "description": "Automated assembly pipelines in progress"}
+{"assembly_category.id": "draft"  , "hierarchy_name": "assembly/draft", "description": "Final assembly from the automated pipeline"}
+{"assembly_category.id": "curated", "hierarchy_name": "assembly/curated", "description": "Curated assemblies"}
+{"assembly_category.id": "release", "hierarchy_name": "assembly/release", "description": "Finished assemblies released to INSDC datbases"}
