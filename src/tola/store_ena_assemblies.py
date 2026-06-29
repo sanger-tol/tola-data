@@ -6,7 +6,7 @@ import duckdb
 from tola import click_options
 from tola.ndjson import get_input_objects, ndjson_row
 from tola.pretty import plain_text_from_itr
-from tola.terminal import colour_pager, pretty_dict_itr
+from tola.terminal import TerminalDict, colour_pager, s
 from tola.tolqc_client import TolClient
 
 
@@ -38,29 +38,29 @@ def cli(tolqc_alias, input_files):
     for accession in search_accessions:
         load_ena_assemblies(client, conn, accession, loaded)
 
-    if loaded:
-        # Pretty print the new ENA assembly entries
-        itr = pretty_dict_itr(loaded, None, head="Stored {} new ENA assembly record{}:")
-        if sys.stdout.isatty():
-            colour_pager(itr)
-        else:
-            print(plain_text_from_itr(itr))
-
-    new_links = []
     cache_tolqc_assemblies(client, conn)
     cache_tolqc_assembly_datasets(client, conn)
+    new_links = []
     load_ena_assembly_datasets(client, conn, new_links)
 
-    if new_links:
-        if loaded:
-            sys.stdout.write("\n")
-        itr = pretty_dict_itr(
-            new_links, None, head="Stored {} assembly_dataset link{}:"
-        )
+    if loaded or new_links:
+        itr = asm_link_dict_itr(loaded, new_links)
         if sys.stdout.isatty():
             colour_pager(itr)
         else:
-            print(plain_text_from_itr(itr))
+            sys.stdout.write(plain_text_from_itr(itr))
+
+
+def asm_link_dict_itr(loaded=None, new_links=None):
+    if loaded:
+        yield f"\nStored {len(loaded)} ENA assembly record{s(loaded)}:\n"
+        for row in loaded:
+            yield TerminalDict(row).pretty()
+
+    if new_links:
+        yield f"\nStored {len(new_links)} assembly_dataset link{s(new_links)}:\n"
+        for row in new_links:
+            yield TerminalDict(row).pretty()
 
 
 def search_accessions_from_files(input_files) -> list[str]:
