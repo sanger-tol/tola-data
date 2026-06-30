@@ -36,6 +36,7 @@ def cli(tolqc_alias, input_files):
     cache_tolqc_assemblies(client, conn)
     loaded = []
     for accession in search_accessions:
+        cache_ena_assemblies(conn, accession)
         load_ena_assemblies(client, conn, accession, loaded)
 
     cache_tolqc_assemblies(client, conn)
@@ -75,7 +76,7 @@ def search_accessions_from_files(input_files) -> list[str]:
     return search_acc
 
 
-def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection):
+def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute("DROP TABLE IF EXISTS tolqc")
     sql = """
       CREATE TABLE tolqc AS
@@ -103,12 +104,11 @@ def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection):
     conn.execute(sql, [url])
 
 
-def load_ena_assemblies(
-    client: TolClient,
-    conn: duckdb.DuckDBPyConnection,
-    accession: str,
-    loaded: list,
-):
+def cache_ena_assemblies(conn, accession="PRJEB43745") -> None:
+    """
+    Cache assembly information from the ENA `filereport` endpoint
+    """
+
     ena_fields = {
         "specimen_biosample": "sample_accession",
         "genome_accession_id": "assembly_set_accession",
@@ -133,19 +133,16 @@ def load_ena_assemblies(
     )
     filereport_url = f"https://www.ebi.ac.uk/ena/portal/api/filereport?{params}"
 
-    # # Split run_accession_list string into a list
+    # Use DuckDB to split run_accession_list string into a list on import
     ena_fields["run_accession_list"] = "string_split(run_accession, ';')"
 
     column_specs = ",\n          ".join(
         f"{col} AS {alias}" for alias, col in ena_fields.items()
     )
 
-    # Remove ENA records table from previous any previous accession
-    conn.execute("DROP TABLE IF EXISTS ena")
-
     # Fetch ENA records for this accession
     sql = f"""
-      CREATE TABLE ena AS
+      CREATE OR REPLACE TABLE ena AS
         SELECT
           {column_specs}
         FROM
@@ -157,6 +154,13 @@ def load_ena_assemblies(
         # Empty result for accession
         return
 
+
+def load_ena_assemblies(
+    client: TolClient,
+    conn: duckdb.DuckDBPyConnection,
+    accession: str,
+    loaded: list,
+):
     # Get new ENA assembly records by joining to the tolqc table.
 
     # Filter results from ENA by those which have a matching BioSample

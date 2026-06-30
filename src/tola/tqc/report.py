@@ -1,6 +1,5 @@
 import json
 import sys
-import textwrap
 
 import click
 
@@ -97,22 +96,14 @@ def show_report_description(client):
     else:
         sys.exit(f"Error: missing metadata table entry for '{meta_id}'")
 
-    rows = []
+    name_desc = {}
     for avail in rep_list:
         name = avail.get("name", "<NO_NAME>")
         desc = avail.get("description", "<NO_DESCRIPTION>")
-        rows.append([name, desc])
-    max_name = max(len(x[0]) for x in rows)
-    desc_width = 67 - max_name
+        name_desc[name] = desc
 
     click.echo("Available reports:")
-    for name, desc in rows:
-        desc = desc.rstrip(".") + "."
-        first, *rest = textwrap.wrap(desc, width=desc_width)
-        click.echo(f"\n {name:>{max_name}}  {first}")
-        for txt in rest:
-            click.echo(f" {' ':>{max_name}}  {txt}")
-    click.echo("")
+    click.echo(wrap_name_description(name_desc))
 
 
 def pretty_terminal_dict_itr(first, itr, first_key=None):

@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 import re
+import textwrap
 from io import StringIO
 
 import click
@@ -103,3 +104,21 @@ def natural(string):
     return tuple(
         int(x) if i % 2 else x for i, x in enumerate(re.split(r"(\d+)", string))
     )
+
+def wrap_name_description(name_desc: dict[str, str]):
+    """
+    Wraps a dict of `name: description` for printing in a terminal.
+    """
+
+    max_name = max(len(x) for x in name_desc)
+    desc_width = 67 - max_name
+
+    out = StringIO("")
+    for name, desc in name_desc.items():
+        desc = desc.rstrip(".") + "."
+        first, *rest = textwrap.wrap(desc, width=desc_width)
+        out.write(f"\n {name:>{max_name}}  {first}\n")
+        for txt in rest:
+            out.write(f" {' ':>{max_name}}  {txt}\n")
+
+    return out.getvalue()
