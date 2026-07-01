@@ -119,6 +119,6 @@ def wrap_name_description(name_desc: dict[str, str]):
         first, *rest = textwrap.wrap(desc, width=desc_width)
         out.write(f"\n {name:>{max_name}}  {first}\n")
         for txt in rest:
-            out.write(f" {' ':>{max_name}}  {txt}\n")
+            out.write(f" {' ':{max_name}}  {txt}\n")
 
     return out.getvalue()

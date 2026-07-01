@@ -276,6 +276,7 @@ def cache_tolqc_assembly_datasets(client: TolClient, conn: duckdb.DuckDBPyConnec
           columns := {
             data_id:       'VARCHAR',
             run_accession: 'VARCHAR',
+            specimen:      'VARCHAR',
             dataset_id:    'VARCHAR',
             dataset_name:  'VARCHAR',
             data_type:     'VARCHAR',
