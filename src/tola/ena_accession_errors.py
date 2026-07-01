@@ -4,17 +4,14 @@ import textwrap
 from io import StringIO
 
 import click
-import duckdb
 
 from tola import click_options
-from tola.ndjson import get_input_objects, ndjson_row
-from tola.pretty import plain_text_from_itr, wrap_name_description
+from tola.pretty import wrap_name_description
 from tola.store_ena_assemblies import (
     cache_ena_assemblies,
     cache_tolqc_assemblies,
     cache_tolqc_assembly_datasets,
 )
-from tola.terminal import TerminalDict, colour_pager, s
 from tola.tolqc_client import TolClient
 
 REPORTS = {
@@ -109,8 +106,8 @@ REPORTS = {
     },
     "bad-specimen-biosample": {
         "description": (
-            "ENA assemblies not loaded into ToLQC due"
-            " to mismatch in specimen biosample accessions"
+            "ENA assemblies not loaded into ToLQC due to mismatches"
+            " in specimen biosample accessions"
         ),
         "query": """
           WITH
@@ -135,6 +132,60 @@ REPORTS = {
             JOIN tolqc USING (specimen)
           WHERE
             tolqc_specimen_biosample != ena_specimen_biosample
+        """,
+    },
+    "cross-specimen": {
+        "description": "ENA assembly run accessions from other specimens",
+        "query": """
+          WITH
+            rs AS (
+              SELECT
+                data_id,
+                run_accession,
+                specimen,
+                unnest(assemblies, recursive := true)
+              FROM
+                asm_data
+            )
+          SELECT
+            tolqc.specimen AS tolqc_specimen,
+            rs.specimen AS ena_run_specimen,
+            rs.genome_accession_id,
+            data_id,
+            run_accession,
+          FROM
+            tolqc
+            JOIN rs USING (assembly_id)
+          WHERE
+            tolqc.specimen != rs.specimen
+        """,
+    },
+    "cross-tolid": {
+        "description": "ENA assembly run accessions from other ToLID prefixes",
+        "query": r"""
+          WITH
+            rs AS (
+              SELECT
+                data_id,
+                run_accession,
+                regexp_extract(specimen, '^([^.]+)')
+                  .regexp_replace('\d+$', '') AS ena_tolid,
+                unnest(assemblies, recursive := true)
+              FROM
+                asm_data
+            )
+          SELECT DISTINCT
+            regexp_extract(tolqc.specimen, '^([^.]+)')
+              .regexp_replace('\d+$', '') AS tolqc_tolid,
+            rs.ena_tolid,
+            rs.genome_accession_id,
+            data_id,
+            run_accession,
+          FROM
+            tolqc
+            JOIN rs USING (assembly_id)
+          WHERE
+            ena_tolid != tolqc_tolid
         """,
     },
 }
