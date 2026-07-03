@@ -71,7 +71,8 @@ COMMENT 'When row was last updated';
 
 ALTER TABLE tol_sample_bioproject ADD UNIQUE (data_id);
 
-ALTER TABLE tol_sample_bioproject ADD FOREIGN KEY fk_tsb_to_sample_uuid (uuid_sample_lims)
+ALTER TABLE tol_sample_bioproject ADD CONSTRAINT fk_tsb_to_sample_uuid
+FOREIGN KEY fk_tsb_to_sample_uuid (uuid_sample_lims)
 REFERENCES sample (uuid_sample_lims) ON DELETE SET NULL ON UPDATE RESTRICT;
 
 
