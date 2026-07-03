@@ -3,7 +3,7 @@ import sys
 
 import click
 
-from tola.pretty import bold, s
+from tola.pretty import bold, s, wrap_name_description
 from tola.terminal import TerminalDict, colour_pager
 
 
