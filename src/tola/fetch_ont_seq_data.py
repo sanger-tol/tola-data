@@ -335,7 +335,7 @@ def product_from_collection(coll):
             product_locs,
             coll.path,
             type_prefix,
-            "BAM",
+            "BAM_DIR",
         )
 
     # fmt: off
