@@ -1,9 +1,11 @@
 import re
 import sys
 import textwrap
+from datetime import datetime, timedelta
 from io import StringIO
 
 import click
+import duckdb
 
 from tola import click_options
 from tola.pretty import wrap_name_description
@@ -202,6 +204,22 @@ REPORTS = {
 @click.command
 @click_options.tolqc_alias
 @click.option(
+    "--duckdb-file",
+    "duckdb_file",
+    default=":memory:",
+    help="Name of duckdb database file which caches ENA assembly accession data",
+    envvar="ENA_ASSEMBLY_ACCESSIONS_DUCKDB",
+    show_default=True,
+)
+@click.option(
+    "--update",
+    "update_flag",
+    flag_value=True,
+    default=False,
+    show_default=True,
+    help="Update the DuckDB cache database from ToLQC and the ENA",
+)
+@click.option(
     "--report",
     "report_name",
     type=click.Choice(
@@ -234,10 +252,22 @@ REPORTS = {
     help="Print the number of rows found by each report",
 )
 @click.pass_context
-def cli(ctx, tolqc_alias, report_name, output_file, output_format, summary):
+def cli(
+    ctx,
+    tolqc_alias,
+    duckdb_file,
+    update_flag,
+    report_name,
+    output_file,
+    output_format,
+    summary,
+):
     """
     Report potential errors in linking of ENA run accessions to assemblies.
     """
+
+    if duckdb_file == ":memory:":
+        update_flag = True
 
     if not report_name and not summary:
         name_desc = {k: v["description"] for k, v in REPORTS.items()}
@@ -256,11 +286,16 @@ def cli(ctx, tolqc_alias, report_name, output_file, output_format, summary):
     )
 
     # Fetch data from ToLQC and the ENA
-    conn = client.duckdb_connect()
-    add_macros(conn)
-    cache_tolqc_assemblies(client, conn)
-    cache_tolqc_assembly_datasets(client, conn)
-    cache_ena_assemblies(conn)
+    conn = client.duckdb_connect(duckdb_file)
+    if not update_flag:
+        update_flag = needs_update(conn)
+
+    if update_flag:
+        add_macros(conn)
+        cache_tolqc_assemblies(client, conn)
+        cache_tolqc_assembly_datasets(client, conn)
+        cache_ena_assemblies(conn)
+        log_update_time(conn)
 
     if summary:
         rprt = []
@@ -283,6 +318,29 @@ def add_macros(conn):
       s.regexp_extract('^([^.]+)')
        .regexp_replace('\d+$', '');
   """)
+
+
+def needs_update(conn: duckdb.DuckDBPyConnection):
+    tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
+
+    if "update_log" not in tables:
+        conn.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
+        return True
+
+    # If any of our data tables are missing, then an update is required
+    if {"tolqc", "asm_data", "ena"} - tables:
+        return True
+
+    # Is the cached data stale?
+    (latest,) = conn.execute("SELECT MAX(updated_at) FROM update_log").fetchone()  # ty:ignore[not-iterable]
+    if latest is None:
+        return True
+    now = datetime.now(tz=latest.tzinfo)
+    return now - latest > timedelta(hours=8)
+
+
+def log_update_time(conn: duckdb.DuckDBPyConnection):
+    conn.execute("INSERT INTO update_log(updated_at) VALUES (current_timestamp)")
 
 
 def duckdb_copy_file_statement(file: str, fmt: str):

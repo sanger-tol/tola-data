@@ -99,7 +99,7 @@ class MLWHDiffDB:
         self.load_table_from_json("mlwh", str(mlwh_ndjson))
 
     def find_diffs(self):
-        self.execute("INSERT INTO update_log VALUES (current_timestamp)")
+        self.execute("INSERT INTO update_log(updated_at) VALUES (current_timestamp)")
         ds = DiffStore()
         for m in self.compare_tables():
             ds.add(m)

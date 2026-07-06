@@ -77,9 +77,8 @@ def search_accessions_from_files(input_files) -> list[str]:
 
 
 def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection) -> None:
-    conn.execute("DROP TABLE IF EXISTS tolqc")
     sql = """
-      CREATE TABLE tolqc AS
+      CREATE OR REPLACE TABLE tolqc AS
       FROM
         read_json(
           ?,
@@ -268,9 +267,8 @@ def load_ena_assemblies(
 
 
 def cache_tolqc_assembly_datasets(client: TolClient, conn: duckdb.DuckDBPyConnection):
-    conn.execute("DROP TABLE IF EXISTS asm_data")
     sql = """
-      CREATE TABLE asm_data AS
+      CREATE OR REPLACE TABLE asm_data AS
       FROM
         read_json(
           ?,
