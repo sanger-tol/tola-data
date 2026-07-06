@@ -135,12 +135,16 @@ REPORTS = {
         """,
     },
     "cross-specimen": {
-        "description": "ENA assembly run accessions from other specimens",
+        "description": (
+            "ENA assembly run accessions from other specimens,"
+            " excluding Hi-C data with the same ToLID prefix"
+        ),
         "query": """
           WITH
             rs AS (
               SELECT
                 data_id,
+                data_type,
                 run_accession,
                 specimen,
                 unnest(assemblies, recursive := true)
@@ -148,16 +152,21 @@ REPORTS = {
                 asm_data
             )
           SELECT
-            tolqc.specimen AS tolqc_specimen,
+            COALESCE(tolqc.cobiont_of, tolqc.specimen) AS tolqc_specimen,
             rs.specimen AS ena_run_specimen,
             rs.genome_accession_id,
+            rs.data_type,
             data_id,
             run_accession,
           FROM
             tolqc
             JOIN rs USING (assembly_id)
           WHERE
-            tolqc.specimen != rs.specimen
+            tolqc_specimen != ena_run_specimen
+            AND NOT (
+              data_type = 'hic'
+              AND extract_tolid(tolqc_specimen) = extract_tolid(ena_run_specimen)
+            )
         """,
     },
     "cross-tolid": {
@@ -168,15 +177,14 @@ REPORTS = {
               SELECT
                 data_id,
                 run_accession,
-                regexp_extract(specimen, '^([^.]+)')
-                  .regexp_replace('\d+$', '') AS ena_tolid,
+                extract_tolid(specimen) AS ena_tolid,
                 unnest(assemblies, recursive := true)
               FROM
                 asm_data
             )
           SELECT DISTINCT
-            regexp_extract(tolqc.specimen, '^([^.]+)')
-              .regexp_replace('\d+$', '') AS tolqc_tolid,
+            COALESCE(tolqc.cobiont_of, tolqc.specimen)
+              .extract_tolid() AS tolqc_tolid,
             rs.ena_tolid,
             rs.genome_accession_id,
             data_id,
@@ -249,6 +257,7 @@ def cli(ctx, tolqc_alias, report_name, output_file, output_format, summary):
 
     # Fetch data from ToLQC and the ENA
     conn = client.duckdb_connect()
+    add_macros(conn)
     cache_tolqc_assemblies(client, conn)
     cache_tolqc_assembly_datasets(client, conn)
     cache_ena_assemblies(conn)
@@ -266,6 +275,14 @@ def cli(ctx, tolqc_alias, report_name, output_file, output_format, summary):
         query = REPORTS[report_name]["query"]
         sql = out_sql.format(query)
         conn.execute(sql, [out_file])
+
+
+def add_macros(conn):
+    conn.execute(r"""
+    CREATE OR REPLACE MACRO extract_tolid (s) AS
+      s.regexp_extract('^([^.]+)')
+       .regexp_replace('\d+$', '');
+  """)
 
 
 def duckdb_copy_file_statement(file: str, fmt: str):

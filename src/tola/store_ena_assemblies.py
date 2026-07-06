@@ -86,6 +86,7 @@ def cache_tolqc_assemblies(client: TolClient, conn: duckdb.DuckDBPyConnection) -
           columns := {
             specimen_biosample: 'VARCHAR',
             specimen: 'VARCHAR',
+            cobiont_of: 'VARCHAR',
             assembly_id: 'INT',
             assembly_bioproject: 'VARCHAR',
             genome_accession_id: 'VARCHAR',
