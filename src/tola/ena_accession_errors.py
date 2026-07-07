@@ -59,9 +59,9 @@ REPORTS = {
           SELECT
             specimen,
             genome_accession_id,
-            data_type,
+            run_accession,
             data_id,
-            run_accession
+            data_type,
           FROM
             asm_data
             JOIN ena_run USING (run_accession)
@@ -95,9 +95,9 @@ REPORTS = {
           SELECT
             specimen,
             genome_accession_id,
-            data_type,
+            run_accession,
             data_id,
-            run_accession
+            data_type,
           FROM
             asm_run
             JOIN tolqc USING (specimen)
@@ -157,9 +157,9 @@ REPORTS = {
             COALESCE(tolqc.cobiont_of, tolqc.specimen) AS tolqc_specimen,
             rs.specimen AS ena_run_specimen,
             rs.genome_accession_id,
-            rs.data_type,
-            data_id,
             run_accession,
+            data_id,
+            rs.data_type,
           FROM
             tolqc
             JOIN rs USING (assembly_id)
@@ -179,6 +179,7 @@ REPORTS = {
               SELECT
                 data_id,
                 run_accession,
+                data_type,
                 extract_tolid(specimen) AS ena_tolid,
                 unnest(assemblies, recursive := true)
               FROM
@@ -189,8 +190,9 @@ REPORTS = {
               .extract_tolid() AS tolqc_tolid,
             rs.ena_tolid,
             rs.genome_accession_id,
-            data_id,
             run_accession,
+            data_id,
+            rs.data_type,
           FROM
             tolqc
             JOIN rs USING (assembly_id)
@@ -217,7 +219,10 @@ REPORTS = {
     flag_value=True,
     default=False,
     show_default=True,
-    help="Update the DuckDB cache database from ToLQC and the ENA",
+    help="""
+      Update the DuckDB cache database from ToLQC and the ENA.  The cache will
+      also be updated without this flag if it is more than four hours old.
+    """,
 )
 @click.option(
     "--report",
@@ -304,7 +309,7 @@ def cli(
             description = conf["description"]
             (n,) = conn.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608  # ty:ignore[not-iterable]
             rprt.append((f"{n:,d}", name, description))
-        click.echo("\nReport summary:\n" + wrap_report(rprt))
+        click.echo("\nNumber of rows in each report:\n" + wrap_report(rprt))
 
     else:
         query = REPORTS[report_name]["query"]
@@ -336,7 +341,7 @@ def needs_update(conn: duckdb.DuckDBPyConnection):
     if latest is None:
         return True
     now = datetime.now(tz=latest.tzinfo)
-    return now - latest > timedelta(hours=8)
+    return now - latest > timedelta(hours=4)
 
 
 def log_update_time(conn: duckdb.DuckDBPyConnection):
