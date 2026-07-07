@@ -143,9 +143,16 @@ def create_missing_new_objs_from_old(client, table, records_by_id, spec_dict):
             if k == pk_name:
                 continue
             new_key = k.replace(".id", "_id")
+
             # There are some exceptions to the naming of foreign keys
-            if new_key == "status_id":
+            if k == "status.id":
                 new_key = f"{table}_{new_key}"
+            elif table == "specimen":
+                if k == "cobiont_of.id":
+                    new_key = "cobiont_specimen_id"
+                elif k == "assignee.id":
+                    new_key = "assigned_user_id"
+
             new_attr[new_key] = v
         new_obj.append(cdo(table, new, new_attr))
 
