@@ -27,7 +27,10 @@ class CacheDB:
         else:
             write_flag = True
 
-        self.conn = duckdb.connect(path, read_only=not write_flag)  # ty:ignore[invalid-argument-type]
+        self.conn = duckdb.connect(
+            path or ":memory:",
+            read_only=not write_flag,
+        )
         self.setup_ca_cert_file()
         if write_flag:
             self.create_db_tables()
