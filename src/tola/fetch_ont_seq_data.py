@@ -330,7 +330,7 @@ def product_from_collection(coll):
             "FASTQ_DIR",
         )
 
-    if "BAM" in top_types:
+    if type_prefix == "RAW" and "BAM" in top_types:
         append_product_dir(
             product_locs,
             coll.path,
@@ -357,6 +357,21 @@ def product_from_collection(coll):
                 dir_type,
             )
     # fmt: on
+
+    # Trap multiplexed, re-basecalled BAMs with paths like:
+    #   /seq/ont/promethion/offline-basecalls/...
+    #     .../5mcg_5hmcg_6ma/merged/pass/barcode07/ONTRUN-304[...]_merged.bam
+    if (
+        not product_locs
+        and type_prefix == "RECALL"
+        and coll.path.parent.name == "pass"
+    ):
+        append_product_dir(
+            product_locs,
+            coll.path,
+            type_prefix,
+            "BAM",
+        )
 
     return product_locs
 
