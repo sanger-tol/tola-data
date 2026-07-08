@@ -1,3 +1,4 @@
+import pathlib
 import re
 import sys
 import textwrap
@@ -204,9 +205,17 @@ REPORTS = {
 @click.option(
     "--duckdb-file",
     "duckdb_file",
-    default=":memory:",
-    help="Name of duckdb database file which caches ENA assembly accession data",
+    default=None,
+    help="""
+      Path to the DuckDB database file which caches ENA assembly accession
+      data. If not specifed it defaults to the value of the
+      ENA_ASSEMBLY_ACCESSIONS_DUCKDB environment variable if set, or else
+      creates an in-memory database.
+    """,
     envvar="ENA_ASSEMBLY_ACCESSIONS_DUCKDB",
+    type=click.Path(
+        path_type=pathlib.Path,
+    ),
     show_default=True,
 )
 @click.option(
