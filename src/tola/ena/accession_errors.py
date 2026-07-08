@@ -8,12 +8,8 @@ import click
 import duckdb
 
 from tola import click_options
+from tola.ena.database import EnaCache
 from tola.pretty import wrap_name_description
-from tola.store_ena_assemblies import (
-    cache_ena_assemblies,
-    cache_tolqc_assemblies,
-    cache_tolqc_assembly_datasets,
-)
 from tola.tolqc_client import TolClient
 
 REPORTS = {
@@ -271,9 +267,6 @@ def cli(
     Report potential errors in linking of ENA run accessions to assemblies.
     """
 
-    if duckdb_file == ":memory:":
-        update_flag = True
-
     if not report_name and not summary:
         name_desc = {k: v["description"] for k, v in REPORTS.items()}
         click.echo(
@@ -285,67 +278,32 @@ def cli(
 
     out_file, out_sql = duckdb_copy_file_statement(output_file, output_format)
 
+    # Fetch data from ToLQC and the ENA
     client = TolClient(
         tolqc_alias=tolqc_alias,
         page_size=1000,
     )
+    cache = EnaCache(duckdb_file, client)
 
-    # Fetch data from ToLQC and the ENA
-    conn = client.duckdb_connect(duckdb_file)
-    if not update_flag:
-        update_flag = needs_update(conn)
-
-    if update_flag:
-        add_macros(conn)
-        cache_tolqc_assemblies(client, conn)
-        cache_tolqc_assembly_datasets(client, conn)
-        cache_ena_assemblies(conn)
-        log_update_time(conn)
+    if update_flag or cache.needs_update:
+        cache.cache_tolqc_assemblies()
+        cache.cache_tolqc_assembly_datasets()
+        cache.cache_ena_assemblies()
+        cache.log_update_time()
 
     if summary:
         rprt = []
         for name, conf in REPORTS.items():
             query = conf["query"]
             description = conf["description"]
-            (n,) = conn.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608  # ty:ignore[not-iterable]
+            (n,) = cache.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608  # ty:ignore[not-iterable]
             rprt.append((f"{n:,d}", name, description))
         click.echo("\nNumber of rows in each report:\n" + wrap_report(rprt))
 
     else:
         query = REPORTS[report_name]["query"]
         sql = out_sql.format(query)
-        conn.execute(sql, [out_file])
-
-
-def add_macros(conn):
-    conn.execute(r"""
-    CREATE OR REPLACE MACRO extract_tolid (s) AS
-      s.regexp_extract('^([^.]+)')
-       .regexp_replace('\d+$', '');
-  """)
-
-
-def needs_update(conn: duckdb.DuckDBPyConnection):
-    tables = {x[0] for x in conn.execute("SHOW TABLES").fetchall()}
-
-    if "update_log" not in tables:
-        conn.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
-        return True
-
-    # If any of our data tables are missing, then an update is required
-    if {"tolqc", "asm_data", "ena"} - tables:
-        return True
-
-    # Is the cached data stale?
-    (latest,) = conn.execute("SELECT MAX(updated_at) FROM update_log").fetchone()  # ty:ignore[not-iterable]
-    if latest is None:
-        return True
-    now = datetime.now(tz=latest.tzinfo)
-    return now - latest > timedelta(hours=4)
-
-
-def log_update_time(conn: duckdb.DuckDBPyConnection):
-    conn.execute("INSERT INTO update_log(updated_at) VALUES (current_timestamp)")
+        cache.execute(sql, [out_file])
 
 
 def duckdb_copy_file_statement(file: str, fmt: str):

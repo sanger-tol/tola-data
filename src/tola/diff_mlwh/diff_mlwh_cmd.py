@@ -98,7 +98,7 @@ from tola.tqc.upsert import TableUpserter
     metavar="REASON",
     help="""
       Show the differences tagged with this reason. The value "NONE" will show
-      any differences not tagged with a reason.(See output
+      any differences not tagged with a reason.  (See output
       from --show-reason-dict for the list of reasons).
     """,
 )
