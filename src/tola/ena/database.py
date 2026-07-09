@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import duckdb
+import pyarrow
 
 from tola.cache_db import CacheDB
 from tola.ndjson import ndjson_row
@@ -31,6 +32,11 @@ class EnaCache(CacheDB):
             self.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
             self.needs_update = True
 
+        if "reason_dict" not in tables:
+            self.create_reason_dict_table()
+        if "error_reason" not in tables:
+            self.create_reason_table()
+
         # If any of our data tables are missing, then an update is required
         if {"tolqc", "asm_data", "ena"} - tables:
             self.needs_update = True
@@ -51,6 +57,63 @@ class EnaCache(CacheDB):
             s.regexp_extract('^([^.]+)')
              .regexp_replace('\d+$', '');
         """)
+
+    def create_reason_table(self):
+        self.execute("""
+          CREATE TABLE error_reason (
+            genome_accession_id VARCHAR,
+            run_accession VARCHAR,
+            reason VARCHAR REFERENCES reason_dict (reason),
+            PRIMARY KEY (genome_accession_id, run_accession)
+          )
+        """)
+
+    def store_error_reasons(
+        self,
+        store_reason: str,
+        input_objects: list[dict[str, str]],
+    ):
+        arrow_table = self.build_reasons_arrow_table(store_reason, input_objects)  # noqa: F841
+
+        self.conn.execute("""
+          INSERT INTO error_reason (
+            genome_accession_id,
+            run_accession,
+            reason
+          )
+          FROM arrow_table
+          ON CONFLICT DO UPDATE SET reason = EXCLUDED.reason;
+        """)
+
+    def delete_error_reasons(
+        self,
+        delete_reason: str,
+        input_objects: list[dict[str, str]],
+    ):
+        arrow_table = self.build_reasons_arrow_table(delete_reason, input_objects)  # noqa: F841
+
+        self.conn.execute("""
+          DELETE FROM error_reason
+          USING arrow_table NATURAL JOIN error_reason AS e
+        """)
+
+    def build_reasons_arrow_table(
+        self,
+        reason: str,
+        input_objects: list[dict[str, str]],
+    ):
+        gen_accs = []
+        run_accs = []
+        for row in input_objects:
+            gen_accs.append(row["genome_accession_id"])
+            run_accs.append(row["run_accession"])
+        return pyarrow.Table.from_pydict(
+            {
+                "genome_accession_id": gen_accs,
+                "run_accession": run_accs,
+                "reason": [reason] * len(gen_accs),
+            }
+        )
 
     def cache_tolqc_assemblies(self) -> None:
         sql = """

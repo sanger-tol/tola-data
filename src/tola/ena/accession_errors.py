@@ -1,15 +1,15 @@
+import logging
 import pathlib
 import re
 import sys
 import textwrap
-from datetime import datetime, timedelta
 from io import StringIO
 
 import click
-import duckdb
 
 from tola import click_options
 from tola.ena.database import EnaCache
+from tola.ndjson import get_input_objects
 from tola.pretty import wrap_name_description
 from tola.tolqc_client import TolClient
 
@@ -59,9 +59,11 @@ REPORTS = {
             run_accession,
             data_id,
             data_type,
+            reason,
           FROM
             asm_data
             JOIN ena_run USING (run_accession)
+            LEFT JOIN error_reason USING (genome_accession_id, run_accession)
           WHERE
             dataset_id IS NULL
         """,
@@ -95,10 +97,12 @@ REPORTS = {
             run_accession,
             data_id,
             data_type,
+            reason,
           FROM
             asm_run
             JOIN tolqc USING (specimen)
             ANTI JOIN ena_run USING (run_accession, genome_accession_id)
+            LEFT JOIN error_reason USING (genome_accession_id, run_accession)
           WHERE
             tolqc.genome_accession_id IS NOT NULL
         """,
@@ -154,12 +158,16 @@ REPORTS = {
             COALESCE(tolqc.cobiont_of, tolqc.specimen) AS tolqc_specimen,
             rs.specimen AS ena_run_specimen,
             rs.genome_accession_id,
-            run_accession,
+            rs.run_accession,
             data_id,
             rs.data_type,
+            reason,
           FROM
             tolqc
             JOIN rs USING (assembly_id)
+            LEFT JOIN error_reason AS ar
+              ON rs.genome_accession_id = ar.genome_accession_id
+              AND rs.run_accession = ar.run_accession
           WHERE
             tolqc_specimen != ena_run_specimen
             AND NOT (
@@ -187,12 +195,16 @@ REPORTS = {
               .extract_tolid() AS tolqc_tolid,
             rs.ena_tolid,
             rs.genome_accession_id,
-            run_accession,
+            rs.run_accession,
             data_id,
             rs.data_type,
+            reason,
           FROM
             tolqc
             JOIN rs USING (assembly_id)
+            LEFT JOIN error_reason AS ar
+              ON rs.genome_accession_id = ar.genome_accession_id
+              AND rs.run_accession = ar.run_accession
           WHERE
             ena_tolid != tolqc_tolid
         """,
@@ -210,7 +222,7 @@ REPORTS = {
       Path to the DuckDB database file which caches ENA assembly accession
       data. If not specifed it defaults to the value of the
       ENA_ASSEMBLY_ACCESSIONS_DUCKDB environment variable if set, or else
-      creates an in-memory database.
+      uses a temporary in-memory database.
     """,
     envvar="ENA_ASSEMBLY_ACCESSIONS_DUCKDB",
     type=click.Path(
@@ -261,6 +273,40 @@ REPORTS = {
     default=False,
     help="Print the number of rows found by each report",
 )
+@click.option(
+    "--show-reason-dict",
+    flag_value=True,
+    help="""
+      Show the dictionary of reasons for run accessions to be missing from ENA
+      assemblies.
+    """,
+)
+@click.option(
+    "--add-reason-dict",
+    nargs=2,
+    metavar=("REASON", "DESCRIPTION"),
+    help="Add a reason and its description to the dictionary of reasons.",
+)
+@click.option(
+    "--store-reason",
+    metavar="REASON",
+    help="""
+      Name of reason to store for each genome accession ID / run accession ID
+      pair input.  Each NDJSON row from the `input_files` argument is
+      expected to have a value under `genome_accession_id` for the genome
+      accession, and another under `run_accession_id` for the run accession.
+    """,
+)
+@click.option(
+    "--delete-reason",
+    metavar="REASON",
+    help="""
+      Name of reason to delete for each genome accession ID / run accession ID
+      pair input.  Input is the same as for `--store-reason`.
+    """,
+)
+@click_options.input_files
+@click_options.log_level
 @click.pass_context
 def cli(
     ctx,
@@ -271,21 +317,22 @@ def cli(
     output_file,
     output_format,
     summary,
+    show_reason_dict,
+    add_reason_dict,
+    store_reason,
+    delete_reason,
+    input_files,
+    log_level,
 ):
     """
     Report potential errors in linking of ENA run accessions to assemblies.
     """
 
-    if not report_name and not summary:
-        name_desc = {k: v["description"] for k, v in REPORTS.items()}
-        click.echo(
-            ctx.get_help()
-            + "\n\nAvailable reports:\n"
-            + wrap_name_description(name_desc)
-        )
-        sys.exit(1)
-
-    out_file, out_sql = duckdb_copy_file_statement(output_file, output_format)
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(message)s",
+        force=True,
+    )
 
     # Fetch data from ToLQC and the ENA
     client = TolClient(
@@ -293,6 +340,8 @@ def cli(
         page_size=1000,
     )
     cache = EnaCache(duckdb_file, client)
+
+    out_file, out_sql = duckdb_copy_file_statement(output_file, output_format)
 
     if update_flag or cache.needs_update:
         cache.cache_tolqc_assemblies()
@@ -308,11 +357,29 @@ def cli(
             (n,) = cache.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608  # ty:ignore[not-iterable]
             rprt.append((f"{n:,d}", name, description))
         click.echo("\nNumber of rows in each report:\n" + wrap_report(rprt))
-
-    else:
+    elif report_name:
         query = REPORTS[report_name]["query"]
         sql = out_sql.format(query)
         cache.execute(sql, [out_file])
+    elif show_reason_dict:
+        cache.show_reason_dict_contents()
+    elif add_reason_dict:
+        cache.load_reason_dict_entry(add_reason_dict)
+    elif store_reason:
+        input_objects = get_input_objects(input_files)
+        cache.store_error_reasons(store_reason, input_objects)
+    elif delete_reason:
+        input_objects = get_input_objects(input_files)
+        cache.delete_error_reasons(delete_reason, input_objects)
+    else:
+        name_desc = {k: v["description"] for k, v in REPORTS.items()}
+        if not update_flag:
+            click.echo(ctx.get_help() + "\n")
+        click.echo(
+            "\nAvailable reports:\n"
+            + wrap_name_description(name_desc)
+        )
+        sys.exit(1)
 
 
 def duckdb_copy_file_statement(file: str, fmt: str):
