@@ -10,7 +10,7 @@ import click
 from tola import click_options
 from tola.ena.database import EnaCache
 from tola.ndjson import get_input_objects
-from tola.pretty import wrap_name_description
+from tola.pretty import bold, wrap_name_description
 from tola.tolqc_client import TolClient
 
 REPORTS = {
@@ -349,12 +349,13 @@ def cli(
         cache.cache_ena_assemblies()
         cache.log_update_time()
 
-    if summary:
+    if summary or update_flag:
         rprt = []
         for name, conf in REPORTS.items():
             query = conf["query"]
             description = conf["description"]
-            (n,) = cache.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608  # ty:ignore[not-iterable]
+            count = cache.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()  # noqa: S608
+            n = 0 if count is None else count[0]
             rprt.append((f"{n:,d}", name, description))
         click.echo("\nNumber of rows in each report:\n" + wrap_report(rprt))
     elif report_name:
@@ -367,19 +368,19 @@ def cli(
         cache.load_reason_dict_entry(add_reason_dict)
     elif store_reason:
         input_objects = get_input_objects(input_files)
-        cache.store_error_reasons(store_reason, input_objects)
+        n = cache.store_error_reasons(store_reason, input_objects)
+        click.echo(f"Stored {bold(n)} {store_reason!r} error reasons", err=True)
     elif delete_reason:
         input_objects = get_input_objects(input_files)
-        cache.delete_error_reasons(delete_reason, input_objects)
+        n = cache.delete_error_reasons(delete_reason, input_objects)
+        click.echo(f"Deleted {bold(n)} {delete_reason!r} error reasons", err=True)
     else:
         name_desc = {k: v["description"] for k, v in REPORTS.items()}
-        if not update_flag:
-            click.echo(ctx.get_help() + "\n")
-        click.echo(
-            "\nAvailable reports:\n"
+        sys.exit(
+            ctx.get_help()
+            + "\n\nAvailable reports:\n"
             + wrap_name_description(name_desc)
         )
-        sys.exit(1)
 
 
 def duckdb_copy_file_statement(file: str, fmt: str):

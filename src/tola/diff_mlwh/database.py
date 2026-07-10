@@ -41,10 +41,10 @@ class MLWHDiffDB(CacheDB):
 
         # Count the number of rows which will be deleted, then delete them.
         crsr = self.execute(template.format("SELECT COUNT(*)"), (data_id_list, reason))
-        (row_count,) = crsr.fetchone()
+        row_count = crsr.fetchone()
         self.execute(template.format("DELETE"), (data_id_list, reason))
 
-        return row_count
+        return 0 if row_count is None else row_count[0]
 
     def create_db_tables(self):
         tables = {x[0] for x in self.execute("SHOW TABLES").fetchall()}

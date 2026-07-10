@@ -28,10 +28,6 @@ class EnaCache(CacheDB):
 
         tables = {x[0] for x in self.execute("SHOW TABLES").fetchall()}
 
-        if "update_log" not in tables:
-            self.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
-            self.needs_update = True
-
         if "reason_dict" not in tables:
             self.create_reason_dict_table()
         if "error_reason" not in tables:
@@ -41,12 +37,19 @@ class EnaCache(CacheDB):
         if {"tolqc", "asm_data", "ena"} - tables:
             self.needs_update = True
 
-        # Is the cached data stale?
-        (latest,) = self.execute("SELECT MAX(updated_at) FROM update_log").fetchone()
-        if latest is None:
-            return True
-        now = datetime.now(tz=latest.tzinfo)
-        return now - latest > timedelta(hours=4)
+        if "update_log" in tables:
+            # Is the cached data stale?
+            latest_row = self.execute("SELECT MAX(updated_at) FROM update_log").fetchone()
+            if latest_row is None:
+                self.needs_update = True
+            else:
+                latest = latest_row[0]
+                now = datetime.now(tz=latest.tzinfo)
+                if now - latest > timedelta(hours=4):
+                    self.needs_update = True
+        else:
+            self.execute("CREATE TABLE update_log(updated_at TIMESTAMPTZ)")
+            self.needs_update = True
 
     def log_update_time(self):
         self.execute("INSERT INTO update_log(updated_at) VALUES (current_timestamp)")
@@ -81,21 +84,39 @@ class EnaCache(CacheDB):
             run_accession,
             reason
           )
+          SELECT
+            genome_accession_id,
+            run_accession,
+            reason
           FROM arrow_table
-          ON CONFLICT DO UPDATE SET reason = EXCLUDED.reason;
+          ON CONFLICT DO UPDATE SET reason = EXCLUDED.reason
+          RETURNING *
         """)
+
+        rows = self.conn.fetchall()
+        return len(rows)
 
     def delete_error_reasons(
         self,
         delete_reason: str,
         input_objects: list[dict[str, str]],
-    ):
+    ) -> int:
         arrow_table = self.build_reasons_arrow_table(delete_reason, input_objects)  # noqa: F841
+        conn = self.conn
 
-        self.conn.execute("""
+        count = conn.execute("""
+          SELECT
+            count_star()
+          FROM error_reason NATURAL JOIN arrow_table
+        """).fetchone()
+
+        conn.execute("""
           DELETE FROM error_reason
-          USING arrow_table NATURAL JOIN error_reason AS e
+          USING arrow_table
+          WHERE error_reason = arrow_table  -- Where row tuples match
         """)
+
+        return 0 if count is None else count[0]
 
     def build_reasons_arrow_table(
         self,
