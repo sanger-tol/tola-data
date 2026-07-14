@@ -39,7 +39,9 @@ class EnaCache(CacheDB):
 
         if "update_log" in tables:
             # Is the cached data stale?
-            latest_row = self.execute("SELECT MAX(updated_at) FROM update_log").fetchone()
+            latest_row = self.execute(
+                "SELECT MAX(updated_at) FROM update_log"
+            ).fetchone()
             if latest_row is None:
                 self.needs_update = True
             else:
@@ -214,6 +216,7 @@ class EnaCache(CacheDB):
             }.items()
         )
         filereport_url = f"https://www.ebi.ac.uk/ena/portal/api/filereport?{params}"
+        self.log.debug(f"{filereport_url = }")
 
         # Use DuckDB to split run_accession_list string into a list on import
         ena_fields["run_accession_list"] = "string_split(run_accession, ';')"
@@ -311,6 +314,7 @@ class EnaCache(CacheDB):
                             "name": batch["assembly_name"][i],
                             "description": batch["description"][i],
                             "level": batch["level"][i],
+                            "category_id": "release",
                         },
                     )
                 )

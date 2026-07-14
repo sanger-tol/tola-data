@@ -123,7 +123,7 @@ REPORTS = {
                 ANTI JOIN tolqc USING (genome_accession_id)
               WHERE
                 -- Use underscores in assembly names to exclude metagenome assemblies
-                assembly_name !~ '.*_.*'
+                NOT assembly_name.contains('_')
             )
           SELECT DISTINCT
             specimen,
@@ -292,7 +292,7 @@ REPORTS = {
     metavar="REASON",
     help="""
       Name of reason to store for each genome accession ID / run accession ID
-      pair input.  Each NDJSON row from the `input_files` argument is
+      pair input.  Each NDJSON row from the INPUT_FILES argument is
       expected to have a value under `genome_accession_id` for the genome
       accession, and another under `run_accession_id` for the run accession.
     """,
