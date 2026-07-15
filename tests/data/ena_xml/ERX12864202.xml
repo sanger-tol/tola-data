@@ -1,0 +1,71 @@
+<EXPERIMENT_SET>
+<EXPERIMENT accession="ERX12864202" alias="SC_EXP_49280_2#18" center_name="WELLCOME SANGER INSTITUTE">
+  <IDENTIFIERS>
+    <PRIMARY_ID>ERX12864202</PRIMARY_ID>
+    <SUBMITTER_ID namespace="WELLCOME SANGER INSTITUTE">SC_EXP_49280_2#18</SUBMITTER_ID>
+  </IDENTIFIERS>
+  <TITLE>Illumina NovaSeq X paired end sequencing</TITLE>
+  <STUDY_REF accession="ERP159253">
+    <IDENTIFIERS>
+      <PRIMARY_ID>ERP159253</PRIMARY_ID>
+      <SECONDARY_ID>PRJEB74590</SECONDARY_ID>
+    </IDENTIFIERS>
+  </STUDY_REF>
+  <DESIGN>
+    <DESIGN_DESCRIPTION>Illumina sequencing of sample accession SAMEA113398901 for study accession PRJEB74590.  This submission includes reads tagged with the sequence GCTTGCAT.</DESIGN_DESCRIPTION>
+    <SAMPLE_DESCRIPTOR accession="ERS15394050">
+      <IDENTIFIERS>
+        <PRIMARY_ID>ERS15394050</PRIMARY_ID>
+        <EXTERNAL_ID namespace="BioSample">SAMEA113398901</EXTERNAL_ID>
+      </IDENTIFIERS>
+    </SAMPLE_DESCRIPTOR>
+    <LIBRARY_DESCRIPTOR>
+      <LIBRARY_STRATEGY>RNA-Seq</LIBRARY_STRATEGY>
+      <LIBRARY_SOURCE>TRANSCRIPTOMIC</LIBRARY_SOURCE>
+      <LIBRARY_SELECTION>PolyA</LIBRARY_SELECTION>
+      <LIBRARY_LAYOUT>
+        <PAIRED NOMINAL_LENGTH="200"/>
+      </LIBRARY_LAYOUT>
+      <LIBRARY_CONSTRUCTION_PROTOCOL>RNA PolyA</LIBRARY_CONSTRUCTION_PROTOCOL>
+    </LIBRARY_DESCRIPTOR>
+  </DESIGN>
+  <PLATFORM>
+    <ILLUMINA>
+      <INSTRUMENT_MODEL>Illumina NovaSeq X</INSTRUMENT_MODEL>
+    </ILLUMINA>
+  </PLATFORM>
+  <PROCESSING/>
+  <EXPERIMENT_LINKS>
+    <EXPERIMENT_LINK>
+      <XREF_LINK>
+        <DB>ENA-SAMPLE</DB>
+        <ID>ERS15394050</ID>
+      </XREF_LINK>
+    </EXPERIMENT_LINK>
+    <EXPERIMENT_LINK>
+      <XREF_LINK>
+        <DB>ENA-SUBMISSION</DB>
+        <ID>ERA30745728</ID>
+      </XREF_LINK>
+    </EXPERIMENT_LINK>
+    <EXPERIMENT_LINK>
+      <XREF_LINK>
+        <DB>ENA-FASTQ-FILES</DB>
+        <ID><![CDATA[https://www.ebi.ac.uk/ena/portal/api/filereport?accession=ERX12864202&result=read_run&fields=run_accession,fastq_ftp,fastq_md5,fastq_bytes]]></ID>
+      </XREF_LINK>
+    </EXPERIMENT_LINK>
+    <EXPERIMENT_LINK>
+      <XREF_LINK>
+        <DB>ENA-SUBMITTED-FILES</DB>
+        <ID><![CDATA[https://www.ebi.ac.uk/ena/portal/api/filereport?accession=ERX12864202&result=read_run&fields=run_accession,submitted_ftp,submitted_md5,submitted_bytes,submitted_format]]></ID>
+      </XREF_LINK>
+    </EXPERIMENT_LINK>
+  </EXPERIMENT_LINKS>
+  <EXPERIMENT_ATTRIBUTES>
+    <EXPERIMENT_ATTRIBUTE>
+      <TAG>ENA-STATUS</TAG>
+      <VALUE>PUBLIC</VALUE>
+    </EXPERIMENT_ATTRIBUTE>
+  </EXPERIMENT_ATTRIBUTES>
+</EXPERIMENT>
+</EXPERIMENT_SET>
