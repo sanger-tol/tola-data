@@ -29,14 +29,16 @@ def main():
     rsrv_size = 20
     samples = {}
     for lib_type, acc in conn.fetchall():
-        n_smpl = samples.setdefault(lib_type, [0, []])
+        n_smpl = samples.setdefault(
+            lib_type,
+            [0, []],  # 0 is n is number seen, [] is smpl is reservoir
+        )
         n, smpl = n_smpl
-        n += 1
-        if n <= rsrv_size:
+        if n < rsrv_size:
             smpl.append(acc)
-        elif (i := randint(0, n - 1)) < rsrv_size:  # noqa: S311
+        elif (i := randint(0, n)) < rsrv_size:  # noqa: S311
             smpl[i] = acc
-        n_smpl[0] = n
+        n_smpl[0] = n + 1
 
     for lib_type, n_smpl in samples.items():
         n, smpl = n_smpl
@@ -49,7 +51,6 @@ def main():
             xml = rspns.content
             for doc in EnaExptXmlParser().parse_string(xml):
                 sys.stdout.write(ndjson_row({"library_type": lib_type, **doc}))
-
 
 
 if __name__ == "__main__":
