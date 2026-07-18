@@ -92,7 +92,7 @@ class EnaCache(CacheDB):
             reason
           FROM arrow_table
           ON CONFLICT DO UPDATE SET reason = EXCLUDED.reason
-          RETURNING *
+          RETURNING NULL
         """)
 
         rows = self.conn.fetchall()

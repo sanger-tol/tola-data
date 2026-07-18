@@ -3,6 +3,7 @@ import os
 from abc import abstractmethod
 from inspect import cleandoc
 from pathlib import Path
+from urllib.request import getproxies
 
 import click
 import duckdb
@@ -32,19 +33,26 @@ class CacheDB:
             read_only=not write_flag,
         )
         self.setup_ca_cert_file()
+        self.setup_http_proxy()
         if write_flag:
             self.create_db_tables()
 
     def setup_ca_cert_file(self):
         """
-        Sets a CA certificates file for the curl HTTP client backend or falls
-        back to httplib.
+        Sets a CA certificates file for DuckDB's libcurl HTTP client.
         """
         if cert_file := os.environ.get("REQUESTS_CA_BUNDLE"):
             self.execute("SET ca_cert_file = ?", [cert_file])
             self.execute("SET enable_server_cert_verification = true")
-        else:
-            self.execute("SET httpfs_client_implementation = httplib")
+
+    def setup_http_proxy(self):
+        """
+        Sets HTTP proxy URL (which may have been set by `TolClient`) for
+        DuckDB's libcurl HTTP client.
+        """
+        pxs = getproxies()
+        if proxy_url := pxs.get("https", pxs.get("http")):
+            self.execute("SET http_proxy = ?", [proxy_url])
 
     def execute(self, sql: str, params=None) -> duckdb.DuckDBPyConnection:
         sql.rstrip("; \n")
