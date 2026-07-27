@@ -75,9 +75,16 @@ class TolClient:
         core_data_object(tolqc)
         return tolqc
 
-    def ads_get_list(self, table, filter_spec):
+    def ads_get_list(self, table, filter_spec, requested_fields=None):
+        rft = (
+            None
+            if requested_fields is None
+            else self.build_req_fields_tree(table, requested_fields=requested_fields)
+        )
         yield from self.ads_ro.get_list(
-            table, object_filters=DataSourceFilter(and_=filter_spec)
+            table,
+            object_filters=DataSourceFilter(and_=filter_spec),
+            requested_tree=rft,
         )
 
     def report_url(self, report_name, params=None):
