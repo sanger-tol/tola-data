@@ -1,10 +1,13 @@
 import logging
 import sys
+from typing import Any
 
 import click
 
 from tola import click_options
 from tola.ndjson import ndjson_row
+from tola.pretty import s
+from tola.tolqc_client import TolClient
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +21,18 @@ log = logging.getLogger(__name__)
       Auto update the MLWH with any `data` table files where `accession_id`
       is "Request" or report to STDOUT
     """,
-    default=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--store",
+    "store_flag",
+    help="""
+      Store input MLWH `tol_sample_bioproject` table rows (which can be
+      produced by "--report")
+    """,
+    flag_value=True,
+    default=False,
     show_default=True,
 )
 @click_options.file
@@ -28,7 +42,7 @@ log = logging.getLogger(__name__)
     nargs=-1,
     required=False,
 )
-def mlwh_ena(ctx, auto_update, file_list, file_format, data_id_list):
+def mlwh_ena(ctx, auto_update, store_flag, file_list, file_format, data_id_list):
     """
     Add raw data entries for submission to the ENA, to create run accessions.
     Creates or updates entries in the MLWH `tol_sample_bioproject` table used
@@ -39,17 +53,12 @@ def mlwh_ena(ctx, auto_update, file_list, file_format, data_id_list):
     each row in each "--file" argument given.
     """
 
-    client = ctx.obj
+    filt_spec = build_filter_spec(data_id_list)
+
+    client: TolClient = ctx.obj
     for file in client.ads_get_list(
         "file",
-        {
-            "data.accession.id": {
-                "eq": {"value": "Request"},
-            },
-            "file_type": {
-                "in_list": {"value": ["BAM", "CRAM", "RECALL_BAM"]},
-            },
-        },
+        filter_spec=filt_spec,
         requested_fields=[
             "data.id",
             "data.library.library_type",
@@ -57,52 +66,75 @@ def mlwh_ena(ctx, auto_update, file_list, file_format, data_id_list):
             "data.sample.specimen.species",
         ],
     ):
-        row = build_tol_bioproject_row(file)
+        if not (row := build_tol_bioproject_row(file)):
+            continue
         sys.stdout.write(ndjson_row(row))
+
+
+def build_filter_spec(data_id_list: list[str]) -> dict[str, dict[str, Any]]:
+    spec = {
+        "file_type": {
+            "in_list": {"value": ["BAM", "CRAM", "RECALL_BAM"]},
+        },
+    }
+
+    if data_id_list:
+        spec["data.id"] = {
+            "in_list": {"value": data_id_list},
+        }
+    else:
+        spec["data.accession.id"] = {
+            "eq": {"value": "Request"},
+        }
+
+    return spec
 
 
 def build_tol_bioproject_row(file):
     data = file.data
 
     # Check that all the required values are present
-    if not (lib := data.library):
-        log.warning(f"No library attached to data.id = {data.id!r}")
-        return
-
-    if not (run := data.run):
-        log.warning(f"No run attached to data.id = {data.id!r}")
-        return
-
-    if not (platform := run.platform):
-        log.warning(f"No run attached to data.id = {data.id!r} run.id = {run.id!r}")
-        return
-
-    if not (lib_type := lib.library_type):
-        log.warning(
-            f"No library_type attached to data.id = {data.id!r} library.id = {lib.id!r}"
-        )
-        return
-
-    if not (sample := data.sample):
-        log.warning("No sample attached to data.id = {data.id!r}")
-        return
-
-    if not (specimen := sample.specimen):
-        log.warning(
-            f"No specimen attached to data.id = {data.id!r} sample.id = {sample.id!r}"
-        )
-        return
-
-    if not (species := specimen.species):
-        log.warning(
-            "No species attached to "
-            f"data.id = {data.id!r} specimen.id = {specimen.id!r}"
-        )
-        return
+    missing = []
 
     # Cannot proceed without an iRODS file name, since iRODS is where
     # DataHose read files from.
     if file.remote_path is None or not file.remote_path.startswith("irods:"):
+        missing.append(f"No iRODS path for, file.name = {file.name!r}")
+
+    if not (lib := data.library):
+        missing.append("No library attached")
+
+    if not (run := data.run):
+        missing.append("No run attached")
+
+    if run and not (platform := run.platform):
+        missing.append(f"No run attached to run.id = {run.id!r}")
+
+    if lib and not (lib_type := lib.library_type):
+        missing.append(f"No library_type attached to library.id = {lib.id!r}")
+
+    if not (sample := data.sample):
+        missing.append("No sample attached")
+
+    if sample and not (specimen := sample.specimen):
+        missing.append(f"No specimen attached to sample.id = {sample.id!r}")
+
+    if specimen and not (species := specimen.species):
+        missing.append(f"No species attached to specimen.id = {specimen.id!r}")
+
+    if sample and not (bsa := sample.accession):
+        missing.append(f"No BioSample accession attached to sample.id = {sample.id!r}")
+
+    if species and not (bpa := species.data_accession):
+        missing.append(
+            f"No BioSpecimen data_accession attached to species.id = {species.id!r}"
+        )
+
+    if missing:
+        msg = "\n  ".join(
+            [f"Missing value{s(missing)} for data.id = {data.id!r}", *missing]
+        )
+        log.warning(msg)
         return
 
     return {
@@ -121,8 +153,8 @@ def build_tol_bioproject_row(file):
         #     lib_type.description_template, lib.description
         # ),
         "tolid": specimen.id,
-        "biosample_accession": sample.accession.id,
-        "bioproject_accession": species.data_accession.id,
+        "biosample_accession": bsa.id,
+        "bioproject_accession": bpa.id,
     }
 
 

@@ -8,6 +8,7 @@ from tola import click_options
 from tola.illumina_images import NoSuchIrodsFileError, PlotBamStatsRunner
 from tola.ndjson import get_input_objects, ndjson_row
 from tola.store_folder import upload_files
+from tola.tolqc_client import TolClient
 from tola.tqc.engine import irods_path_dataobject, update_file_size_and_md5_if_missing
 
 log = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ def load_illumina_images(ctx, input_files, auto_flag, fetch_input, quiet):
             sys.stdout.write(ndjson_row(data))
 
 
-def get_work(client):
+def get_work(client: TolClient):
     """
     Build a complete list of work to do and return it.  Do not yield each
     individual record, because populating `data.folder_ulid` will change the
@@ -127,7 +128,7 @@ def get_work(client):
     spec_list = []
     for data in client.ads_get_list(
         "data",
-        {
+        filter_spec={
             "lims_qc": {
                 "eq": {"value": "pass"},
             },

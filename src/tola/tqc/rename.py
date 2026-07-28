@@ -6,6 +6,7 @@ from tol.core import DataSourceFilter
 from tola import click_options
 from tola.goat_client import GoaTClient
 from tola.pretty import bold
+from tola.tolqc_client import TolClient
 from tola.tqc.engine import (
     core_data_object_to_dict,
     fetch_all,
@@ -56,7 +57,7 @@ def rename(ctx, table_names, input_files, ignore_species_check):
     we usually want to rename to the MLWH value.)
     """
 
-    client = ctx.obj
+    client: TolClient = ctx.obj
     input_obj = input_objects_or_exit(ctx, input_files)
 
     for table in table_names:
@@ -74,7 +75,7 @@ def rename(ctx, table_names, input_files, ignore_species_check):
             )
 
 
-def rename_records(client, table, input_obj, ignore_species_check):
+def rename_records(client: TolClient, table, input_obj, ignore_species_check):
     # Build a dictionary of renaming operations
     spec_dict = build_spec_dict(table, input_obj)
 
@@ -127,7 +128,9 @@ def rename_records(client, table, input_obj, ignore_species_check):
     return len(new_records), len(spec_dict)
 
 
-def create_missing_new_objs_from_old(client, table, records_by_id, spec_dict):
+def create_missing_new_objs_from_old(
+    client: TolClient, table, records_by_id, spec_dict
+):
     cdo = client.build_cdo
 
     new_obj = []
@@ -159,7 +162,7 @@ def create_missing_new_objs_from_old(client, table, records_by_id, spec_dict):
     return new_obj
 
 
-def fetch_entries_from_specs(client, table, spec_dict):
+def fetch_entries_from_specs(client: TolClient, table, spec_dict):
     id_list = []
     id_field = f"{table}.id"
     for sp in spec_dict.values():
@@ -203,7 +206,7 @@ def fill_mising_field_from_old_records(field, spec_dict, flat_by_id):
             spec[field] = [old_loc, old_loc]
 
 
-def delete_old_edit_entries(client, table, spec_dict):
+def delete_old_edit_entries(client: TolClient, table, spec_dict):
     ads = client.ads
     edit_table = f"edit_{table}"
     old_edits = ads.get_list(
@@ -213,7 +216,7 @@ def delete_old_edit_entries(client, table, spec_dict):
     ads.delete(edit_table, [x.id for x in old_edits])
 
 
-def rename_tolid_prefix_in_old_species(client, spec_dict, species_by_id):
+def rename_tolid_prefix_in_old_species(client: TolClient, spec_dict, species_by_id):
     cdo = client.build_cdo
 
     old_species = [species_by_id[x] for x in spec_dict]
@@ -226,7 +229,7 @@ def rename_tolid_prefix_in_old_species(client, spec_dict, species_by_id):
         species_by_id[sp.id] = core_data_object_to_dict(sp)
 
 
-def switch_to_many_entries(client, spec_dict, table, many_tbl):
+def switch_to_many_entries(client: TolClient, spec_dict, table, many_tbl):
     """
     Switch the foreign key in each `to_many` related object to point to its
     new (renamed) parent.
@@ -257,7 +260,7 @@ def switch_to_many_entries(client, spec_dict, table, many_tbl):
 
 
 def create_new_species_from_goat(
-    client, spec_dict, species_by_id, ignore_species_check
+    client: TolClient, spec_dict, species_by_id, ignore_species_check
 ):
     gc = GoaTClient()
     cdo = client.build_cdo

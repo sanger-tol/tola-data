@@ -2,16 +2,17 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable, Iterable
 from functools import cached_property
 from io import StringIO
 from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import requests
 from tol.api_client import ApiDataSource, create_api_datasource
 from tol.core import DataSourceFilter, core_data_object
+from tol.core.data_object import DataObject
 from tol.core.datasource_error import DataSourceError
 from tol.core.requested_fields import ReqFieldsTree
 
@@ -75,15 +76,28 @@ class TolClient:
         core_data_object(tolqc)
         return tolqc
 
-    def ads_get_list(self, table, filter_spec, requested_fields=None):
+    def ads_get_list(
+        self,
+        table,
+        *,
+        filter_spec: dict[str, dict[str, Any]] | None = None,
+        requested_fields: list[str] | None = None,
+    ) -> Iterable[DataObject]:
+        """
+        Warpper around `ApiDataSource.get_list()` buliding a
+        `DataSourceFilter` from the `filter_spec` argument and a
+        `ReqFieldsTree` from the `requested_fields` argument.
+        """
+
         rft = (
             None
             if requested_fields is None
             else self.build_req_fields_tree(table, requested_fields=requested_fields)
         )
+        filt = DataSourceFilter(and_=filter_spec) if filter_spec else None
         yield from self.ads_ro.get_list(
             table,
-            object_filters=DataSourceFilter(and_=filter_spec),
+            object_filters=filt,
             requested_tree=rft,
         )
 
@@ -93,7 +107,7 @@ class TolClient:
         return req.url
 
     @cached_property
-    def build_cdo(self):
+    def build_cdo(self) -> Callable[[str, str, dict[str, Any]], DataObject]:
         """
         Returns a function which builds a CoreDataObject (cdo)
         """
@@ -101,7 +115,7 @@ class TolClient:
 
         def cdo_builder(
             table: str, name: str | None = None, attr: dict[str, Any] | None = None
-        ):
+        ) -> DataObject:
             return obj_bldr(table, id_=name, attributes=attr)
 
         return cdo_builder
