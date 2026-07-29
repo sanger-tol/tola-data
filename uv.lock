@@ -325,6 +325,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nanoid"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b7/9d/0250bf5935d88e214df469d35eccc0f6ff7e9db046fc8a9aeb4b2a192775/nanoid-2.0.0.tar.gz", hash = "sha256:5a80cad5e9c6e9ae3a41fa2fb34ae189f7cb420b2a5d8f82bd9d23466e4efa68", size = 3290, upload-time = "2018-11-20T14:45:51.578Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/0d/8630f13998638dc01e187fadd2e5c6d42d127d08aeb4943d231664d6e539/nanoid-2.0.0-py3-none-any.whl", hash = "sha256:90aefa650e328cffb0893bbd4c236cfd44c48bc1f2d0b525ecc53c3187b653bb", size = 5844, upload-time = "2018-11-20T14:45:50.165Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.0"
 source = { registry = "https://pypi.org/simple" }
@@ -772,7 +781,7 @@ wheels = [
 
 [[package]]
 name = "tol-sdk"
-version = "2.1.9"
+version = "2.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -781,15 +790,16 @@ dependencies = [
     { name = "dacite" },
     { name = "dateparser" },
     { name = "more-itertools" },
+    { name = "nanoid" },
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/29/3b5ead2264d7ded05f416d2b981dfd970b7403f29e2f2c69ab83143fbcfa/tol_sdk-2.1.9.tar.gz", hash = "sha256:1b48dbc924d4b7495676ace3d9ed3bf50be193210ec523dcd671716a6ed649e9", size = 394032, upload-time = "2026-05-13T21:06:49.709Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/8f/d4978c9f7c360302e8daacc9ae801c2c376213f45d5007e4cb46efab184e/tol_sdk-2.4.2.tar.gz", hash = "sha256:6d6a9260df4206d091e607eacbc42a1e2f5e7337bafa42d1cc3452d69e0e8ccb", size = 431810, upload-time = "2026-07-29T08:07:30.07Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/dd/4b1889a03f39f389c39bb99c23fddcd2ef4924577d3f089c1cb03a9cba46/tol_sdk-2.1.9-py3-none-any.whl", hash = "sha256:1907fb85823bf3d9bd75b77f845013297809784bc8c4b42b0d89c4b711b431bb", size = 568185, upload-time = "2026-05-13T21:06:47.222Z" },
+    { url = "https://files.pythonhosted.org/packages/03/d3/e54e3396dcd4e30d2574b5b61d1eb59f22ae1db171cbeb3f19beed984742/tol_sdk-2.4.2-py3-none-any.whl", hash = "sha256:c7c3ce644c8b14af5d1f7c900e6b79773122c3dba764f499291c29c0c67a1ef2", size = 616718, upload-time = "2026-07-29T08:07:27.612Z" },
 ]
 
 [[package]]
@@ -831,7 +841,7 @@ requires-dist = [
     { name = "python-ulid" },
     { name = "pytz" },
     { name = "requests" },
-    { name = "tol-sdk", specifier = ">=2.1.8" },
+    { name = "tol-sdk", specifier = ">=2.4.2" },
 ]
 
 [package.metadata.requires-dev]

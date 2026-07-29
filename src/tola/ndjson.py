@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import sys
+from typing import Any
 
 import pytz
 
@@ -16,16 +17,16 @@ class DateTimeZoneEncoder(json.JSONEncoder):
     default, local timezone to any "naive" datetime objects before encoding.
     """
 
-    def default(self, obj):
+    def default(self, o: Any) -> Any:
         # Test for datetime first, since it is a subclass of date
-        if isinstance(obj, datetime.datetime):
-            obj = set_timezone_if_naive(obj)
-            return obj.isoformat()
-        if isinstance(obj, datetime.date | datetime.time):
-            return obj.isoformat()
+        if isinstance(o, datetime.datetime):
+            o = set_timezone_if_naive(o)
+            return o.isoformat()
+        if isinstance(o, datetime.date | datetime.time):
+            return o.isoformat()
 
         # This line means any exceptions raised will come from the base class
-        return json.JSONEncoder.default(self, obj)
+        return json.JSONEncoder.default(self, o)
 
 
 def set_timezone_if_naive(dt: datetime.datetime) -> datetime.datetime:

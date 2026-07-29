@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import sys
+from collections.abc import Iterable
 from datetime import datetime
 from hashlib import md5
 from pathlib import Path
@@ -54,7 +55,7 @@ def parse_datetime_fields(field_list, input_obj):
                 obj[fld] = dt
 
 
-def input_objects_or_exit(ctx, input_files):
+def input_objects_or_exit(ctx, input_files) -> list[dict[str, Any]]:
     if not input_files and sys.stdin.isatty():
         err = "Error: " + bold("Missing INPUT_FILES arguments or STDIN input")
         sys.exit(ctx.get_help() + "\n\n" + err)
@@ -391,7 +392,12 @@ def dicts_to_core_data_objects(ads, table, flat_list):
     return cdo_out
 
 
-def id_iterator(key, id_list=None, file_list=None, file_format=None):
+def id_iterator(
+    key: str,
+    id_list: list[str | int] | None = None,
+    file_list: list[Path] | None = None,
+    file_format: str | None = None,
+) -> Iterable[str | int]:
     if id_list:
         yield from id_list
         return

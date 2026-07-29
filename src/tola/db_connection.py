@@ -4,6 +4,7 @@ from pathlib import Path
 
 import mysql.connector
 import psycopg2
+from mysql.connector.abstracts import MySQLConnectionAbstract
 from psycopg2.extras import DictCursor
 
 
@@ -11,8 +12,12 @@ class ConnectionParamsError(Exception):
     """Error in the ~/.connection_params.json config file"""
 
 
-def mlwh_db():
+def mlwh_db() -> MySQLConnectionAbstract:
     return make_connection("mlwh")
+
+
+def mlwh_rw_db() -> MySQLConnectionAbstract:
+    return make_connection("mlwh-rw")
 
 
 def sts_db():
@@ -27,7 +32,8 @@ def make_connection(db_alias):
     elif dbd == "Pg":
         return psycopg2.connect(cursor_factory=DictCursor, **params)
     else:
-        raise f"Unknown database type '{dbd}'"
+        msg = f"Unknown database type '{dbd}'"
+        raise ConnectionParamsError(msg)
 
 
 def get_connection_url(db_alias):
