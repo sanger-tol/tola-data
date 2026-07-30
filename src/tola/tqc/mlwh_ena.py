@@ -10,10 +10,14 @@ from tol.core.data_object import DataObject
 
 from tola import click_options, db_connection
 from tola.ndjson import ndjson_row
-from tola.pretty import s
+from tola.pretty import bold, s
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
-from tola.tqc.engine import id_iterator, input_objects_or_exit
+from tola.tqc.engine import (
+    dicts_to_core_data_objects,
+    id_iterator,
+    input_objects_or_exit,
+)
 
 log = logging.getLogger(__name__)
 
@@ -80,14 +84,27 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
     fetch_sample_table_fields(conn, mlwh_rows, client)
     if store_flag or update_mlwh:
         store_tol_bioproject_rows(conn, mlwh_rows)
+        update_request_placeholders_to_pending(client, mlwh_rows)
 
     if sys.stdout.isatty():
-        action = "Stored or updated" if store_flag or update_mlwh else "Generated"
-        header = f"{action} {{}} MLWH tol_sample_bioproject table row{{}}:"
-        colour_pager(pretty_dict_itr(mlwh_rows, "data.id", head=header))
+        header = format_header(mlwh_rows, store_flag or update_mlwh)
+        colour_pager(pretty_dict_itr(mlwh_rows, "data_id", head=header))
     else:
         for row in mlwh_rows:
             sys.stdout.write(ndjson_row(row))
+
+
+def format_header(mlwh_rows: list[dict[str, Any]], write_flag: bool):
+    new = 0
+    for row in mlwh_rows:
+        if row.get("id_tsb_tmp"):
+            new += 1
+    upd = len(mlwh_rows) - new
+    return (
+        f"Stored {bold(new)} new and updated {bold(upd)}"
+        if write_flag
+        else f"Generated {bold(len(mlwh_rows))}"
+    ) + f" MLWH tol_sample_bioproject table row{s(mlwh_rows)}:"
 
 
 def fetch_tol_bioproject_rows(
@@ -98,10 +115,14 @@ def fetch_tol_bioproject_rows(
         "file",
         filter_spec=filt_spec,
         requested_fields=[
+            "name",
+            "remote_path",
             "data.id",
             "data.library.library_type",
             "data.run.platform",
-            "data.sample.specimen.species",
+            "data.sample.id",
+            "data.sample.specimen.id",
+            "data.sample.specimen.species.id",
         ],
     ):
         if row := build_tol_bioproject_row(file):
@@ -127,6 +148,35 @@ def build_filter_spec(data_id_list: list[str | int]) -> dict[str, dict[str, Any]
         }
 
     return spec
+
+
+def update_request_placeholders_to_pending(
+    client: TolClient, mlwh_rows: list[dict[str, Any]]
+):
+    """
+    For each `data.id` in `mlwh_rows` update any "Request" placeholder
+    accessions to "Pending", now that they've been written to the MLWH
+    `tol_sample_bioproject` table.
+    """
+    data_id_list = [x["data_id"] for x in mlwh_rows]
+    req_data_id = []
+    for page in client.pages(data_id_list):
+        for data in client.ads_get_list(
+            "data",
+            filter_spec={
+                "accession.id": {"eq": {"value": "Request"}},
+                "id": {"in_list": {"value": page}},
+            },
+            requested_fields=["id"],  # Fetch the minimum data
+        ):
+            req_data_id.append(data.id)
+
+    ads = client.ads
+    for page in client.pages(req_data_id):
+        updates = dicts_to_core_data_objects(
+            ads, "data", [{"data.id": x, "accession.id": "Pending"} for x in page]
+        )
+        ads.upsert("data", updates)
 
 
 def build_tol_bioproject_row(file: DataObject):
@@ -252,11 +302,18 @@ def store_tol_bioproject_rows(
     conn: MySQLConnectionAbstract,
     mlwh_rows: list[dict[str, Any]],
 ) -> None:
+    """
+    Syncs all the rows in the `mlwh_rows` argument with the MLWH
+    `tol_sample_bioproject` table, or if there are any errors rolls back a
+    transaction and exits the script having stored no changes.
+    """
     crsr = conn.cursor(dictionary=True)
     sql = tol_sample_bioproject_insert()
 
     try:
         for row in mlwh_rows:
+            # Uses keys in the row dict to fill in the named placeholders in
+            # the SQL template:
             crsr.execute(sql, row)
             if not row.get("id_tsb_tmp"):
                 # New row _should_ have an auto-incremented ID
@@ -269,63 +326,43 @@ def store_tol_bioproject_rows(
 
 
 def tol_sample_bioproject_insert() -> str:
-    return cleandoc("""
+    """
+    Composes the SQL statement which inserts or updates a row in the
+    `tol_sample_bioproject` table.
+    """
+    columns = (
+        "data_id",
+        "id_sample_tmp",
+        "uuid_sample_lims",
+        "file",
+        "filename",
+        "platform",
+        "instrument",
+        "library_name",
+        "library_source",
+        "library_selection",
+        "library_strategy",
+        "library_type",
+        "library_construction_protocol",
+        "design_description",
+        "tolid",
+        "biosample_accession",
+        "bioproject_accession",
+    )
+
+    cols_str = ",\n          ".join(columns)
+    vals_str = ",\n          ".join(f"%({c})s" for c in columns)
+    upds_str = ",\n          ".join(f"{c} = %({c})s" for c in columns)
+
+    return cleandoc(f"""
       INSERT INTO
         tol_sample_bioproject (
-          data_id,
-          id_sample_tmp,
-          uuid_sample_lims,
-          file,
-          filename,
-          platform,
-          instrument,
-          library_name,
-          library_source,
-          library_selection,
-          library_strategy,
-          library_type,
-          library_construction_protocol,
-          design_description,
-          tolid,
-          biosample_accession,
-          bioproject_accession
+          {cols_str}
         )
       VALUES
         (
-          %(data_id)s,
-          %(id_sample_tmp)s,
-          %(uuid_sample_lims)s,
-          %(file)s,
-          %(filename)s,
-          %(platform)s,
-          %(instrument)s,
-          %(library_name)s,
-          %(library_source)s,
-          %(library_selection)s,
-          %(library_strategy)s,
-          %(library_type)s,
-          %(library_construction_protocol)s,
-          %(design_description)s,
-          %(tolid)s,
-          %(biosample_accession)s,
-          %(bioproject_accession)s
+          {vals_str}
         )
       ON DUPLICATE KEY UPDATE
-        data_id = %(data_id)s,
-        id_sample_tmp = %(id_sample_tmp)s,
-        uuid_sample_lims = %(uuid_sample_lims)s,
-        file = %(file)s,
-        filename = %(filename)s,
-        platform = %(platform)s,
-        instrument = %(instrument)s,
-        library_name = %(library_name)s,
-        library_source = %(library_source)s,
-        library_selection = %(library_selection)s,
-        library_strategy = %(library_strategy)s,
-        library_type = %(library_type)s,
-        library_construction_protocol = %(library_construction_protocol)s,
-        design_description = %(design_description)s,
-        tolid = %(tolid)s,
-        biosample_accession = %(biosample_accession)s,
-        bioproject_accession = %(bioproject_accession)s
-    """)
+        {upds_str}
+    """)  # noqa: S608

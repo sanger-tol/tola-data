@@ -96,8 +96,10 @@ def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
                 + json.dumps(first, indent=4)
             )
 
-    count = len(row_list)
-    yield head.format(bold(count), s(count)) + "\n"
+    if "{}" in head:
+        count = len(row_list)
+        head = head.format(bold(count), s(count))
+    yield head + "\n"
 
     for flat in row_list:
         yield TerminalDict(flat, key=key).pretty()

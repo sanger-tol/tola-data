@@ -1,3 +1,4 @@
+from tol.api_client.api_datasource import ApiDataSource
 import asyncio
 import logging
 import re
@@ -347,7 +348,9 @@ def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
         add_sub_tree_data(flat, sub_tree, sub_cdo, *path, rel_name)
 
 
-def dicts_to_core_data_objects(ads, table, flat_list):
+def dicts_to_core_data_objects(
+    ads: ApiDataSource, table: str, flat_list: list[dict[str, Any]]
+):
     """Turns flattened dicts back into CoreDataObjects"""
 
     rel_conf = ads.relationship_config.get(table)
