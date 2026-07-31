@@ -1,4 +1,3 @@
-from tol.api_client.api_datasource import ApiDataSource
 import asyncio
 import logging
 import re
@@ -10,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from partisan.irods import DataObject
+from tol.api_client.api_datasource import ApiDataSource
 from tol.core import DataSourceFilter, ReqFieldsTree
 
 from tola.ndjson import (
@@ -268,7 +268,9 @@ def req_fields_tree_cdo_to_dict(requested_tree: ReqFieldsTree, cdo):
     return flat
 
 
-def flatten_cdo(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
+def flatten_cdo(
+    flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path
+) -> dict[str, Any]:
     """
     Flattens a CoreDataObject to a dict, calling itself recursively on
     requested, related objects.

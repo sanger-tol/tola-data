@@ -26,7 +26,7 @@ def main():
     """)
 
     # Use reservoir sampling to get up to this many samples for each lib type
-    rsrv_size = 20
+    rsrv_size = 40
     samples = {}
     for lib_type, acc in conn.fetchall():
         n_smpl = samples.setdefault(
@@ -45,7 +45,7 @@ def main():
         for acc in sorted(smpl):
             print(f"{lib_type}\t{n}\t{acc}", file=sys.stderr)
             url = f"https://www.ebi.ac.uk/ena/browser/api/xml/{acc}"
-            rspns = requests.get(url, timeout=10)
+            rspns = requests.get(url, timeout=120)
             if rspns.status_code != 200:
                 sys.exit(f"{rspns.status_code}: {url}")
             xml = rspns.content

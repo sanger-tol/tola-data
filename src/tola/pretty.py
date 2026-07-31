@@ -48,7 +48,12 @@ def field_style(column_name, val):
         return val.isoformat(sep=" ", timespec="seconds"), bold
     if isinstance(val, dt.date | dt.time):
         return val.isoformat(), bold
-    if isinstance(val, int) and val >= 10_000 and not column_name.endswith("_id"):
+    if (
+        isinstance(val, int)
+        and val >= 10_000
+        and not column_name.endswith("_id")
+        and not column_name.startswith("id_")
+    ):
         return f"{val:_}", bold
     if isinstance(val, dict | list):
         if len(val) == 0 or (
@@ -104,6 +109,7 @@ def natural(string):
     return tuple(
         int(x) if i % 2 else x for i, x in enumerate(re.split(r"(\d+)", string))
     )
+
 
 def wrap_name_description(name_desc: dict[str, str]):
     """

@@ -20,7 +20,7 @@ from tola.db_connection import get_connection_params_entry
 from tola.s3client import S3Client
 from tola.store_folder import FolderLocation
 from tola.terminal import TerminalDict
-from tola.tqc.engine import core_data_object_to_dict
+from tola.tqc.engine import core_data_object_to_dict, req_fields_tree_cdo_to_dict
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +100,39 @@ class TolClient:
             object_filters=filt,
             requested_tree=rft,
         )
+
+    def ads_get_dict_list(
+        self,
+        table,
+        *,
+        filter_spec: dict[str, dict[str, Any]] | None = None,
+        requested_fields: list[str] | None = None,
+    ) -> Iterable[dict[str, Any]]:
+        """
+        Provides the same interface as `ads_get_list()` but flattens each
+        object returned into a single dict, which can be more convenient to
+        fetch values from when multiple objects it the hierarchy may be
+        `None`.
+        """
+
+        rft = (
+            None
+            if requested_fields is None
+            else self.build_req_fields_tree(table, requested_fields=requested_fields)
+        )
+        filt = DataSourceFilter(and_=filter_spec) if filter_spec else None
+        flat_rft = self.build_req_fields_tree(
+            table,
+            requested_fields=requested_fields,
+            all_attributes=True,
+        )
+
+        for cdo in self.ads_ro.get_list(
+            table,
+            object_filters=filt,
+            requested_tree=rft,
+        ):
+            yield req_fields_tree_cdo_to_dict(flat_rft, cdo)
 
     def report_url(self, report_name, params=None):
         report = f"report/{report_name}"

@@ -1,12 +1,14 @@
 import logging
 import sys
+from collections.abc import Callable
 from inspect import cleandoc
+from io import StringIO
+from string import Formatter
 from typing import Any
 
 import click
 import mysql.connector
 from mysql.connector.abstracts import MySQLConnectionAbstract
-from tol.core.data_object import DataObject
 
 from tola import click_options, db_connection
 from tola.ndjson import ndjson_row
@@ -67,6 +69,7 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
     """
 
     client: TolClient = ctx.obj
+    conn = db_connection.mlwh_rw_db()
 
     if store_flag:
         mlwh_rows = input_objects_or_exit(ctx, file_list)
@@ -75,13 +78,14 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
             id_iterator("data.id", data_id_list, file_list, file_format)
         )
         filt_spec = build_filter_spec(data_id_list)
-        mlwh_rows = fetch_tol_bioproject_rows(client, filt_spec)
+        tolqc_rows = fetch_tolqc_rows(client, filt_spec)
+        fetch_sample_table_fields(conn, tolqc_rows, client)
+        add_extra_mlwh_info(conn, tolqc_rows)
+        mlwh_rows = build_tol_bioproject_rows(tolqc_rows)
 
     if not mlwh_rows:
         sys.exit(0)
 
-    conn = db_connection.mlwh_rw_db()
-    fetch_sample_table_fields(conn, mlwh_rows, client)
     if store_flag or update_mlwh:
         store_tol_bioproject_rows(conn, mlwh_rows)
         update_request_placeholders_to_pending(client, mlwh_rows)
@@ -107,25 +111,50 @@ def format_header(mlwh_rows: list[dict[str, Any]], write_flag: bool):
     ) + f" MLWH tol_sample_bioproject table row{s(mlwh_rows)}:"
 
 
-def fetch_tol_bioproject_rows(
+def fetch_tolqc_rows(
     client: TolClient, filt_spec: dict[str, dict[str, Any]]
 ) -> list[dict[str, str]]:
+    """
+    Returns a list of `file` table entries satisfying the filter
+    specification.  Each row is a flattened dict of the required
+    information.
+    """
+
+    return list(
+        client.ads_get_dict_list(
+            "file",
+            filter_spec=filt_spec,
+            requested_fields=[
+                "name",
+                "remote_path",
+                "data.id",
+                "data.library.library_type",
+                "data.run.platform",
+                "data.sample.id",
+                "data.sample.specimen.id",
+                "data.sample.specimen.species.id",
+                "data.run.id",
+            ],
+        )
+    )
+
+
+def add_extra_mlwh_info(
+    conn: MySQLConnectionAbstract, tolqc_rows: list[dict[str, Any]]
+) -> None:
+    pass
+
+
+def build_tol_bioproject_rows(tolqc_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Checks and reformats the info for each `data.id` in `tolqc_rows` for the
+    MLWH `tol_sample_bioproject` table.  Filters out any rows missing
+    information and logs a warning showing what's missing.
+    """
+
     mlwh_rows = []
-    for file in client.ads_get_list(
-        "file",
-        filter_spec=filt_spec,
-        requested_fields=[
-            "name",
-            "remote_path",
-            "data.id",
-            "data.library.library_type",
-            "data.run.platform",
-            "data.sample.id",
-            "data.sample.specimen.id",
-            "data.sample.specimen.species.id",
-        ],
-    ):
-        if row := build_tol_bioproject_row(file):
+    for file in tolqc_rows:
+        if row := _build_tol_bioproject_row(file):
             mlwh_rows.append(row)
 
     return mlwh_rows
@@ -179,85 +208,104 @@ def update_request_placeholders_to_pending(
         ads.upsert("data", updates)
 
 
-def build_tol_bioproject_row(file: DataObject):
+def format_description(flat: dict[str, Any], missing: list[str]) -> str | None:
+    """
+    Formats a description or appends to the `missing` array if data required
+    to fill out a template is missing.
+    """
+
+    # Is there a description template?
+    for tmpl_source in (
+        "data.library.description",
+        "data.library.library_type.description_template",
+    ):
+        if template := flat[tmpl_source]:
+            break
+    if not template:
+        return None
+
+    # Fill out the template. (This will return the string unaltered if there
+    # are no "{name}" format directives in the string.)
+    desc = StringIO("")
+    for txt, source, *_ in Formatter().parse(template):
+        if txt is not None:
+            desc.write(txt)
+
+        if source is None:
+            # Text at the end of the template string
+            continue
+        elif source == "":
+            # Invalid "{}" format directive in string - a name is required
+            missing.append(f"Missing field name in {tmpl_source} template: {template}")
+            return
+
+        val = flat.get(source)
+        if val is None:
+            missing.append(source)
+            return
+        desc.write(str(val))
+
+    return desc.getvalue()
+
+
+# ruff: disable[E501]
+WANTED_MAP = (
+    # Name                             Source                                             Required
+    ("data_id",                        "data.id",                                         True),
+    ("sample_name",                    "data.sample.id",                                  True),
+    ("id_sample_tmp",                  "id_sample_tmp",                                   True),
+    ("uuid_sample_lims",               "uuid_sample_lims",                                True),
+    ("file",                           "remote_path",                                     True),
+    ("filename",                       "name",                                            True),
+    ("platform",                       "data.run.platform.name",                          True),
+    ("instrument",                     "data.run.platform.model",                         True),
+    ("library_name",                   "data.library.id",                                 True),
+    ("library_source",                 "data.library.library_type.source",                True),
+    ("library_selection",              "data.library.library_type.selection",             True),
+    ("library_strategy",               "data.library.library_type.strategy",              True),
+    ("library_type",                   "data.library.library_type.id",                    True),
+    ("library_construction_protocol",  "data.library.library_type.id",                    True),
+    ("design_description",             format_description,                                False),
+    ("tolid",                          "data.sample.specimen.id",                         True),
+    ("biosample_accession",            "data.sample.accession.id",                        True),
+    ("bioproject_accession",           "data.sample.specimen.species.data_accession.id",  True),
+    ("run",                            "data.run.id",                                     True),
+    ("cut_sites",                      "data.library.library_type.cut_sites",             False),
+)  # fmt: skip
+# ruff: enable[E501]
+
+
+def _build_tol_bioproject_row(flat: dict[str, Any]):
+
     # Check that all the required values are present
     missing = []
+    row = {}
+    for name, source, required in WANTED_MAP:
+        if isinstance(source, Callable):
+            val = source(flat, missing)
+        else:
+            val = flat.get(source)
+            if val is None:
+                if required:
+                    missing.append(source)
+            elif name == "file":
+                # Cannot proceed without an iRODS file name, since iRODS is where
+                # DataHose read files from.
+                if not val.startswith("irods:"):
+                    missing.append(source)
+                else:
+                    val = val[6:]
 
-    # Cannot proceed without an iRODS file name, since iRODS is where
-    # DataHose read files from.
-    if file.remote_path is not None and file.remote_path.startswith("irods:"):
-        file_path = file.remote_path[6:]
-    else:
-        file_path = None
-        missing.append(f"No iRODS path for, file.name = {file.name!r}")
-
-    if data := file.data:
-        data_id = data.id
-    else:
-        missing.append(f"No data object attached to file.id = {file.id!r}")
-        data_id = None
-
-    if data and not (lib := data.library):
-        missing.append("No library attached")
-
-    if data and not (run := data.run):
-        missing.append("No run attached")
-
-    if run and not (platform := run.platform):
-        missing.append(f"No run attached to run.id = {run.id!r}")
-
-    if lib and not (lib_type := lib.library_type):
-        missing.append(f"No library_type attached to library.id = {lib.id!r}")
-
-    if data and not (sample := data.sample):
-        missing.append("No sample attached")
-
-    if sample and not (specimen := sample.specimen):
-        missing.append(f"No specimen attached to sample.id = {sample.id!r}")
-
-    if specimen and not (species := specimen.species):
-        missing.append(f"No species attached to specimen.id = {specimen.id!r}")
-
-    if sample and not (bsa := sample.accession):
-        missing.append(f"No BioSample accession attached to sample.id = {sample.id!r}")
-
-    if species and not (bpa := species.data_accession):
-        missing.append(
-            f"No BioSpecimen data_accession attached to species.id = {species.id!r}"
-        )
+        row[name] = val
 
     if missing:
-        msg = "\n  ".join(
-            [f"Missing value{s(missing)} for data.id = {data_id!r}:", *missing]
+        msg = "  \n  ".join(
+            [f"Missing value{s(missing)} for data.id = {row['data_id']!r}:", *missing]
         )
         log.warning(msg)
         return
 
-    return {
-        "data_id": data_id,
-        "sample_name": sample.id,
-        "file": file_path,
-        "filename": file.name,
-        "platform": platform.name,
-        "instrument": platform.model,
-        "library_name": lib.id,
-        "library_source": lib_type.source,
-        "library_selection": lib_type.selection,
-        "library_strategy": lib_type.strategy,
-        "library_type": lib_type.id,
-        "library_construction_protocol": lib_type.id,
-        "design_description": None,
-        # "design_description": build_description(
-        #     lib_type.description_template, lib.description
-        # ),
-        "tolid": specimen.id,
-        "biosample_accession": bsa.id,
-        "bioproject_accession": bpa.id,
-    }
-
-
-def build_description(type_template, lib_desc):
-    return f"{type_template} {lib_desc}"
+    return row
 
 
 def fetch_sample_table_fields(
@@ -268,7 +316,7 @@ def fetch_sample_table_fields(
 
     idx: dict[str, list[dict[str, Any]]] = {}
     for row in mlwh_rows:
-        idx.setdefault(row["sample_name"], []).append(row)
+        idx.setdefault(row["data.sample.id"], []).append(row)
 
     crsr = conn.cursor()
     last_page = None
@@ -364,5 +412,5 @@ def tol_sample_bioproject_insert() -> str:
           {vals_str}
         )
       ON DUPLICATE KEY UPDATE
-        {upds_str}
+          {upds_str}
     """)  # noqa: S608
