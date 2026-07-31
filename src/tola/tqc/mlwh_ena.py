@@ -1,14 +1,15 @@
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Iterable
 from inspect import cleandoc
 from io import StringIO
+from itertools import batched
 from string import Formatter
 from typing import Any
 
 import click
 import mysql.connector
-from mysql.connector.abstracts import MySQLConnectionAbstract
+from mysql.connector.abstracts import MySQLConnectionAbstract, MySQLCursorAbstract
 
 from tola import click_options, db_connection
 from tola.ndjson import ndjson_row
@@ -22,12 +23,6 @@ from tola.tqc.engine import (
 )
 
 log = logging.getLogger(__name__)
-
-
-class MlwhEnaDataError(Exception):
-    """
-    Data error when storing
-    """
 
 
 @click.command()
@@ -64,12 +59,15 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
     to populate the SubTrack ENA submissions system.
 
     Defaults to any `data` table entries where `accession.id` is "Request", or
-    for each `data.id` given in DATA_ID_LIST, or for each `data.id` values in
+    for each `data.id` given in DATA_ID_LIST, or for each `data.id` value in
     each row in each "--file" argument given.
     """
 
     client: TolClient = ctx.obj
-    conn = db_connection.mlwh_rw_db()
+
+    # Connect with the read-only account if we don't need write access to MLWH
+    write_flag = store_flag or update_mlwh
+    conn = db_connection.mlwh_rw_db() if write_flag else db_connection.mlwh_db()
 
     if store_flag:
         mlwh_rows = input_objects_or_exit(ctx, file_list)
@@ -79,19 +77,22 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
         )
         filt_spec = build_filter_spec(data_id_list)
         tolqc_rows = fetch_tolqc_rows(client, filt_spec)
-        fetch_sample_table_fields(conn, tolqc_rows, client)
-        add_extra_mlwh_info(conn, tolqc_rows)
+
+        # Add some information from the MLWH
+        fetch_sample_table_fields(conn, tolqc_rows, client.page_size)
+        add_illumina_tag_sequences(conn, tolqc_rows, client.page_size)
+
         mlwh_rows = build_tol_bioproject_rows(tolqc_rows)
 
     if not mlwh_rows:
         sys.exit(0)
 
-    if store_flag or update_mlwh:
+    if write_flag:
         store_tol_bioproject_rows(conn, mlwh_rows)
         update_request_placeholders_to_pending(client, mlwh_rows)
 
     if sys.stdout.isatty():
-        header = format_header(mlwh_rows, store_flag or update_mlwh)
+        header = format_header(mlwh_rows, write_flag)
         colour_pager(pretty_dict_itr(mlwh_rows, "data_id", head=header))
     else:
         for row in mlwh_rows:
@@ -137,12 +138,6 @@ def fetch_tolqc_rows(
             ],
         )
     )
-
-
-def add_extra_mlwh_info(
-    conn: MySQLConnectionAbstract, tolqc_rows: list[dict[str, Any]]
-) -> None:
-    pass
 
 
 def build_tol_bioproject_rows(tolqc_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -208,7 +203,11 @@ def update_request_placeholders_to_pending(
         ads.upsert("data", updates)
 
 
-def format_description(flat: dict[str, Any], missing: list[str]) -> str | None:
+def format_description(
+    flat: dict[str, Any],
+    row: dict[str, Any],
+    missing: list[str],
+) -> str | None:
     """
     Formats a description or appends to the `missing` array if data required
     to fill out a template is missing.
@@ -239,7 +238,7 @@ def format_description(flat: dict[str, Any], missing: list[str]) -> str | None:
             missing.append(f"Missing field name in {tmpl_source} template: {template}")
             return
 
-        val = flat.get(source)
+        val = row.get(source)
         if val is None:
             missing.append(source)
             return
@@ -248,11 +247,12 @@ def format_description(flat: dict[str, Any], missing: list[str]) -> str | None:
     return desc.getvalue()
 
 
+# This could live in, or be supplemented by, an entry in the ToLQC `metadata`
+# table.
 # ruff: disable[E501]
 WANTED_MAP = (
     # Name                             Source                                             Required
     ("data_id",                        "data.id",                                         True),
-    ("sample_name",                    "data.sample.id",                                  True),
     ("id_sample_tmp",                  "id_sample_tmp",                                   True),
     ("uuid_sample_lims",               "uuid_sample_lims",                                True),
     ("file",                           "remote_path",                                     True),
@@ -265,12 +265,13 @@ WANTED_MAP = (
     ("library_strategy",               "data.library.library_type.strategy",              True),
     ("library_type",                   "data.library.library_type.id",                    True),
     ("library_construction_protocol",  "data.library.library_type.id",                    True),
-    ("design_description",             format_description,                                False),
     ("tolid",                          "data.sample.specimen.id",                         True),
     ("biosample_accession",            "data.sample.accession.id",                        True),
     ("bioproject_accession",           "data.sample.specimen.species.data_accession.id",  True),
+    ("sample_name",                    "data.sample.id",                                  True),
     ("run",                            "data.run.id",                                     True),
     ("cut_sites",                      "data.library.library_type.cut_sites",             False),
+    ("tag_sequence",                   "tag_sequence",                                    False),
 )  # fmt: skip
 # ruff: enable[E501]
 
@@ -281,25 +282,25 @@ def _build_tol_bioproject_row(flat: dict[str, Any]):
     missing = []
     row = {}
     for name, source, required in WANTED_MAP:
-        if isinstance(source, Callable):
-            val = source(flat, missing)
-        else:
-            val = flat.get(source)
-            if val is None:
-                if required:
-                    missing.append(source)
-            elif name == "file":
-                # Cannot proceed without an iRODS file name, since iRODS is where
-                # DataHose read files from.
-                if not val.startswith("irods:"):
-                    missing.append(source)
-                else:
-                    val = val[6:]
+        val = flat.get(source)
+        if val is None:
+            if required:
+                missing.append(source)
+        elif name == "file":
+            # Cannot proceed without an iRODS file name, since iRODS is where
+            # DataHose read files from.
+            if not val.startswith("irods:"):
+                missing.append(source)
+            else:
+                val = val[6:]
 
         row[name] = val
 
+    # Descriptions are formatted using the name field from `WANTED_MAP`
+    row["design_description"] = format_description(flat, row, missing)
+
     if missing:
-        msg = "  \n  ".join(
+        msg = "\n  ".join(
             [f"Missing value{s(missing)} for data.id = {row['data_id']!r}:", *missing]
         )
         log.warning(msg)
@@ -308,33 +309,33 @@ def _build_tol_bioproject_row(flat: dict[str, Any]):
     return row
 
 
+def batched_queries(
+    crsr: MySQLCursorAbstract,
+    sql_template: str,
+    params: list,
+    max_page: int = 200,
+) -> Iterable[Any]:
+    last_page = None
+    for page in batched(params, max_page):
+        page_size = len(page)
+        if page_size != last_page:
+            sql = sql_template.format(",".join(["%s"] * page_size))
+            last_page = page_size
+        crsr.execute(sql, page)
+        yield from crsr
+
+
 def fetch_sample_table_fields(
     conn: MySQLConnectionAbstract,
-    mlwh_rows: list[dict[str, Any]],
-    client: TolClient,
+    tolqc_rows: list[dict[str, Any]],
+    max_page: int = 200,
 ) -> None:
 
     idx: dict[str, list[dict[str, Any]]] = {}
-    for row in mlwh_rows:
+    for row in tolqc_rows:
         idx.setdefault(row["data.sample.id"], []).append(row)
 
-    crsr = conn.cursor()
-    last_page = None
-    for page in client.pages(list(idx)):
-        page_size = len(page)
-        if page_size != last_page:
-            sql = sample_table_info_sql(page_size)
-            last_page = page_size
-        crsr.execute(sql, page)
-        for sample_name, id_sample_tmp, uuid_sample_lims in crsr.fetchall():
-            for row in idx[str(sample_name)]:
-                row["id_sample_tmp"] = id_sample_tmp
-                row["uuid_sample_lims"] = uuid_sample_lims
-
-
-def sample_table_info_sql(page_size: int):
-    placeholders = ",".join(["%s"] * page_size)
-    return cleandoc(f"""
+    sql_template = cleandoc("""
       SELECT
         name,
         id_sample_tmp,
@@ -342,8 +343,68 @@ def sample_table_info_sql(page_size: int):
       FROM
         sample
       WHERE
-        name IN ({placeholders})
-    """)  # noqa: S608
+        name IN ({})
+    """)
+
+    crsr = conn.cursor()
+    for sample_name, id_sample_tmp, uuid_sample_lims in batched_queries(
+        crsr, sql_template, list(idx), max_page
+    ):
+        for row in idx[str(sample_name)]:
+            row["id_sample_tmp"] = id_sample_tmp
+            row["uuid_sample_lims"] = uuid_sample_lims
+
+
+def add_illumina_tag_sequences(
+    conn: MySQLConnectionAbstract,
+    tolqc_rows: list[dict[str, Any]],
+    max_page: int = 200,
+) -> None:
+
+    idx = {}
+    smpl = set()
+    for row in tolqc_rows:
+        if row["data.run.platform.name"] == "Illumina":
+            idx[row["data.id"]] = row
+            smpl.add(row["data.sample.id"])
+
+    if not idx:
+        return
+
+    # This SQL uses joins found in fetch-mlwh-seq-data that deal with possibly
+    # multiplexed Illumina runs.
+    sql_template = cleandoc("""
+      SELECT
+        REGEXP_REPLACE(
+          irods.irods_data_relative_path,
+          '\\.[[:alnum:]]+$', '') AS data_id,
+        flowcell.tag_sequence AS tag_sequence
+      FROM
+        sample
+        JOIN iseq_flowcell AS flowcell
+          ON flowcell.id_sample_tmp = sample.id_sample_tmp
+        JOIN iseq_product_metrics AS component_metrics
+          ON flowcell.id_iseq_flowcell_tmp = component_metrics.id_iseq_flowcell_tmp
+        JOIN iseq_run_lane_metrics AS run_lane_metrics
+          ON component_metrics.id_run = run_lane_metrics.id_run
+          AND component_metrics.position = run_lane_metrics.position
+        JOIN iseq_product_components AS components
+          ON component_metrics.id_iseq_pr_metrics_tmp
+                  = components.id_iseq_pr_component_tmp
+        AND components.component_index = 1
+        JOIN iseq_product_metrics AS product_metrics
+          ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
+        JOIN seq_product_irods_locations AS irods
+          ON product_metrics.id_iseq_product = irods.id_product
+      WHERE
+        sample.name IN ({})
+    """)
+
+    for data_id, tag_sequence in batched_queries(
+        conn.cursor(), sql_template, sorted(smpl), max_page
+    ):
+        if row := idx.get(data_id):
+            row["tag_sequence"] = tag_sequence
 
 
 def store_tol_bioproject_rows(
