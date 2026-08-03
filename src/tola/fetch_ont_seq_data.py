@@ -387,6 +387,7 @@ def append_product_dir(product_locs, product_dir, type_prefix, dir_type):
                     ):
                         product_locs.append(
                             {
+                                "name": obj.name,
                                 "remote_path": f"irods:{obj.path}/{obj.name}",
                                 "file_type": file_type,
                                 "size_bytes": obj.size(),
