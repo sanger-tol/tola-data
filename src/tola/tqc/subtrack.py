@@ -11,10 +11,35 @@ from tola.ndjson import (
 )
 from tola.subtrack import SubTrack
 from tola.terminal import colour_pager, pretty_dict_itr
+from tola.tolqc_client import TolClient
 from tola.tqc.engine import guess_file_type, parse_id_list_stream
 
 
 @click.command()
+@click.pass_context
+@click.option(
+    "--auto",
+    "auto_flag",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="""
+      Query subtrack with any "Pending" accessions found in the ToLQC `data`
+      table, fill in the `data_submission` table with those records, populate
+      the `accession` table, and update `data.accession.id` with run
+      accessions.
+    """,
+)
+@click.option(
+    "--auto-value",
+    default="Pending",
+    show_default=True,
+    help="""
+      Value to search for in `data.accession.id`.  Set to "null" to search for
+      all "null" accessions - which may be usefult to fill in data for
+      faculty projects.
+    """,
+)
 @click.option(
     "--key",
     default="file_name",
@@ -36,7 +61,16 @@ from tola.tqc.engine import guess_file_type, parse_id_list_stream
     nargs=-1,
     required=False,
 )
-def subtrack(key, throw_if_missing, file_list, file_format, data_filenames):
+def subtrack(
+    ctx,
+    auto_flag,
+    auto_value,
+    key,
+    throw_if_missing,
+    file_list,
+    file_format,
+    data_filenames,
+):
     """Show information from the subtrack database
 
     DATA_FILENAMES is a list of data filenames to fetch ENA submission
@@ -53,9 +87,21 @@ def subtrack(key, throw_if_missing, file_list, file_format, data_filenames):
     e.g. tqc subtrack 36703_6#11.cram m84047_240704_124657_s2.hifi_reads.bc2070.bam
     """
 
-    query_obj = get_file_name_query_objects(key, data_filenames, file_list, file_format)
-    if not query_obj:
-        sys.exit("No input provided")
+    client = ctx.obj
+    if auto_flag:
+        if key != "file_name":
+            sys.exit("Cannot set --key to {key!r} with --auto")
+        auto_value = None if auto_value.lower() == "null" else auto_value
+        query_obj = get_file_names_by_accession_value(client, auto_value)
+        if not query_obj:
+            sys.exit(0)
+    else:
+        query_obj = get_file_name_query_objects(
+            key, data_filenames, file_list, file_format
+        )
+        if not query_obj:
+            sys.exit("No input provided")
+
     fetched_info = {
         x["file_name"]: x
         for x in SubTrack().fetch_submission_info([n["file_name"] for n in query_obj])
@@ -73,11 +119,40 @@ def subtrack(key, throw_if_missing, file_list, file_format, data_filenames):
         nf_list = "".join(f"  {x['file_name']}\n" for x in not_found)
         sys.exit("Failed to fetch info from subtrack for files:\n" + nf_list)
 
+    if auto_flag:
+        subtrack_info = [x for x in subtrack_info if x["run_accession"] is not None]
+
     if sys.stdout.isatty():
         colour_pager(pretty_dict_itr(subtrack_info, key))
     else:
         for info in subtrack_info:
             sys.stdout.write(ndjson_row(info))
+
+
+def get_file_names_by_accession_value(
+    client: TolClient, auto_value: str | None
+):
+    query_obj = []
+    for file in client.ads_get_list(
+        "file",
+        filter_spec={
+            # These submission file types should probably go in the `metadata` table.
+            "file_type": {"in_list": {"value": ["BAM", "CRAM", "RECALL_BAM"]}},
+            "data.accession.id": {"eq": {"value": auto_value}},
+        },
+    ):
+        path = file.name or file.remote_path
+        if not path:
+            continue
+        file_name = Path(path).name
+        query_obj.append(
+            {
+                "file_name": file_name,
+                "data_id": file.data.id,  # ty: ignore[unresolved-attribute]
+            }
+        )
+
+    return query_obj
 
 
 def get_file_name_query_objects(key, data_filenames, file_list, file_format):
