@@ -15,6 +15,8 @@ def test_query_parser():
         "specimen.species.id!%corax",
         "has_methylation=true",
         "has_kinetics=false",
+        "file_type,=BAM,CRAM,RECALL_BAM",
+        "accession!,=Pending,Request"
     ]
     qp = QueryParser(params)
     assert qp.filter_dict() == {
@@ -76,6 +78,17 @@ def test_query_parser():
         "has_kinetics": {
             "eq": {
                 "value": False,
+            }
+        },
+        "file_type": {
+            "in_list": {
+                "value": ["BAM", "CRAM", "RECALL_BAM"],
+            }
+        },
+        "accession": {
+            "in_list": {
+                "value": ["Pending", "Request"],
+                "negate": True,
             }
         },
     }

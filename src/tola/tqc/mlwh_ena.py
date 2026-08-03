@@ -391,7 +391,7 @@ def add_illumina_tag_sequences(
         JOIN iseq_product_components AS components
           ON component_metrics.id_iseq_pr_metrics_tmp
                   = components.id_iseq_pr_component_tmp
-        AND components.component_index = 1
+          AND components.component_index = 1
         JOIN iseq_product_metrics AS product_metrics
           ON components.id_iseq_pr_tmp = product_metrics.id_iseq_pr_metrics_tmp
         JOIN seq_product_irods_locations AS irods

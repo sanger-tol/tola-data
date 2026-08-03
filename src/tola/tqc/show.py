@@ -54,15 +54,17 @@ from tola.tqc.query_parser import QueryParser
       Multiple query terms can be given, which are combined by "AND".
 
       \b
-      Available operators:
-        =   equal (can use "null" as the VALUE)
-        !=  not-equal
-        <   less than
-        <=  less than or equal
-        >   greater than
-        >=  greater than or equal
-        %   contains (case insensitive sub-string match)
-        !%  does not contain
+      Available OPERATORs:
+        =    equal (can use "null" as the VALUE)
+        !=   not-equal
+        <    less than
+        <=   less than or equal
+        >    greater than
+        >=   greater than or equal
+        %    contains (case insensitive sub-string match)
+        !%   does not contain
+        ,=   in list (VALUE is split on ",")
+        !,=  not in list
 
       Query filters containing "<" or ">" require enclosing the query term in
       quotes to avoid shell redirection.

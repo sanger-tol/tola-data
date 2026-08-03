@@ -32,7 +32,7 @@ class QueryParser:
 
     def add_param(self, param: str) -> None:
         """Adds a filter parameter to the list of terms"""
-        m = re.fullmatch(r"^([\w.]+)([=!<>%]{1,2})(.+)", param)
+        m = re.fullmatch(r"^([\w.]+)([!]?[<>,=%]{1,2})(.+)", param)
         if not m:
             msg = f"Failed to parse query param {param!r}"
             raise QueryParserError(msg)
@@ -50,7 +50,11 @@ class QueryParser:
 
         op, negate = self._parse_operator(operator, param)
 
-        value = string_to_type(value)
+        if op == "in_list":
+            value = [string_to_type(x) for x in value.split(",")]
+        else:
+            value = string_to_type(value)
+
         if value is None and op == "eq":
             # !=null means exists
             term = {"exists": {}} if negate is True else {"exists": {"negate": True}}
@@ -94,6 +98,11 @@ class QueryParser:
                 op = "contains"
             case "!%":
                 op = "contains"
+                negate = True
+            case ",=":
+                op = "in_list"
+            case "!,=":
+                op = "in_list"
                 negate = True
             case _:
                 msg = f"Unknown operator {operator!r} in query param {ctx!r}"
