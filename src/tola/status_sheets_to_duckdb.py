@@ -65,7 +65,9 @@ def cli(duckdb_file):
     # Start duckdb cli if run in a terminal
     if sys.stdout.isatty():
         conn.close()
-        os.execlp("duckdb", "duckdb", "-ui", duckdb_file)  # noqa: S606, S607
+        # Don't start the web browser UI if we're on a remote Linux host
+        ui = [] if os.environ.get("XDG_SESSION_TYPE") == "tty" else ["-ui"]
+        os.execlp("duckdb", "duckdb", *ui, duckdb_file)  # noqa: S606, S607
 
 
 def create_table(conn, table_name, row_itr):
