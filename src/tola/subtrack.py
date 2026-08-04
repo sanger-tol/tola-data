@@ -2,6 +2,7 @@ from functools import cached_property
 from inspect import cleandoc
 
 from tola import db_connection
+from tola.ndjson import set_timezone_if_naive
 
 
 class SubTrack:
@@ -46,7 +47,10 @@ class SubTrack:
                 sql = self.submission_info_sql(page_size)
                 last_page = page_size
             crsr.execute(sql, page)
-            yield from crsr
+            for row in crsr:
+                if sdt := row["submission_time"]:
+                    row["submission_time"] = set_timezone_if_naive(sdt)
+                yield row
 
     def submission_info_sql(self, count):
         placeholders = ",".join(["%s"] * count)

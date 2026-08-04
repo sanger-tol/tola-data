@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -9,10 +10,15 @@ from tola.ndjson import (
     parse_ndjson_stream,
     pretty_row,
 )
+from tola.pretty import plain_text_from_itr
 from tola.subtrack import SubTrack
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
-from tola.tqc.engine import guess_file_type, parse_id_list_stream
+from tola.tqc.engine import (
+    dicts_to_core_data_objects,
+    guess_file_type,
+    parse_id_list_stream,
+)
 
 
 @click.command()
@@ -35,9 +41,9 @@ from tola.tqc.engine import guess_file_type, parse_id_list_stream
     default="Pending",
     show_default=True,
     help="""
-      Value to search for in `data.accession.id`.  Set to "null" to search for
-      all "null" accessions - which may be usefult to fill in data for
-      faculty projects.
+      Value to search for in `data.accession.id` to select entries.  Set
+      to "null" to search for all "null" accessions (which may be useful to
+      fill in data for faculty projects).
     """,
 )
 @click.option(
@@ -50,6 +56,13 @@ from tola.tqc.engine import guess_file_type, parse_id_list_stream
     "--throw",
     "throw_if_missing",
     help="Exit with an error if records for any of the filenames are not found",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--pretty",
+    help="Format pretty output even when STDOUT is not an terminal",
     is_flag=True,
     default=False,
     show_default=True,
@@ -67,6 +80,7 @@ def subtrack(
     auto_value,
     key,
     throw_if_missing,
+    pretty,
     file_list,
     file_format,
     data_filenames,
@@ -120,18 +134,106 @@ def subtrack(
         sys.exit("Failed to fetch info from subtrack for files:\n" + nf_list)
 
     if auto_flag:
+        # Filter out entries without run accessions
         subtrack_info = [x for x in subtrack_info if x["run_accession"] is not None]
+        store_accessions(client, subtrack_info)
+        store_data_submissions(client, subtrack_info)
+        update_data_table_run_accessions(client, subtrack_info)
 
-    if sys.stdout.isatty():
-        colour_pager(pretty_dict_itr(subtrack_info, key))
+    if not subtrack_info:
+        sys.exit(0)
+
+    if pretty or sys.stdout.isatty():
+        head = (
+            "Fetched {} new submission records from SubTrack:"
+            if auto_flag
+            else "Found {} SubTrack records:"
+        )
+        itr = pretty_dict_itr(subtrack_info, key, head=head)
+        if pretty:
+            print(plain_text_from_itr(itr))
+        else:
+            colour_pager(itr)
     else:
         for info in subtrack_info:
             sys.stdout.write(ndjson_row(info))
 
 
-def get_file_names_by_accession_value(
-    client: TolClient, auto_value: str | None
-):
+def store_accessions(client: TolClient, subtrack_info: list[dict[str, Any]]) -> None:
+    acc_upserts = {}
+    for info in subtrack_info:
+        for acc_info in [
+            {
+                "accession.id": info["run_accession"],
+                "accession_type_id": "Run",
+                "secondary": info["experiment_accession"],
+                "submission": info["submission_accession"],
+                "date_submitted": info["submission_time"],
+            },
+            {
+                "accession.id": info["experiment_accession"],
+                "accession_type_id": "Experiment",
+                "secondary": info["run_accession"],
+                "submission": info["submission_accession"],
+                "date_submitted": info["submission_time"],
+            },
+            {
+                "accession.id": info["sample_accession"],
+                "accession_type_id": "BioSample",
+            },
+            {
+                "accession.id": info["study_accession"],
+                "accession_type_id": "BioProject",
+            },
+        ]:
+            acc_upserts[acc_info["accession.id"]] = acc_info
+
+    ads = client.ads
+    acc_cdo_list = dicts_to_core_data_objects(ads, "accession", acc_upserts.values())
+    ads.upsert("accession", acc_cdo_list)
+
+
+def store_data_submissions(
+    client: TolClient, subtrack_info: list[dict[str, Any]]
+) -> None:
+    ads = client.ads
+    data_sub_cdo_list = dicts_to_core_data_objects(
+        ads,
+        "data_submission",
+        [
+            {
+                "data_submission.id": info["data_id"],
+                "run_accession_id": info["run_accession"],
+                "study_accession_id": info["study_accession"],
+                "sample_accession_id": info["sample_accession"],
+                "experiment_accession_id": info["experiment_accession"],
+                "submission_time": info["submission_time"],
+            }
+            for info in subtrack_info
+        ],
+    )
+    ads.upsert("data_submission", data_sub_cdo_list)
+
+
+def update_data_table_run_accessions(
+    client: TolClient, subtrack_info: list[dict[str, Any]]
+) -> None:
+    ads = client.ads
+    data_cdo_list = dicts_to_core_data_objects(
+        ads,
+        "data",
+        [
+            {
+                "data.id": info["data_id"],
+                "accession_id": info["run_accession"],
+            }
+            for info in subtrack_info
+        ],
+    )
+    ads.upsert("data", data_cdo_list)
+
+
+def get_file_names_by_accession_value(client: TolClient, auto_value: str | None):
     query_obj = []
     for file in client.ads_get_list(
         "file",

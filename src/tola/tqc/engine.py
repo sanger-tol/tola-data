@@ -351,7 +351,7 @@ def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
 
 
 def dicts_to_core_data_objects(
-    ads: ApiDataSource, table: str, flat_list: list[dict[str, Any]]
+    ads: ApiDataSource, table: str, flat_list: Iterable[dict[str, Any]]
 ):
     """Turns flattened dicts back into CoreDataObjects"""
 

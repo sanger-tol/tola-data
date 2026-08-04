@@ -53,6 +53,9 @@ experiment_name, flowcell_id and instrument_slot in oseq_flowcell).
       Show data modified since a particular datetime, in ISO8601
       (RFC3339) format. If there is no time zone it is converted from the
       local timezone to UTC / GMT.
+
+      By default only iRODS metadata updated since the ToLQC
+      'irods.ont.last_modified' metadata table minus 40 days is returned.
     """,
 )
 @click.option(
