@@ -60,13 +60,7 @@ from tola.tqc.engine import (
     default=False,
     show_default=True,
 )
-@click.option(
-    "--pretty",
-    help="Format pretty output even when STDOUT is not an terminal",
-    is_flag=True,
-    default=False,
-    show_default=True,
-)
+@click_options.pretty
 @click_options.file
 @click_options.file_format
 @click.argument(

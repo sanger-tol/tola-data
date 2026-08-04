@@ -86,6 +86,18 @@ quiet = click.option(
 )
 
 
+pretty = click.option(
+    "--pretty",
+    help="""
+      Print pretty output when STDOUT is not an terminal instead of the
+      default ND-JSON
+    """,
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+
+
 def default_diff_mlwh_duckdb():
     return pathlib.Path(f"diff_mlwh_{TODAY}.duckdb")
 

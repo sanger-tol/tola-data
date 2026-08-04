@@ -13,7 +13,7 @@ from mysql.connector.abstracts import MySQLConnectionAbstract, MySQLCursorAbstra
 
 from tola import click_options, db_connection
 from tola.ndjson import ndjson_row
-from tola.pretty import bold, s
+from tola.pretty import bold, plain_text_from_itr, s
 from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
 from tola.tqc.engine import (
@@ -45,6 +45,7 @@ log = logging.getLogger(__name__)
     default=False,
     show_default=True,
 )
+@click_options.pretty
 @click_options.file
 @click_options.file_format
 @click.argument(
@@ -52,7 +53,9 @@ log = logging.getLogger(__name__)
     nargs=-1,
     required=False,
 )
-def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list):
+def mlwh_ena(
+    ctx, update_mlwh, store_flag, pretty, file_list, file_format, data_id_list
+):
     """
     Add raw data entries for submission to the ENA, to create run accessions.
     Creates or updates entries in the MLWH `tol_sample_bioproject` table used
@@ -91,9 +94,13 @@ def mlwh_ena(ctx, update_mlwh, store_flag, file_list, file_format, data_id_list)
         store_tol_bioproject_rows(conn, mlwh_rows)
         update_request_placeholders_to_pending(client, mlwh_rows)
 
-    if sys.stdout.isatty():
+    if pretty or sys.stdout.isatty():
         header = format_header(mlwh_rows, write_flag)
-        colour_pager(pretty_dict_itr(mlwh_rows, "data_id", head=header))
+        itr = pretty_dict_itr(mlwh_rows, "data_id", head=header)
+        if pretty:
+            print(plain_text_from_itr(itr))
+        else:
+            colour_pager(itr)
     else:
         for row in mlwh_rows:
             sys.stdout.write(ndjson_row(row))
