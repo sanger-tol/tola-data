@@ -392,9 +392,6 @@ def add_illumina_tag_sequences(
           ON flowcell.id_sample_tmp = sample.id_sample_tmp
         JOIN iseq_product_metrics AS component_metrics
           ON flowcell.id_iseq_flowcell_tmp = component_metrics.id_iseq_flowcell_tmp
-        JOIN iseq_run_lane_metrics AS run_lane_metrics
-          ON component_metrics.id_run = run_lane_metrics.id_run
-          AND component_metrics.position = run_lane_metrics.position
         JOIN iseq_product_components AS components
           ON component_metrics.id_iseq_pr_metrics_tmp
                   = components.id_iseq_pr_component_tmp
