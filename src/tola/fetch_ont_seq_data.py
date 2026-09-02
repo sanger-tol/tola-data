@@ -55,7 +55,8 @@ experiment_name, flowcell_id and instrument_slot in oseq_flowcell).
       local timezone to UTC / GMT.
 
       By default only iRODS metadata updated since the ToLQC
-      'irods.ont.last_modified' metadata table minus 40 days is returned.
+      'irods.ont.last_modified' metadata table entry minus 40 days are
+      returned.
     """,
 )
 @click.option(
@@ -84,7 +85,7 @@ def cli(
     Fetch sequencing data from the Multi-LIMS Warehouse (MLWH)
 
     Fetches Oxford Nanopore (ONT) sequencing run data by querying iRODS
-    under "/seq/ont" for data linked to any of numeric STUDY_ID procided. e.g. 5901
+    under "/seq/ont" for data linked to any of numeric STUDY_ID provided. e.g. 5901
     (Darwin Tree of Life).
 
     If STUDY_ID arguments are not provided, a list is fetched from the ToLQC

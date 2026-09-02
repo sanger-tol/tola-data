@@ -139,9 +139,9 @@ def subtrack(
 
     if pretty or sys.stdout.isatty():
         head = (
-            "Fetched {} new submission records from SubTrack:"
+            "Fetched {} new submission record{} from SubTrack:"
             if auto_flag
-            else "Found {} SubTrack records:"
+            else "Found {} SubTrack record{}:"
         )
         itr = pretty_dict_itr(subtrack_info, key, head=head)
         if pretty:

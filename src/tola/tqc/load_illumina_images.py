@@ -129,7 +129,7 @@ def get_work(client: TolClient):
     for data in client.ads_get_list(
         "data",
         filter_spec={
-            "lims_qc": {
+            "lims_qc_id": {
                 "eq": {"value": "pass"},
             },
             "run.platform.name": {

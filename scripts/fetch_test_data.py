@@ -383,32 +383,32 @@ def fetch_species_data(session, species_list):
 
     data_patches = {
         "35344_1#2": {
-            "qc": "pass",
+            "qc_id": "pass",
             "visibility": "Always",
             "processed": None,
         },
         "35344_1#3": {
-            "qc": "pass",
+            "qc_id": "pass",
             "visibility": "Always",
             "processed": 0,
         },
         "35344_1#4": {
-            "qc": "pass",
+            "qc_id": "pass",
             "visibility": "Testing",
             "processed": 0,
         },
         "37939_1#2": {
-            "qc": "fail",
+            "qc_id": "fail",
             "visibility": "Always",
             "processed": 0,
         },
         "m64089e_210601_133425#1022": {
-            "qc": "pass",
+            "qc_id": "pass",
             "visibility": "Always",
             "processed": None,
         },
         "m84309_250205_121831_s4#2076": {
-            "qc": "pass",
+            "qc_id": "pass",
             "reads_discarded": 14187,
             "reads_trimmed": 767,
             "bases_removed": 128899080,
