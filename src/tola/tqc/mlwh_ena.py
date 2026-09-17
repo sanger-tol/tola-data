@@ -295,7 +295,7 @@ def _build_tol_bioproject_row(flat: dict[str, Any]):
                 missing.append(source)
         elif name == "file":
             # Cannot proceed without an iRODS file name, since iRODS is where
-            # DataHose read files from.
+            # DataHose / Data Release Team (DRT) read files from.
             if not val.startswith("irods:"):
                 missing.append(source)
             else:
