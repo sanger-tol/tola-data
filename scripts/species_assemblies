@@ -1,0 +1,81 @@
+#!/usr/bin/env perl
+
+### species_assemblies
+
+use strict;
+use warnings;
+use Getopt::Long qw{ GetOptions };
+
+{
+    my $usage = sub { exec('perldoc', $0) };
+    GetOptions(
+        'h|help!' => $usage,
+    ) or $usage->();
+
+    my @species;
+    while (<>) {
+        s/^\s+|\s+$//g;
+        push @species, $_;
+    }
+
+    my @tqc_cmd = qw{
+      tqc --tolqc-alias tolqc-flask
+      show
+      --table assembly
+      --fields specimen.species.id
+    };
+
+    push @tqc_cmd, "--query", "specimen.species.id,=" . join(",", map {"'$_'"} @species);
+
+    my @sql;
+    {
+        no warnings;
+        @sql = qw{
+          SELECT
+            species: "specimen.species.id",
+            specimen: "specimen.id",
+            assembly_name: name,
+            accession: "genome_accession.id",
+            level
+          FROM
+            read_json('/dev/stdin')
+          ORDER BY ALL
+        };
+    }
+    my $select = "@sql";
+    $select =~ s/"/\\"/g;
+
+    system(qq{@tqc_cmd | duckdb -csv -c "$select"});
+}
+
+__END__
+
+=head1 NAME - species_assemblies
+
+=head1 USAGE
+
+    species_assemblies <FILES|STDIN>
+
+=head1 DESCRIPTION
+
+Given a file of species names, one per line, fetches details of assemblies
+from the ToLQC database, printing CSV to STDOUT.
+
+=head1 SYNOPSIS
+
+  species_assemblies species_names.txt > assemblies.csv
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h|--help>
+
+Show this message and exit.
+
+=back
+
+=head1 AUTHOR
+
+James Gilbert B<email> jgrg@sanger.ac.uk
+
