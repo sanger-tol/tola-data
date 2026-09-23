@@ -19,10 +19,10 @@ use Getopt::Long qw{ GetOptions };
     }
 
     my @tqc_cmd = qw{
-      tqc --tolqc-alias tolqc-flask
-      show
+      tqc show
       --table assembly
       --fields specimen.species.id
+      --query genome_accession.id!=null
     };
 
     push @tqc_cmd, "--query", "specimen.species.id,=" . join(",", map {"'$_'"} @species);
