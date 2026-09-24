@@ -1,6 +1,9 @@
 import re
+from pathlib import Path
 
 from tol.core import DataSourceFilter
+
+from tola.tqc.engine import parse_id_list_stream
 
 
 class QueryParserError(Exception):
@@ -32,7 +35,7 @@ class QueryParser:
 
     def add_param(self, param: str) -> None:
         """Adds a filter parameter to the list of terms"""
-        m = re.fullmatch(r"^([\w.]+)([!]?[<>,=%]{1,2})(.+)", param)
+        m = re.fullmatch(r"^([\w.]+)([!]?[<>,@=%]{1,2})(.+)", param)
         if not m:
             msg = f"Failed to parse query param {param!r}"
             raise QueryParserError(msg)
@@ -52,6 +55,10 @@ class QueryParser:
 
         if op == "in_list":
             value = [string_to_type(x) for x in value.split(",")]
+        elif op == "in_list_file":
+            with Path(value).open() as id_fh:
+                value = list(parse_id_list_stream(id_fh))
+            op = "in_list"
         else:
             value = string_to_type(value)
 
@@ -103,6 +110,11 @@ class QueryParser:
                 op = "in_list"
             case "!,=":
                 op = "in_list"
+                negate = True
+            case "@=":
+                op = "in_list_file"
+            case "!@=":
+                op = "in_list_file"
                 negate = True
             case _:
                 msg = f"Unknown operator {operator!r} in query param {ctx!r}"

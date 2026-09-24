@@ -2,11 +2,11 @@ import asyncio
 import logging
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterator
 from datetime import datetime
 from hashlib import md5
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from partisan.irods import DataObject
 from tol.api_client.api_datasource import ApiDataSource
@@ -351,7 +351,7 @@ def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
 
 
 def dicts_to_core_data_objects(
-    ads: ApiDataSource, table: str, flat_list: Iterable[dict[str, Any]]
+    ads: ApiDataSource, table: str, flat_list: list[dict[str, Any]]
 ):
     """Turns flattened dicts back into CoreDataObjects"""
 
@@ -402,7 +402,7 @@ def id_iterator(
     id_list: list[str | int] | None = None,
     file_list: list[Path] | None = None,
     file_format: str | None = None,
-) -> Iterable[str | int]:
+) -> Iterator[str | int]:
     if id_list:
         yield from id_list
         return
@@ -475,12 +475,12 @@ def guess_file_type(file):
     return "NDJSON" if extn == ".ndjson" else "TXT"
 
 
-def parse_id_list_stream(fh):
+def parse_id_list_stream(fh: IO[Any]) -> Iterator[str]:
     for line in fh:
         yield line.strip()
 
 
-def ids_from_ndjson_stream(key, fh):
+def ids_from_ndjson_stream(key: str, fh: IO[Any]) -> Iterator[str]:
     for row in parse_ndjson_stream(fh):
         oid = row[key]
         if oid is not None:

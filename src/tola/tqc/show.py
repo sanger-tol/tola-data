@@ -65,6 +65,9 @@ from tola.tqc.query_parser import QueryParser
         !%   does not contain
         ,=   in list (VALUE is split on ",")
         !,=  not in list
+        @=   in list where VALUE is the name of a file
+             containing one item per line
+        !@=  not in list of items in VALUE file
 
       Query filters containing "<" or ">" require enclosing the query term in
       quotes to avoid shell redirection.
