@@ -1,0 +1,9 @@
+{"assembly_component_type.id":"set","description":"A set of haplotype assemblies for a specimen"}
+{"assembly_component_type.id":"primary","description":"The best, representative haplotype assembly for a specimen, including its organelle genomes"}
+{"assembly_component_type.id":"alternate","description":"The alternate haplotype assembly for a specimen, usually less complete than the primary"}
+{"assembly_component_type.id":"mitochondrion","description":"A mitochondrial genome"}
+{"assembly_component_type.id":"chloroplast","description":"A chloroplast genome"}
+{"assembly_component_type.id":"polyploid","description":"A haplotype from a polyploid genome"}
+{"assembly_component_type.id":"haploid","description":"Assembly of a haploid genome"}
+{"assembly_component_type.id":"maternal","description":"The maternal haplotype assembled from a genome trio"}
+{"assembly_component_type.id":"paternal","description":"The paternal haplotype assembled from a genome trio"}

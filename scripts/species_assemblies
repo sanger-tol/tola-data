@@ -25,7 +25,7 @@ use Getopt::Long qw{ GetOptions };
       --query genome_accession.id!=null
     };
 
-    push @tqc_cmd, "--query", "specimen.species.id,=" . join(",", map {"'$_'"} @species);
+    push @tqc_cmd, '--query', 'specimen.species.id,=' . join(',', map {"'$_'"} @species);
 
     my @sql;
     {
