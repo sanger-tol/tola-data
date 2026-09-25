@@ -81,6 +81,12 @@ from tola.tqc.query_parser import QueryParser
     default=False,
     help="For LogBase derived tables, show who last modified each row and when.",
 )
+@click.option(
+    "--show-query",
+    flag_value=True,
+    help="Print the filter `dict` used to create a `DataSourceFilter` object",
+    hidden=True,
+)
 @click_options.id_list
 def show(
     client: TolClient,
@@ -92,6 +98,7 @@ def show(
     fields_txt,
     queries_txt,
     id_list,
+    show_query,
 ):
     """Show rows from a table in the ToLQC database
 
@@ -126,6 +133,10 @@ def show(
     filter_dict = None
     if queries_txt:
         filter_dict = QueryParser(queries_txt).filter_dict()
+
+    if show_query:
+        click.echo(str(filter_dict))
+        sys.exit(0)
 
     if key == "id":
         key = f"{table}.id"

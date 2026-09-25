@@ -26,6 +26,7 @@ dependencies = [
 ]
 
 [project.scripts]
+build-assembly-sets="tola.ena.build_assembly_sets:cli"
 compare-pacbio-json="tola.compare_pacbio_json:cli"
 data-processed="tola.data_processed:cli"
 diff-mlwh="tola.diff_mlwh.diff_mlwh_cmd:cli"
