@@ -140,7 +140,7 @@ class TolClient:
         return req.url
 
     @cached_property
-    def build_cdo(self) -> Callable[[str, str, dict[str, Any]], DataObject]:
+    def build_cdo(self) -> Callable[[str, str | None, dict[str, Any]], DataObject]:
         """
         Returns a function which builds a CoreDataObject (cdo)
         """
