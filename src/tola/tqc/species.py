@@ -2,7 +2,7 @@ import click
 
 from tola import click_options
 from tola.goat_client import GoaTClient
-from tola.tqc.engine import hash_dir, id_iterator
+from tola.tqc.engine import hash_dir, id_iterator, key_list_search
 from tola.tqc.upsert import TableUpserter
 
 
@@ -12,7 +12,7 @@ from tola.tqc.upsert import TableUpserter
     "--key",
     default="taxon_id",
     show_default=True,
-    help=("Column name containing the NCBI taxon ID"),
+    help="Column name containing the NCBI taxon ID",
 )
 @click_options.file
 @click_options.file_format
@@ -39,7 +39,7 @@ def upsert_species(ctx, key, file_list, file_format, id_list, apply_flag):
             for k, v in raw_info.items():
                 if k == "species_id":
                     sp_info["species.id"] = v
-                elif k not in {'ploidy', 'ploidy_sources'}:
+                elif k not in {"ploidy", "ploidy_sources"}:
                     sp_info[k] = v
             species_info.append(sp_info)
 
@@ -67,6 +67,15 @@ def upsert_species(ctx, key, file_list, file_format, id_list, apply_flag):
             else:
                 msg = "Missing species info for path {path!r}"
                 raise ValueError(msg)
+
+    loc_id_missing = []
+    for path, info in path_sp_info.items():
+        if not info.get("location.id"):
+            loc_id_missing.append(path)
+    if loc_id_missing:
+        path_loc = key_list_search(client, "location", "path", loc_id_missing)
+        for path, loc in path_loc.items():
+            path_sp_info[path]["location.id"] = loc.id
 
     # Prepare the updates and apply them if the `apply_flag` is set
     ups.build_table_upserts("species", species_info)

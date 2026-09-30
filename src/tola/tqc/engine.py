@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from datetime import datetime
 from hashlib import md5
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from partisan.irods import DataObject
 from tol.api_client.api_datasource import ApiDataSource
@@ -17,6 +17,9 @@ from tola.ndjson import (
     parse_ndjson_stream,
 )
 from tola.pretty import bold
+
+if TYPE_CHECKING:
+    from tola.tolqc_client import TolClient
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +85,9 @@ def hash_dir(hash_me, sci_name):
     return "/".join((*hash_prefix, dir_name))
 
 
-def key_list_search(client, table, key, key_id_list):
+def key_list_search(
+    client: "TolClient", table: str, key: str, key_id_list: list[Any]
+) -> dict[str, DataObject]:
     db_obj_found = {}
     if key_id_list:
         search_key = table_key(table, key)
@@ -105,7 +110,9 @@ def key_list_search(client, table, key, key_id_list):
     return db_obj_found
 
 
-def fetch_list_or_exit(client, table, key, id_list):
+def fetch_list_or_exit(
+    client: "TolClient", table: str, key: str, id_list: list[str]
+) -> list[DataObject]:
     """
     Fetches all the records for `id_list` in the same order, or exits with an
     error.
