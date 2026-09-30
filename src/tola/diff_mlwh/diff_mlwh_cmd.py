@@ -14,6 +14,8 @@ from tola.ndjson import ndjson_row
 from tola.pretty import bold, s
 from tola.tqc.upsert import TableUpserter
 
+log = logging.getLogger(__name__)
+
 
 @click.command
 @click_options.tolqc_alias
@@ -214,7 +216,7 @@ def cli(
     tqc = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias)
     diff_db = MLWHDiffDB(
         diff_mlwh_duckdb,
-        write_flag=update or add_reason_dict or reason_action,
+        write_flag=bool(update or add_reason_dict or reason_action),
     )
 
     # Update the DuckDB database which caches diffs between MLWH and ToLQC
