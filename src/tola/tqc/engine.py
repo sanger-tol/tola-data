@@ -231,7 +231,7 @@ def __req_tree_from_show_modified_flag(table, ads, show_modified=False):
     )
 
 
-def core_data_object_to_dict(cdo, show_modified=False):
+def core_data_object_to_dict(cdo, show_modified=False) -> dict[str, Any | None]:
     """Flattens a CoreDataObject to a dict"""
 
     # The object's ID
@@ -244,6 +244,9 @@ def core_data_object_to_dict(cdo, show_modified=False):
     for rel_name in cdo.to_one_relationships:
         log.debug(f"{cdo = }")
         rltd = getattr(cdo, rel_name)
+        # if isinstance(rltd, str):
+        #     msg = f"Expecting DataObject but got {rel_name} = {rltd!r}"
+        #     raise ValueError(msg)
         if rel_name == "modified_user":
             if show_modified:
                 modfd["modified_by"] = rltd.name if rltd else None

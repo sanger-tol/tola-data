@@ -107,6 +107,7 @@ class TableUpserter:
         """
         Applies changes accumulated in the object across all tables listed.
         """
+        import logging
 
         client = self.client
         ads = client.ads

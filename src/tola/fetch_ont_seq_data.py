@@ -92,7 +92,7 @@ def cli(
     database where "study.auto_sync = true".
     """
 
-    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=25)
+    client = tolqc_client.TolClient(tolqc_url, api_token, tolqc_alias, page_size=10)
     if since:
         since = utc_datetime(since)
 

@@ -35,7 +35,7 @@ class TolClientError(Exception):
 
 class TolClient:
     def __init__(
-        self, tolqc_url=None, api_token=None, tolqc_alias="tolqc", page_size: int = 200
+        self, tolqc_url=None, api_token=None, tolqc_alias="tolqc", page_size: int = 100
     ):
         self.api_path = os.getenv("TOLQC_API_PATH", "/api/v1").strip("/")
         self.page_size = page_size
