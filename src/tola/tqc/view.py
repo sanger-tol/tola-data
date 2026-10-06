@@ -4,7 +4,7 @@ import sys
 
 import click
 
-from tola.pretty import bold, s
+from tola.pretty import bold, plain_text_from_itr, s
 from tola.terminal import TerminalDict, colour_pager
 
 
@@ -32,7 +32,11 @@ def view(ctx, file_list):
         fh_list = [sys.stdin]
     else:
         sys.exit(ctx.get_help())
-    colour_pager(itr_ndjson_file_handles(fh_list))
+    itr = itr_ndjson_file_handles(fh_list)
+    if sys.stdout.isatty():
+        colour_pager(itr)
+    else:
+        sys.stdout.write(plain_text_from_itr(itr))
 
 
 def itr_ndjson_file_handles(fh_list):

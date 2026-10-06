@@ -6,8 +6,6 @@ from tol.core.data_object import DataObject
 
 from tola import click_options
 from tola.tolqc_client import TolClient
-from tola.tqc.engine import core_data_object_to_dict
-from tola.tqc.upsert import TableUpserter
 
 log = logging.getLogger(__name__)
 
@@ -156,6 +154,8 @@ class AssemblySet:
             typ = hap
         elif asm_word == "assembly":
             typ = "primary"
+        elif asm_word == "MT":
+            typ = "mitochondrion"
         elif asm_word in {
             "alternate",
             "chloroplast",
