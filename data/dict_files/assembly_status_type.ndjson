@@ -5,3 +5,4 @@
 {"assembly_status_type.id":"BUSCO Pass","description":"BUSCO genes assembly completeness check has passed","assign_order":50}
 {"assembly_status_type.id":"Submitted","description":"Assembly has been passed to the Sanger data release team","assign_order":60}
 {"assembly_status_type.id":"ENA Public","description":"Assembly is public with a GCA accession at the ENA","assign_order":70}
+{"assembly_status_type.id":"ENA Suppressed","description":"Previously public assembly at ENA is now withdrawn","assign_order":80}
