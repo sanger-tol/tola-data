@@ -56,7 +56,7 @@ class QueryParser:
         if op == "in_list":
             value = [string_to_type(x) for x in value.split(",")]
         elif op == "in_list_file":
-            with Path(value).open() as id_fh:
+            with Path(value).expanduser().open() as id_fh:
                 value = list(parse_id_list_stream(id_fh))
             op = "in_list"
         else:
