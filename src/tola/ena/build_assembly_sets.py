@@ -203,7 +203,10 @@ class AssemblySet:
         return self.source
 
 
-ENA_PUBLIC = {"status_history.status_type.id": {"eq": {"value": "ENA Public"}}}
+ENA_PUBLIC = {
+    "status_history.status_type.id": {"eq": {"value": "ENA Public"}},
+    "status.status_type.id": {"eq": {"value": "ENA Suppressed", "negate": True}},
+}
 
 
 def build_assembly_sets(client: TolClient, specimens: list[str] | None = None):
