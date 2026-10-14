@@ -142,13 +142,15 @@ class AssemblySet:
             )
             raise AssemblySetError(msg)
 
-        if m := re.search(r"(?:\.(hap\d+))?\.\d+\s+(\S+)", desc):
+        hap, asm_word = None, None
+        if m := re.search(r"(?:\.(hap\d+))?(?:\.\d+)?\s+(\S+)", desc):
             hap, asm_word = m.groups()
         else:
             msg = (
                 f"Unexpected wording of assembly.description"
                 f" {desc!r} Assembly(id = {asm.id!r}, name = {asm.name!r})"
             )
+            log.warning(msg)
 
         if hap:
             typ = hap
@@ -240,8 +242,10 @@ def build_assembly_sets(client: TolClient, specimens: list[str] | None = None):
 
         for spmn, assemblies in specimen_asm.items():
             try:
-                for asm_set in build_assembly_sets_for_specimen(client, spmn, assemblies):
-                        asm_set.create_or_update()
+                for asm_set in build_assembly_sets_for_specimen(
+                    client, spmn, assemblies
+                ):
+                    asm_set.create_or_update()
             except AssemblySetError as ase:
                 log.warning(f"Error building assembly set for {spmn}:")
                 for msg in ase.args:
@@ -277,6 +281,39 @@ def list_specimens_with_incomplete_assembly_sets(client: TolClient) -> list[str]
     return sorted(specimens)
 
 
+def guess_asm_version(asm: DataObject) -> int:
+    """
+    Tries to parse a version for an assembly from either the name or the
+    genome_accession fields, throwing an exception if this fails.
+    """
+    txt_list = []
+    if asm_name := asm.name:
+        txt_list.append(asm_name)
+    if gacc := asm.genome_accession:
+        txt_list.append(gacc.id)
+
+    i = None
+    for txt in txt_list:
+        m = re.search(r"^\S+\.(\d+)", txt)
+        if m:
+            i = int(m.group(1))
+            break
+
+    if i is None:
+        specimen = spmn.id if (spmn := asm.specimen) else None
+        msg = f"Failed to parse version for {specimen = }"
+        msg += (
+            f" assembly name = {asm_name!r}"
+            if asm_name
+            else f" assembly ID = {asm.id!r}"
+        )
+        if gacc:
+            msg += f" genome_accession = {gacc!r}"
+        raise AssemblySetError(msg)
+
+    return i
+
+
 def build_assembly_sets_for_specimen(
     client: TolClient, specimen: str, assemblies: list[DataObject]
 ) -> list[AssemblySet]:
@@ -284,13 +321,7 @@ def build_assembly_sets_for_specimen(
     # Group assemblies by version
     version_sets: dict[int, list[DataObject]] = {}
     for asm in assemblies:
-        m = re.search(r"^\S+\.(\d+)", asm.name or "")
-        if not m:
-            msg = (
-                f"Failed to parse version from {specimen!r} assembly name {asm.name!r}"
-            )
-            raise AssemblySetError(msg)
-        i = int(m.group(1))
+        i = guess_asm_version(asm)
         version_sets.setdefault(i, []).append(asm)
 
     v = max(version_sets)
