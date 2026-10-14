@@ -7,3 +7,4 @@
 {"assembly_component_type.id":"haploid","description":"Assembly of a haploid genome"}
 {"assembly_component_type.id":"maternal","description":"The maternal haplotype assembled from a genome trio"}
 {"assembly_component_type.id":"paternal","description":"The paternal haplotype assembled from a genome trio"}
+{"assembly_component_type.id":"collapsed","description":"Two or more haplotypes collapsed into a single set of chromosomes or scaffolds"}
