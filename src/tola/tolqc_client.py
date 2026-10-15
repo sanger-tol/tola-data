@@ -400,7 +400,7 @@ class TolClient:
         return sorted(int(x["id"]) for x in rspns_json["data"])
 
     @cached_property
-    def sex_table(self):
+    def sex_table(self) -> dict[str, str]:
         tbl = {}
         for obj in self.ads_ro.get_list("sex"):
             sex = obj.id

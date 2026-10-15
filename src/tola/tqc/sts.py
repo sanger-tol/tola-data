@@ -1,13 +1,14 @@
 import sys
+from typing import Any
 
 import click
-from tol.core import DataSourceFilter
+from tol.core import DataObject, DataSourceFilter
 from tol.sources.portal import portal
 
 from tola import click_options
 from tola.ndjson import ndjson_row
 from tola.terminal import colour_pager, pretty_dict_itr
-from tola.tolqc_client import uc_munge
+from tola.tolqc_client import TolClient, uc_munge
 from tola.tqc.engine import core_data_object_to_dict, id_iterator
 from tola.tqc.upsert import TableUpserter
 
@@ -70,7 +71,7 @@ def sts_specimen(
 
     specimen_names = list(id_iterator(key, specimen_names, file_list, file_format))
 
-    client = ctx.obj
+    client: TolClient = ctx.obj
 
     if all_fields:
         show_info = True
@@ -99,7 +100,12 @@ def sts_specimen(
             upsrtr.page_results(apply_flag)
 
 
-def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
+def update_specimen_fields(
+    client: TolClient,
+    specimen_names: list[str],
+    patches: dict[str, dict[str, Any]],
+    apply_flag: bool = False,
+):
     updates = []
     acc_updates = []
     for info in fetch_sts_info(client, specimen_names):
@@ -133,7 +139,7 @@ def update_specimen_fields(client, specimen_names, patches, apply_flag=False):
         return upsrtr
 
 
-def show_sts_info(client, all_fields, specimen_names):
+def show_sts_info(client: TolClient, all_fields, specimen_names):
     if all_fields:
         sts_info = [
             core_data_object_to_dict(x)
@@ -143,7 +149,7 @@ def show_sts_info(client, all_fields, specimen_names):
         sts_info = fetch_sts_info(client, specimen_names)
 
     if sys.stdout.isatty():
-        key = "sts_tolid.id" if all_fields else "specimen.id"
+        key = "tolid.id" if all_fields else "specimen.id"
         colour_pager(pretty_dict_itr(sts_info, key))
     else:
         for info in sts_info:
@@ -162,7 +168,7 @@ def fetch_specimen_info_where_fields_are_null(client):
     return info
 
 
-def fetch_specimen_info_for_specimens(client, specimen_names):
+def fetch_specimen_info_for_specimens(client: TolClient, specimen_names):
     info = {}
     for page in client.pages(specimen_names):
         filt = DataSourceFilter(in_list={"id": page})
@@ -170,20 +176,22 @@ def fetch_specimen_info_for_specimens(client, specimen_names):
     return info
 
 
-def fetch_specimen_info_by_filter(client, filt):
+def fetch_specimen_info_by_filter(
+    client: TolClient, filt: DataSourceFilter
+) -> dict[str, Any]:
     itr = client.ads.get_list("specimen", object_filters=filt)
     fields = ["specimen.id", "sts_specimen", "accession.id", "sex.id"]
     found = [obj_to_dict(fields, x) for x in itr]
     return {x["specimen.id"]: x for x in found}
 
 
-def fetch_sts_info(client, specimen_names):
+def fetch_sts_info(client: TolClient, specimen_names):
     fields_wanted = [
-        "sts_tolid.id",
-        "sts_specimen.id",
-        "sts_biospecimen_accession",
-        "sts_sample_same_as",
-        "sts_sex",
+        "tolid.id",
+        "specimen.id",
+        "biospecimen_accession",
+        "sample_same_as",
+        "sex",
     ]
     sex_tbl = client.sex_table
 
@@ -191,14 +199,12 @@ def fetch_sts_info(client, specimen_names):
     for cdo in fetch_sts_data_itr_from_portal(client, specimen_names):
         sts = obj_to_dict(fields_wanted, cdo)
         out = {
-            "specimen.id": sts["sts_tolid.id"],
-            "sts_specimen": sts["sts_specimen.id"],
-            "accession.id": (
-                sts["sts_biospecimen_accession"] or sts["sts_sample_same_as"]
-            ),
+            "specimen.id": sts["tolid.id"],
+            "sts_specimen": sts["specimen.id"],
+            "accession.id": sts["biospecimen_accession"] or sts["sample_same_as"],
         }
         sex = None
-        if sts_sex := sts["sts_sex"]:
+        if sts_sex := sts["sex"]:
             key = uc_munge(sts_sex)
             sex = sex_tbl.get(key, sts_sex)
         out["sex.id"] = sex
@@ -208,20 +214,20 @@ def fetch_sts_info(client, specimen_names):
     return de_duplicate_dicts("specimen.id", found)
 
 
-def fetch_sts_data_itr_from_portal(client, specimen_names):
+def fetch_sts_data_itr_from_portal(client: TolClient, specimen_names):
     prtl = portal()
     prtl.page_size = 200
 
     for page in client.pages(specimen_names):
         filt = DataSourceFilter(
             and_={
-                "sts_tolid.id": {"in_list": {"value": page}},
+                "tolid.id": {"in_list": {"value": page}},
             }
         )
         yield from prtl.get_list("sample", object_filters=filt)
 
 
-def obj_to_dict(fields, cdo):
+def obj_to_dict(fields: list[str], cdo: DataObject) -> dict[str, Any]:
     """
     Extracts all the listed `fields` from CoreDataObject `cdo`, returning them
     in a `dict`.
