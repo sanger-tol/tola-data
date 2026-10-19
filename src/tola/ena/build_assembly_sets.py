@@ -142,18 +142,23 @@ class AssemblySet:
             )
             raise AssemblySetError(msg)
 
-        hap, asm_word = None, None
-        if m := re.search(r"(?:\.(hap\d+))?(?:\.\d+)?\s+(\S+)", desc):
-            hap, asm_word = m.groups()
+        cmpt, asm_word = None, None
+        if m := re.search(r"(?:\.(hap\d+|mito|plastid))?(?:\.\d+)?\s+(\S+)", desc):
+            cmpt, asm_word = m.groups()
         else:
             msg = (
-                f"Unexpected wording of assembly.description"
+                f"\nUnexpected wording of assembly.description"
                 f" {desc!r} Assembly(id = {asm.id!r}, name = {asm.name!r})"
             )
             log.warning(msg)
 
-        if hap:
-            typ = hap
+        if cmpt:
+            if cmpt == "mito":
+                typ = "mitochondrion"
+            elif cmpt == "plastid":
+                typ = "chloroplast"
+            else:
+                typ = cmpt
         elif asm_word == "assembly":
             typ = "primary"
         elif asm_word == "MT":
@@ -209,11 +214,9 @@ ENA_PUBLIC = {
 }
 
 
-def build_assembly_sets(client: TolClient, specimens: list[str] | None = None):
+def build_assembly_sets(client: TolClient, specimens: list[str] | None = None) -> None:
     if not specimens:
         specimens = list_specimens_with_incomplete_assembly_sets(client)
-
-    # ups = TableUpserter(client)
 
     for chapter in client.pages(specimens):
         specimen_asm: dict[str, list[DataObject]] = {}
@@ -250,15 +253,9 @@ def build_assembly_sets(client: TolClient, specimens: list[str] | None = None):
                 ):
                     asm_set.create_or_update()
             except AssemblySetError as ase:
-                log.warning(f"Error building assembly set for {spmn}:")
+                log.warning(f"\nError building assembly set for {spmn}:")
                 for msg in ase.args:
                     log.warning(f"  {msg}")
-
-                # flat_list = [core_data_object_to_dict(x) for x in asm_set.components]
-                # ups.build_table_upserts("assembly", flat_list)
-
-    # ups.apply_upserts()
-    # ups.page_results()
 
 
 def list_specimens_with_incomplete_assembly_sets(client: TolClient) -> list[str]:
