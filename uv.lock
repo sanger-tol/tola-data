@@ -828,7 +828,7 @@ wheels = [
 
 [[package]]
 name = "tola-data"
-version = "1.0.79"
+version = "1.0.82"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },

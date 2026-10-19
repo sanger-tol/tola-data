@@ -315,6 +315,7 @@ class EnaCache(CacheDB):
                             "description": batch["description"][i],
                             "level": batch["level"][i],
                             "category_id": "release",
+                            "file_path": f"{acc_sv}/insdc/{acc_sv}.fa.gz",
                         },
                     )
                 )

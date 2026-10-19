@@ -3,6 +3,7 @@ import sys
 import click
 
 from tola import click_options
+from tola.ena.build_assembly_sets import build_assembly_sets
 from tola.ena.database import EnaCache
 from tola.ndjson import get_input_objects
 from tola.pretty import plain_text_from_itr
@@ -42,6 +43,7 @@ def cli(tolqc_alias, input_files):
     cache.cache_tolqc_assemblies()
     cache.cache_tolqc_assembly_datasets()
     new_links = cache.load_ena_assembly_datasets()
+    build_assembly_sets(client)
 
     if loaded or new_links:
         itr = asm_link_dict_itr(loaded, new_links)
