@@ -123,15 +123,10 @@ class AssemblySet:
                 else self.set_component_type_for_assembly(asm)
             )
 
-        if len(cmpts) == 1 and len(cmpt_types) == 1:
-            cmpts[0].component_type = self.client.build_cdo(  # ty: ignore[unresolved-attribute]
-                "assembly_component_type", "haploid", {}
-            )
-        else:
-            if "haploid" in cmpt_types:
-                for asm in cmpts:
-                    if asm.component_type.id == "haploid":  # ty: ignore[unresolved-attribute]
-                        self.set_component_type_for_assembly(asm)
+        if len(cmpts) > 1 and "haploid" in cmpt_types:
+            for asm in cmpts:
+                if asm.component_type.id == "haploid":  # ty: ignore[unresolved-attribute]
+                    self.set_component_type_for_assembly(asm)
 
     def set_component_type_for_assembly(self, asm: DataObject) -> str:
         desc = asm.description
