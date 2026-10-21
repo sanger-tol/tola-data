@@ -501,13 +501,18 @@ def convert_type(txt):
     """
     Values given on the command line are always strings.
 
-    'null' is converted to `None`.
+    "null" is converted to `None`, "true" becomes `True`, and "false" becomes
+     `False`.
 
     If conversion to `int` or `float` works, return that, or else return the
     original string.
     """
     if txt == "null":
         return None
+    elif txt == "false":
+        return False
+    elif txt == "true":
+        return True
     else:
         try:
             return int(txt)
