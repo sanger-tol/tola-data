@@ -288,7 +288,9 @@ class TolClient:
         )
         return self.__check_response(r)
 
-    def ndjson_post(self, path, ndjson_str_itr, max_request_size=32 * 1024):
+    def ndjson_post(
+        self, path, ndjson_str_itr, max_request_size=32 * 1024
+    ) -> dict[str, list[dict[str, Any]]]:
         rspns = {}
         for chunk in self.chunk_rows(ndjson_str_itr, max_request_size):
             chunk_rspns = self.json_post(path, chunk)

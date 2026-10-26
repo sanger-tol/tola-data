@@ -9,6 +9,7 @@ from tola import click_options, tolqc_client
 from tola.db_connection import ConnectionParamsError
 from tola.pretty import bold
 from tola.tqc.add import add
+from tola.tqc.assembly import assembly
 from tola.tqc.dataset import dataset
 from tola.tqc.delete import delete
 from tola.tqc.edit import edit_col, edit_rows_cli
@@ -64,6 +65,7 @@ def tqc_main(ctx, tolqc_alias, tolqc_url, api_token, log_level):
 
 
 tqc_main.add_command(add)
+tqc_main.add_command(assembly)
 tqc_main.add_command(dataset)
 tqc_main.add_command(delete)
 tqc_main.add_command(edit_col)

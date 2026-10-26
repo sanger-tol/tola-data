@@ -349,17 +349,6 @@ def mk_path(*path) -> str:
     return ".".join(path)
 
 
-def add_sub_tree_data(flat: dict[str, Any], tree: ReqFieldsTree, cdo, *path):
-    attr_names = tree.attribute_names or cdo.attributes
-    for attr in attr_names:
-        path_str = ".".join([*path, attr])
-        flat[path_str] = getattr(cdo, attr) if cdo else None
-    for rel_name, sub_tree in tree.sub_trees():
-        sub_cdo = getattr(cdo, rel_name)
-        flat[".".join([*path, rel_name, "id"])] = sub_cdo.id if sub_cdo else None
-        add_sub_tree_data(flat, sub_tree, sub_cdo, *path, rel_name)
-
-
 def dicts_to_core_data_objects(
     ads: ApiDataSource, table: str, flat_list: list[dict[str, Any]]
 ):
@@ -409,10 +398,10 @@ def dicts_to_core_data_objects(
 
 def id_iterator(
     key: str,
-    id_list: list[str | int] | None = None,
+    id_list: list[str] | None = None,
     file_list: list[Path] | None = None,
     file_format: str | None = None,
-) -> Iterator[str | int]:
+) -> Iterator[str]:
     if id_list:
         yield from id_list
         return
