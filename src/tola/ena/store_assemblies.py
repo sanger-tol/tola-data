@@ -9,6 +9,7 @@ from tola.ndjson import get_input_objects
 from tola.pretty import plain_text_from_itr
 from tola.terminal import TerminalDict, colour_pager, s
 from tola.tolqc_client import TolClient
+from tola.tqc.assembly import AssemblyUpdater
 
 
 @click.command
@@ -51,6 +52,10 @@ def cli(tolqc_alias, input_files):
             colour_pager(itr)
         else:
             sys.stdout.write(plain_text_from_itr(itr))
+
+    asm_updtr = AssemblyUpdater(client)
+    asm_updtr.update_ena_public_to_downloaded()
+    asm_updtr.report_update_counts(True, sys.stdout)
 
 
 def asm_link_dict_itr(loaded=None, new_links=None):
