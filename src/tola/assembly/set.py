@@ -102,10 +102,9 @@ class AssemblySetHandler:
     def load_submitted_set(self, asm_set: dict[str, Any]):
         pass
 
-    def fetch_assembly_set(self, asm_set: dict[str, Any]):
+    def fetch_assembly_set(self, asm_set: dict[str, Any]) -> dict[str, Any] | None:
         filt = {
             "component_type.id": {"eq": {"value": "set"}},
-            "id": {"eq": {"value": "14782"}},
         }
         if set_id := asm_set.get("assembly.id"):
             filt["id"] = {"eq": {"value": set_id}}
@@ -117,19 +116,31 @@ class AssemblySetHandler:
             )
             raise AssemblySetHandlerError(msg)
 
-        asm_cdo, *other = self.client.ads_get_list(
-            "assembly",
-            filter_spec=filt,
-            requested_fields=[
-                "name",
-                "description",
-                "is_reference",
-                "component_assn.component.status",
-                "dataset_assn.dataset.data_assn.data",
-            ],
-        )
-
-        return self.obj_to_assembly_set(asm_cdo)
+        asm_list = [
+            self.obj_to_assembly_set(x)
+            for x in self.client.ads_get_list(
+                "assembly",
+                filter_spec=filt,
+                requested_fields=[
+                    "name",
+                    "description",
+                    "is_reference",
+                    "component_assn.component.status",
+                    "dataset_assn.dataset.data_assn.data",
+                ],
+            )
+        ]
+        if not asm_list:
+            return None
+        elif len(asm_list) == 1:
+            return asm_list[0]
+        else:
+            fld, val = ("assembly.id", set_id) if filt.get("id") else ("name", set_name)
+            msg = (
+                f"{len(asm_list)} assembly sets found for {fld} = {val!r}:\n"
+                + ",\n".join(pretty_row(x) for x in asm_list)
+            )
+            raise AssemblySetHandlerError(msg)
 
     def get_cdo_attr(self, cdo: DataObject, name, *fields: str) -> str | None:
         if (val := getattr(cdo, name, None)) is not None:
@@ -186,11 +197,3 @@ class AssemblySetHandler:
 
         asm_set["components"] = components
         return asm_set
-
-
-if __name__ == "__main__":
-    client = TolClient(tolqc_alias="tolqc-flask")
-    hdlr = AssemblySetHandler(client)
-    for spec in [{"assembly.id": "14782"}]:
-        asm_set = hdlr.fetch_assembly_set(spec)
-        print(pretty_row(asm_set))
