@@ -156,6 +156,7 @@ class EnaCache(CacheDB):
                 level: 'VARCHAR',
                 status: 'VARCHAR',
                 status_time: 'DATE',
+                center_name: 'VARCHAR',
               }
             );
         """
@@ -200,6 +201,7 @@ class EnaCache(CacheDB):
             "assembly_name": "assembly_name",
             "description": "assembly_title",
             "level": "assembly_level",
+            "centre": "center_name",
             "status": "status",
             "status_time": "last_updated",
             "run_accession_list": "run_accession",

@@ -2,7 +2,9 @@ import datetime as dt
 import json
 import re
 import textwrap
+from collections.abc import Sized
 from io import StringIO
+from typing import Literal
 
 import click
 
@@ -95,8 +97,8 @@ def italic(txt):
     return click.style(txt, italic=True)
 
 
-def s(x):
-    """Formatting plurals. Argument can be an `int` or an iterable"""
+def s(x: int | Sized) -> Literal["s", ""]:
+    """Formatting plurals."""
     n = x if isinstance(x, int) else len(x)
     return "" if n == 1 else "s"
 

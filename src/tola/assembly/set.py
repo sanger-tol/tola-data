@@ -81,11 +81,13 @@ can be listed by providing their `assembly.id` integer values.
 
 """
 
+import datetime as dt
 from typing import Any
 
 from tol.core.data_object import DataObject
 
 from tola.ndjson import pretty_row
+from tola.pretty import s
 from tola.tolqc_client import TolClient
 
 
@@ -95,28 +97,67 @@ class AssemblySetHandlerError(Exception):
     """
 
 
+type AsmSet = dict[str, Any]
+type AsmDict = dict[str, Any]
+
+
 class AssemblySetHandler:
     def __init__(self, client: TolClient):
         self.client = client
 
-    def load_submitted_set(self, asm_set: dict[str, Any]):
-        pass
-
-    def fetch_assembly_set(self, asm_set: dict[str, Any]) -> dict[str, Any] | None:
-        filt = {
-            "component_type.id": {"eq": {"value": "set"}},
-        }
-        if set_id := asm_set.get("assembly.id"):
-            filt["id"] = {"eq": {"value": set_id}}
-        elif set_name := asm_set.get("name"):
-            filt["name"] = {"eq": {"value": set_name}}
+    def load_submitted_set(self, asm_set: AsmSet):
+        if asm_id := asm_set.get("assembly.id"):
+            # Update assembly set
+            old_set = self.fetch_one_assembly_set("id", asm_id)
+            self.update_assembly_set(old_set, asm_set)
         else:
-            msg = "No 'assembly.id' or 'name' field in input object:\n" + pretty_row(
-                asm_set
+            self.store_new_assembly_set(asm_set)
+
+    def store_new_assembly_set(self, asm_set: AsmSet) -> None:
+        self.validate_required_fields(asm_set)
+        # Fetch existing sets by specimen ID if set.is_reference = True
+
+        # Store set
+
+        # Store components
+
+        # Link components to sets by writing new entries into assembly_components
+
+        # Set old specimen ID sets to is_reference = False
+
+    def update_assembly_set(self, old_set: AsmSet, new_set: AsmSet) -> None:
+        self.validate_required_fields(new_set)
+        # Update any changed fields in set
+
+        # For each component, either store it if it is new (and link it to the
+        # set in the assembly_components table) or update its fields.
+
+
+    def fetch_one_assembly_set(self, field: str, value: str) -> AsmSet:
+        asm_list = self.fetch_assembly_sets(field, value)
+
+        if len(asm_list) == 1:
+            return asm_list[0]
+        else:
+            msg = (
+                f"{len(asm_list)} assembly sets found for {field} = {value!r}:\n"
+                + ",\n".join(pretty_row(x) for x in asm_list)
             )
             raise AssemblySetHandlerError(msg)
 
-        asm_list = [
+    def fetch_assembly_sets_by_spec(self, spec: dict[str, Any]):
+        for field in ("assembly.id", "name"):
+            if (val := spec.get(field)) is not None:
+                return self.fetch_assembly_sets(field, val)
+
+    def fetch_assembly_sets(self, field: str, value: str) -> list[AsmSet]:
+        query_field = "id" if field == "assembly.id" else field
+        filt = {
+            "component_type.id": {"eq": {"value": "set"}},
+            query_field: {"eq": {"value": value}},
+        }
+
+        return [
             self.obj_to_assembly_set(x)
             for x in self.client.ads_get_list(
                 "assembly",
@@ -130,26 +171,13 @@ class AssemblySetHandler:
                 ],
             )
         ]
-        if not asm_list:
-            return None
-        elif len(asm_list) == 1:
-            return asm_list[0]
-        else:
-            fld, val = ("assembly.id", set_id) if filt.get("id") else ("name", set_name)
-            msg = (
-                f"{len(asm_list)} assembly sets found for {fld} = {val!r}:\n"
-                + ",\n".join(pretty_row(x) for x in asm_list)
-            )
-            raise AssemblySetHandlerError(msg)
 
     def get_cdo_attr(self, cdo: DataObject, name, *fields: str) -> str | None:
         if (val := getattr(cdo, name, None)) is not None:
             return self.get_cdo_attr(val, *fields) if fields else val
         return None
 
-    def extract_cdo_fields(
-        self, cdo: DataObject, obj: dict[str, Any], fields: tuple[str, ...]
-    ):
+    def extract_cdo_fields(self, cdo: DataObject, obj: AsmSet, fields: tuple[str, ...]):
         for fld in fields:
             path = fld.split(".")
             obj[fld] = self.get_cdo_attr(cdo, *path)
@@ -197,3 +225,97 @@ class AssemblySetHandler:
 
         asm_set["components"] = components
         return asm_set
+
+    def validate_required_fields(self, asm_set: AsmSet):
+        if error := self.__run_validation(asm_set):
+            msg = f"Assembly set validattion failed: {error}\n" + pretty_row(asm_set)
+            raise AssemblySetHandlerError(msg)
+
+    def __run_validation(self, asm_set: AsmSet) -> str | None:
+        components = asm_set.get("components")
+        if not components:
+            return "Set must contain one or more components"
+
+        # Test naming of set and components
+        names: set[str | None] = {asm_set.get("name")}
+        for cmpt in components:
+            names.add(cmpt.get("name"))
+
+        if None in names:
+            return "The set and each component must each have a name"
+        if "" in names:
+            return "Empty string is not a valid name"
+        if len(names) != len(components) + 1:
+            return "The set and each component must have unique names"
+
+        if err := self.__check_database_for_new_names(asm_set):
+            return err
+
+        # Component types
+        if asm_set.get("component_type.id") != "set":
+            return "Assembly set component_type.id must be 'set'"
+        cmpt_types = {cmpt.get("component_type.id") for cmpt in components}
+        if len(cmpt_types) != len(components):
+            return "The component_type.id of each component must be different"
+        if "set" in cmpt_types:
+            return "Component assembly cannot have component_type 'set'"
+
+        # Requried fields
+        if err := self.__validate_required_dict_fields(("specimen.id",), asm_set):
+            return err
+        for cmpt in components:
+            if err := self.__validate_required_dict_fields(
+                (
+                    "specimen.id",
+                    "centre.name",
+                    "bioproject_accession.id",
+                    "status_type.id",
+                    "level",
+                    "is_principal",
+                ),
+                cmpt,
+            ):
+                return err
+
+        # All OK!
+        return None
+
+    def __validate_required_dict_fields(
+        self, required: tuple[str, ...], asm: AsmDict
+    ) -> str | None:
+        for field in required:
+            if asm.get(field) not in (None, ""):
+                return f"Missing value for {field}"
+        return None
+
+    def __check_database_for_new_names(self, asm_set: AsmSet) -> str | None:
+        """
+        Check the database for any pre-existing new names.  Performed after
+        checking that each name in the set is unique and is not null or empty
+        string.
+        """
+
+        # Make list of names where assembly.id is null
+        names = [
+            x.get("name")
+            for x in [asm_set, *asm_set["components"]]
+            if x.get("assembly.id") is None
+        ]
+        same_names = [
+            {"id": asm.id, "name": asm.name}
+            for asm in self.client.ads_get_list(
+                "assembly",
+                filter_spec={
+                    "name": {
+                        "in_list": {"value": list(names)},
+                    }
+                },
+            )
+        ]
+        if same_names:
+            y = "y" if len(same_names) == 1 else "ies"
+            return (
+                "Names of the set and each of its components must be new."
+                f" Assembl{y} with matching name{s(same_names)}"
+                f" already in database: {len(same_names)}"
+            )

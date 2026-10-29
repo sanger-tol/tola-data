@@ -26,7 +26,7 @@ def assembly():
 @click.option(
     "--key",
     type=click.Choice(
-        ["assembly.id", "name"],
+        ["assembly.id", "name", "specimen.id"],
         case_sensitive=True,
     ),
     default="assembly.id",
@@ -56,12 +56,11 @@ def set_show(
         file_list=file_list,
         file_format=file_format,
     )
-    spec_list = [{key: x} for x in asm_id_itr]
 
     hdlr = AssemblySetHandler(client)
-    for spec in spec_list:
-        asm_set = hdlr.fetch_assembly_set(spec)
-        print(pretty_row(asm_set))
+    for asm_id in asm_id_itr:
+        for asm_set in hdlr.fetch_assembly_sets(key, asm_id):
+            print(pretty_row(asm_set))
 
 
 @assembly.command
