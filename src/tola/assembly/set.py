@@ -9,7 +9,6 @@ updating assembly table entries.
   "description": "Assembly set mVulVul1.2",
   "specimen.id": "mVulVul1",
   "component_type.id": "set",
-  "is_reference": true,
   "components": [
     {
       "assembly.id": null,
@@ -25,7 +24,6 @@ updating assembly table entries.
       "status.status_time": "2024-07-02T01:44:20+01:00",
       "level": "chromosome",
       "is_principal": true,
-      "is_reference": true
     },
     {
       "assembly.id": null,
@@ -41,7 +39,6 @@ updating assembly table entries.
       "status.status_time": "2024-07-02T01:43:59+01:00",
       "level": "chromosome",
       "is_principal": false,
-      "is_reference": false
     }
   ]
 }
@@ -57,8 +54,6 @@ Fields:
 - `component_type.id` required.  Should be "set" on the top level and set to
   the an ID from the `assembly_component_type` table.  Must be unique within
   a set.
-- `is_reference` usually set to true when submitting new assemblies on both
-  the set and the principal component of the set.
 
 Component specific fields:
 
@@ -66,10 +61,10 @@ Component specific fields:
 - `category.id` should be "release" for "Submitted" assemblies.
 - `bioproject_accession.id` required.  The assembly's BioProject accession.
 - `genome_accession.id` optional.  Can be set when updating.
-- `status_type.id` required.  Set to "Submitted" when recording new
+- `status.status_type.id` required.  Set to "Submitted" when recording new
   submissions.
-- `status_time` optional.  Will be set to the current time if omitted.  Must
-  be in ISO timestamp with time zone format if specified.
+- `status.status_time` optional.  Will be set to the current time if omitted.
+  The default time zone of "Europe/London" will be applied if not specified.
 - `level` required.
 - `is_principal` required.  Set to `true` for the main assembly and `false`
   for all the others.
@@ -86,9 +81,10 @@ from typing import Any
 
 from tol.core.data_object import DataObject
 
-from tola.ndjson import pretty_row
+from tola.ndjson import ndjson_row, pretty_row, set_timezone_if_naive
 from tola.pretty import s
 from tola.tolqc_client import TolClient
+from tola.tqc.engine import dicts_to_core_data_objects
 
 
 class AssemblySetHandlerError(Exception):
@@ -105,33 +101,24 @@ class AssemblySetHandler:
     def __init__(self, client: TolClient):
         self.client = client
 
-    def load_submitted_set(self, asm_set: AsmSet):
+    def load_submitted_set(self, asm_set: AsmSet) -> AsmSet:
         if asm_id := asm_set.get("assembly.id"):
             # Update assembly set
             old_set = self.fetch_one_assembly_set("id", asm_id)
-            self.update_assembly_set(old_set, asm_set)
+            return self.update_assembly_set(old_set, asm_set)
         else:
-            self.store_new_assembly_set(asm_set)
+            return self.store_new_assembly_set(asm_set)
 
-    def store_new_assembly_set(self, asm_set: AsmSet) -> None:
+    def store_new_assembly_set(self, asm_set: AsmSet) -> AsmSet:
         self.validate_required_fields(asm_set)
-        # Fetch existing sets by specimen ID if set.is_reference = True
+        return self.store_assembly_set(asm_set)
 
-        # Store set
-
-        # Store components
-
-        # Link components to sets by writing new entries into assembly_components
-
-        # Set old specimen ID sets to is_reference = False
-
-    def update_assembly_set(self, old_set: AsmSet, new_set: AsmSet) -> None:
+    def update_assembly_set(self, old_set: AsmSet, new_set: AsmSet) -> AsmSet:
         self.validate_required_fields(new_set)
         # Update any changed fields in set
 
         # For each component, either store it if it is new (and link it to the
         # set in the assembly_components table) or update its fields.
-
 
     def fetch_one_assembly_set(self, field: str, value: str) -> AsmSet:
         asm_list = self.fetch_assembly_sets(field, value)
@@ -165,7 +152,6 @@ class AssemblySetHandler:
                 requested_fields=[
                     "name",
                     "description",
-                    "is_reference",
                     "component_assn.component.status",
                     "dataset_assn.dataset.data_assn.data",
                 ],
@@ -192,7 +178,6 @@ class AssemblySetHandler:
                 "description",
                 "specimen.id",
                 "component_type.id",
-                "is_reference",
             ),
         )
 
@@ -218,10 +203,10 @@ class AssemblySetHandler:
                         "status.status_time",
                         "level",
                         "is_principal",
-                        "is_reference",
                     ),
                 )
                 components.append(cmpt_obj)
+        components.sort(key=lambda x: str(x.get("name")))
 
         asm_set["components"] = components
         return asm_set
@@ -269,13 +254,20 @@ class AssemblySetHandler:
                     "specimen.id",
                     "centre.name",
                     "bioproject_accession.id",
-                    "status_type.id",
+                    "status.status_type.id",
                     "level",
                     "is_principal",
                 ),
                 cmpt,
             ):
                 return err
+
+        # Turn status time fields into Datetime objects
+        for cmpt in components:
+            if status_time := cmpt.get("status.status_time"):
+                cmpt["status.status_time"] = set_timezone_if_naive(
+                    dt.datetime.fromisoformat(status_time)
+                )
 
         # All OK!
         return None
@@ -284,7 +276,7 @@ class AssemblySetHandler:
         self, required: tuple[str, ...], asm: AsmDict
     ) -> str | None:
         for field in required:
-            if asm.get(field) not in (None, ""):
+            if asm.get(field) in (None, ""):
                 return f"Missing value for {field}"
         return None
 
@@ -317,5 +309,100 @@ class AssemblySetHandler:
             return (
                 "Names of the set and each of its components must be new."
                 f" Assembl{y} with matching name{s(same_names)}"
-                f" already in database: {len(same_names)}"
+                f" already in database: {same_names}"
             )
+
+    def set_specimen_sets_to_non_reference(self, specimen_id: str) -> None:
+        update_asm_ids = []
+        for asm_set in self.fetch_assembly_sets("specimen.id", specimen_id):
+            if asm_set.get("is_reference") is True:
+                update_asm_ids.append(asm_set.get("assembly.id"))
+        if not update_asm_ids:
+            return
+
+        ads = self.client.ads
+        cdo_updates = dicts_to_core_data_objects(
+            ads,
+            "assembly",
+            [
+                {
+                    "assembly.id": asm_id,
+                    "is_reference": False,
+                }
+                for asm_id in update_asm_ids
+            ],
+        )
+        ads.upsert("assembly", cdo_updates)
+
+    def store_assembly_set(self, asm_set: AsmSet) -> AsmSet:
+        ads = self.client.ads
+
+        # Prepare assembly set specs
+        set_spec = {key: val for key, val in asm_set.items() if key != "components"}
+
+        # Prepare assembly component specs
+        cmpt_specs = []
+        centre_dict = self.client.centre_name_to_id_dict
+        for cmpt in asm_set["components"]:
+            spec = {}
+            for key, val in cmpt.items():
+                if key.startswith("status."):
+                    continue
+                if key == "centre.name":
+                    if centre_id := centre_dict.get(val):
+                        spec["centre.id"] = centre_id
+                    else:
+                        msg = f"No such centre {val!r} in database"
+                        raise AssemblySetHandlerError(msg)
+                else:
+                    spec[key] = val
+            cmpt_specs.append(spec)
+
+        # Store set
+        (set_obj,) = ads.insert(
+            "assembly",
+            dicts_to_core_data_objects(ads, "assembly", [set_spec]),
+        )
+
+        # Store components.  Use `upsert` since some components may already be
+        # stored and have "assembly.id" set.
+        cmpt_objs = [
+            x
+            for x in ads.upsert(
+                "assembly",
+                dicts_to_core_data_objects(ads, "assembly", cmpt_specs),
+            )
+            if isinstance(x, DataObject)
+        ]
+
+        # Set component statuses
+        cmpt_name_ids = {cmpt.name: cmpt.id for cmpt in cmpt_objs}
+        status_specs = []
+        for cmpt_spec in asm_set["components"]:
+            cmpt_asm_id = cmpt_name_ids[cmpt_spec["name"]]
+            status_specs.append(
+                {
+                    "assembly.id": cmpt_asm_id,
+                    "status_type.id": cmpt_spec["status.status_type.id"],
+                    "status_time": cmpt_spec.get("status.status_time"),
+                }
+            )
+        self.client.ndjson_post(
+            "loader/status/assembly", (ndjson_row(x) for x in status_specs)
+        )
+
+        # Link components to sets by writing new entries into assembly_components
+        link_specs = [
+            {
+                "source.id": set_obj.id,
+                "component.id": cmpt.id,
+            }
+            for cmpt in cmpt_objs
+        ]
+        ads.insert(
+            "assembly_source",
+            dicts_to_core_data_objects(ads, "assembly_source", link_specs),
+        )
+
+        # Fetch the new assembly set from the database
+        return self.fetch_one_assembly_set("assembly.id", set_obj.id)

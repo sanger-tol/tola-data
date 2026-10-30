@@ -37,7 +37,7 @@ def assembly():
 @click_options.file_format
 @click_options.id_list
 @click_options.pretty
-def set_show(
+def show_set(
     ctx,
     key: str,
     file_list: list[Path],
@@ -77,7 +77,7 @@ def set_show(
 @click_options.file_format
 @click_options.id_list
 @click_options.pretty
-def set_load(
+def load_set(
     ctx,
     key: str,
     file_list: list[Path],
@@ -86,15 +86,17 @@ def set_load(
     pretty: bool,
 ) -> None:
     """
-    Load new assembly sets and "release" assembly table entries, setting their
-    status to "Submitted".
+    Either load new assembly sets and "release" assembly table component
+    entries and set their statuses, or update existing sets and components
+    where "assembly.id" is set.
     """
     client: TolClient = ctx.obj
 
     input_obj = input_objects_or_exit(ctx, file_list)
     asm_ldr = AssemblySetHandler(client)
     for obj in input_obj:
-        asm_ldr.load_submitted_set(obj)
+        asm_set = asm_ldr.load_submitted_set(obj)
+        print(pretty_row(asm_set))
 
 
 @assembly.command
