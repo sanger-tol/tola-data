@@ -28,19 +28,22 @@ from tolqc.schema.accession_models import (  # noqa: F401
 )
 from tolqc.schema.assembly_models import (
     Assembly,
-    AssemblyDataset,
+    AssemblyCategory,
+    AssemblyComponentType,
+    AssemblyDataset,  # noqa: F401
     AssemblyLevelDict,
+    AssemblySource,  # noqa: F401
     AssemblyStatus,  # noqa: F401
     AssemblyStatusType,
     Dataset,
     DatasetElement,
-    DatasetStatus,
+    DatasetStatus,  # noqa: F401
     DatasetStatusType,
 )
 from tolqc.schema.base import Base
 from tolqc.schema.folder_models import Folder, FolderLocation  # noqa: F401
 from tolqc.schema.sample_data_models import (
-    Allocation,
+    Allocation,  # noqa: F401
     CategoryDict,
     Centre,
     ChemistryDict,
@@ -48,6 +51,9 @@ from tolqc.schema.sample_data_models import (
     File,  # noqa: F401
     FileTypeDict,
     Library,  # noqa: F401
+    LibrarySelectionDict,
+    LibrarySourceDict,
+    LibraryStrategyDict,
     LibraryType,
     Location,  # noqa: F401
     PacbioRunMetrics,
@@ -115,7 +121,6 @@ def cli(db_uri, build_db_uri, echo_sql, create_db, build_samples):
     sample_data = [
         User(
             id=100,
-            oidc_id="tester@sanger.ac.uk",
             email="tester@sanger.ac.uk",
             name="tester",
         ),
@@ -176,6 +181,8 @@ def build_sample_data(ssn_maker):
         # Fetch data from all of the dictionary-like tables
         for cls in (
             AccessionTypeDict,
+            AssemblyCategory,
+            AssemblyComponentType,
             AssemblyLevelDict,
             AssemblyStatusType,
             CategoryDict,
@@ -184,6 +191,9 @@ def build_sample_data(ssn_maker):
             DatasetStatusType,
             FileTypeDict,
             FolderLocation,
+            LibrarySelectionDict,
+            LibrarySourceDict,
+            LibraryStrategyDict,
             LibraryType,
             LinkStatusDict,
             Platform,
@@ -378,6 +388,21 @@ def fetch_species_data(session, species_list):
             .selectinload(Data.dataset_assn)
             .selectinload(DatasetElement.dataset)
             .selectinload(Dataset.assembly_assn)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.status_history)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.status_history)
+        )
+        .options(
+            selectinload(Species.specimens)
+            .selectinload(Specimen.assemblies)
+            .selectinload(Assembly.source_assn)
         )
     )
 
@@ -607,8 +632,11 @@ def code_string(obj, max_line_length=99):
                 "Accession",
                 "AccessionTypeDict",
                 "Assembly",
+                "AssemblyCategory",
+                "AssemblyComponentType",
                 "AssemblyDataset",
                 "AssemblyLevelDict",
+                "AssemblySource",
                 "AssemblyStatus",
                 "AssemblyStatusType",
                 "BioprojectLink",
@@ -632,10 +660,10 @@ def code_string(obj, max_line_length=99):
         "\n\nfrom tolqc.schema import Role, RoleBinding, Token, User\n"
         "from tolqc.schema.accession_models import "
         "Accession, AccessionTypeDict, BioprojectLink, LinkStatusDict, SubmitterDict\n"
-        "from tolqc.schema.assembly_models import "
-        "Assembly, AssemblyDataset, AssemblyLevelDict, AssemblyStatus, "
-        "AssemblyStatusType, Dataset, DatasetElement, DatasetStatus, "
-        "DatasetStatusType\n"
+        "from tolqc.schema.assembly_models import Assembly, AssemblyCategory, "
+        "AssemblyComponentType, AssemblyDataset, AssemblyLevelDict, AssemblySource, "
+        "AssemblyStatus, AssemblyStatusType, "
+        "Dataset, DatasetElement, DatasetStatus, DatasetStatusType\n"
         "from tolqc.schema.folder_models import Folder, FolderLocation\n"
         f"from tolqc.schema.sample_data_models import {class_list_str}\n"
         "from tolqc.schema.system_models import Metadata\n"

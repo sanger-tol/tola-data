@@ -365,7 +365,7 @@ def dicts_to_core_data_objects(
         for key, val in flat.items():
             if rn := obj_rel_name(key):
                 if rn == table:
-                    id_ = val
+                    id_ = str(val)
                 elif to_one_tbl := rel_conf.to_one.get(rn):
                     to_one[rn] = (
                         None if val is None else obj_factory(to_one_tbl, id_=val)
