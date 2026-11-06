@@ -1,5 +1,6 @@
 import logging
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 import click
@@ -7,7 +8,9 @@ import click
 from tola import click_options
 from tola.assembly.set import AssemblySetHandler
 from tola.assembly.updater import AssemblyUpdater
-from tola.ndjson import pretty_row
+from tola.ndjson import ndjson_row
+from tola.pretty import plain_text_from_itr
+from tola.terminal import colour_pager, pretty_dict_itr
 from tola.tolqc_client import TolClient
 from tola.tqc.engine import id_iterator, input_objects_or_exit
 
@@ -19,6 +22,19 @@ def assembly():
     """
     Create, update and show assemblies.
     """
+
+def render_output(pretty: bool, header: str, output_obj: list[dict]) -> None:
+    isa_tty = sys.stdout.isatty()
+
+    if pretty or isa_tty:
+        itr = pretty_dict_itr(output_obj, "name", head=header)
+        if isa_tty:
+            colour_pager(itr)
+        else:
+            sys.stdout.write(plain_text_from_itr(itr))
+    else:
+        for obj in output_obj:
+            sys.stdout.write(ndjson_row(obj))
 
 
 @assembly.command
@@ -58,31 +74,22 @@ def show_set(
     )
 
     hdlr = AssemblySetHandler(client)
+    output_obj = []
     for asm_id in asm_id_itr:
-        for asm_set in hdlr.fetch_assembly_sets(key, asm_id):
-            print(pretty_row(asm_set))
+        output_obj.extend(hdlr.fetch_assembly_sets(key, asm_id))
+    if output_obj:
+        render_output(pretty, "Found {} assembly set{}:", output_obj)
 
 
 @assembly.command
 @click.pass_context
-@click.option(
-    "--key",
-    type=click.Choice(
-        ["assembly.id", "name"],
-        case_sensitive=True,
-    ),
-    default="assembly.id",
-)
 @click_options.file
 @click_options.file_format
 @click_options.id_list
 @click_options.pretty
 def load_set(
     ctx,
-    key: str,
     file_list: list[Path],
-    file_format: str,
-    id_list: list[str],
     pretty: bool,
 ) -> None:
     """
@@ -94,9 +101,10 @@ def load_set(
 
     input_obj = input_objects_or_exit(ctx, file_list)
     asm_ldr = AssemblySetHandler(client)
+    output_obj = []
     for obj in input_obj:
-        asm_set = asm_ldr.load_submitted_set(obj)
-        print(pretty_row(asm_set))
+        output_obj.append(asm_ldr.load_submitted_set(obj))
+    render_output(pretty, "Loaded or updated {} assembly set{}:", output_obj)
 
 
 @assembly.command

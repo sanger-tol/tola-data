@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import io
 import json
 import os
@@ -79,7 +80,7 @@ def pretty_cdo_itr(cdo_list, key, head=None, tail=None, show_modified=False):
     return pretty_dict_itr(flat_list, key, cdo_key, head, tail)
 
 
-def pretty_dict_itr(row_list, key, alt_key=None, head=None, tail=None):
+def pretty_dict_itr(row_list: list[dict], key, alt_key=None, head=None, tail=None):
     if not row_list:
         return []
 
