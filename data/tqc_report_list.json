@@ -7,6 +7,10 @@
             "description": "Returns a row for each assembly which is pubic in the ENA, or a row containing only the specimen's biosample accession and ToLID when there are no public assemblies for the specimen"
         },
         {
+            "name": "ena-assembly-data",
+            "description": "Returns a row for each pair of `data.id` and `dataset.id` (or null if the data table entry is not in any dataset), plus a list of assemblies the dataset is in"
+        },
+        {
             "name": "illumina-data",
             "description": "Illumina sequencing data in ToLQC"
         },
@@ -37,6 +41,10 @@
         {
             "name": "species-bioproject",
             "description": "Bioproject accessions linked to each species. Suppressed links are not shown by default, but can be shown by using the `include_suppressed` PARAM. Add a PARAM `accession=<ACCN>` to search for a matching accession in any of the fields."
+        },
+        {
+            "name": "specimen-assembly",
+            "description": "Shows assembly sets for each specimen, and a list of data files used to assemble the genome"
         },
         {
             "name": "specimen-status",
