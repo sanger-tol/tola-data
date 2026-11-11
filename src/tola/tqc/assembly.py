@@ -84,8 +84,6 @@ def show_set(
 @assembly.command
 @click.pass_context
 @click_options.file
-@click_options.file_format
-@click_options.id_list
 @click_options.pretty
 def load_set(
     ctx,
