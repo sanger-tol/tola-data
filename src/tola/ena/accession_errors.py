@@ -346,7 +346,8 @@ def cli(
     if update_flag or cache.needs_update:
         cache.cache_tolqc_assemblies()
         cache.cache_tolqc_assembly_datasets()
-        cache.cache_ena_assemblies()
+        if not cache.cache_ena_assemblies():
+            sys.exit("No entries returned from ENA filereport endpont")
         cache.log_update_time()
 
     if summary or update_flag:

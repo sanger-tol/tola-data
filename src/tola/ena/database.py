@@ -189,9 +189,10 @@ class EnaCache(CacheDB):
         )
         self.execute(sql, [url])
 
-    def cache_ena_assemblies(self, accession="PRJEB43745") -> None:
+    def cache_ena_assemblies(self, accession="PRJEB43745") -> int | None:
         """
-        Cache assembly information from the ENA `filereport` endpoint
+        Cache assembly information from the ENA `filereport` endpoint. Returns
+        the number of rows in the table.
         """
 
         ena_fields = {
@@ -240,6 +241,10 @@ class EnaCache(CacheDB):
         except duckdb.BinderException:
             # Empty result for accession
             return
+
+        if row := self.execute("SELECT count_star() FROM ena").fetchone():
+            return row[0]
+
 
     def load_ena_assemblies(self, loaded: list[dict[str, str]]) -> None:
         # Get new ENA assembly records by joining to the tolqc table.
