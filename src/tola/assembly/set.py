@@ -102,23 +102,8 @@ class AssemblySetHandler:
         self.client = client
 
     def load_submitted_set(self, asm_set: AsmSet) -> AsmSet:
-        if asm_id := asm_set.get("assembly.id"):
-            # Update assembly set
-            old_set = self.fetch_one_assembly_set("id", asm_id)
-            return self.update_assembly_set(old_set, asm_set)
-        else:
-            return self.store_new_assembly_set(asm_set)
-
-    def store_new_assembly_set(self, asm_set: AsmSet) -> AsmSet:
         self.validate_required_fields(asm_set)
         return self.store_assembly_set(asm_set)
-
-    def update_assembly_set(self, old_set: AsmSet, new_set: AsmSet) -> AsmSet:
-        self.validate_required_fields(new_set)
-        # Update any changed fields in set
-
-        # For each component, either store it if it is new (and link it to the
-        # set in the assembly_components table) or update its fields.
 
     def fetch_one_assembly_set(self, field: str, value: str) -> AsmSet:
         asm_list = self.fetch_assembly_sets(field, value)
@@ -153,6 +138,7 @@ class AssemblySetHandler:
                     "name",
                     "description",
                     "component_assn.component.status",
+                    "component_assn.component.centre.name",
                     "dataset_assn.dataset.data_assn.data",
                 ],
             )
@@ -358,11 +344,15 @@ class AssemblySetHandler:
                     spec[key] = val
             cmpt_specs.append(spec)
 
-        # Store set
-        (set_obj,) = ads.insert(
+        # Store set, using `upsert` to deal with updated fields.
+        (set_obj,) = ads.upsert(
             "assembly",
             dicts_to_core_data_objects(ads, "assembly", [set_spec]),
-        )
+        )  # ty: ignore[not-iterable]
+        if not isinstance(set_obj, DataObject):
+            raise AssemblySetHandlerError(
+                "Failed to store assembly table set entry:\n" + pretty_row(set_spec)
+            )
 
         # Store components.  Use `upsert` since some components may already be
         # stored and have "assembly.id" set.
@@ -371,7 +361,7 @@ class AssemblySetHandler:
             for x in ads.upsert(
                 "assembly",
                 dicts_to_core_data_objects(ads, "assembly", cmpt_specs),
-            )
+            )  # ty: ignore[not-iterable]
             if isinstance(x, DataObject)
         ]
 
@@ -391,6 +381,14 @@ class AssemblySetHandler:
             "loader/status/assembly", (ndjson_row(x) for x in status_specs)
         )
 
+        existing_links = {
+            x.component.id  # ty: ignore[missing-union-attribute]
+            for x in self.client.ads_get_list(
+                "assembly_source",
+                filter_spec={"source.id": {"eq": {"value": set_obj.id}}},
+            )
+        }
+
         # Link components to sets by writing new entries into assembly_components
         link_specs = [
             {
@@ -398,11 +396,13 @@ class AssemblySetHandler:
                 "component.id": cmpt.id,
             }
             for cmpt in cmpt_objs
+            if cmpt.id not in existing_links
         ]
-        ads.insert(
-            "assembly_source",
-            dicts_to_core_data_objects(ads, "assembly_source", link_specs),
-        )
+        if link_specs:
+            ads.insert(
+                "assembly_source",
+                dicts_to_core_data_objects(ads, "assembly_source", link_specs),
+            )
 
         # Fetch the new assembly set from the database
         return self.fetch_one_assembly_set("assembly.id", set_obj.id)

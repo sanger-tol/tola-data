@@ -1,12 +1,11 @@
 import logging
 import sys
-from collections.abc import Iterable
 from pathlib import Path
 
 import click
 
 from tola import click_options
-from tola.assembly.set import AssemblySetHandler
+from tola.assembly.set import AssemblySetHandler, AssemblySetHandlerError
 from tola.assembly.updater import AssemblyUpdater
 from tola.ndjson import ndjson_row
 from tola.pretty import plain_text_from_itr
@@ -99,9 +98,12 @@ def load_set(
 
     input_obj = input_objects_or_exit(ctx, file_list)
     asm_ldr = AssemblySetHandler(client)
-    output_obj = []
-    for obj in input_obj:
-        output_obj.append(asm_ldr.load_submitted_set(obj))
+    try:
+        output_obj = []
+        for obj in input_obj:
+            output_obj.append(asm_ldr.load_submitted_set(obj))
+    except AssemblySetHandlerError as ashe:
+        sys.stderr.write("\n".join(ashe.args))
     render_output(pretty, "Loaded or updated {} assembly set{}:", output_obj)
 
 
