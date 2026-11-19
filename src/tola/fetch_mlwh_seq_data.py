@@ -195,7 +195,7 @@ def pacbio_fetcher(mlwh, study_id, save_data=None):
     crsr.execute(pacbio_sql(), [str(study_id)])
     for row in crsr:
         build_remote_path(row)
-        extract_pimms_description(row)
+        extract_hifi_flavour(row)
 
         # Build data_id field, appending any tags
         data_id = row["data_id"]
@@ -244,11 +244,15 @@ def build_remote_path(row):
         row["remote_path"] = None
 
 
-def extract_pimms_description(row):
+def extract_hifi_flavour(row):
     for col in "sample_type", "sample_description":
-        if (txt := row.pop(col)) and re.search(r"\bPiMmS\b", txt, re.IGNORECASE):
-            row["pipeline_id_lims"] = "PacBio - HiFi (PiMmS)"
-            row["pcr_adapter_id"] = "TruSeq_i7s_UDI001--TruSeq_i5s_UDI001"
+        if (txt := row.pop(col)) and (
+            m := re.search(r"\b(MDA|PiMmS)\b", txt, re.IGNORECASE)
+        ):
+            flavour = "MDA" if m.group(1).lower() == "mda" else "PiMmS"
+            row["pipeline_id_lims"] = f"PacBio - HiFi ({flavour})"
+            if flavour == "PiMmS":
+                row["pcr_adapter_id"] = "Ni5--Ni5"
 
 
 @cache
