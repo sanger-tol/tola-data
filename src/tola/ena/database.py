@@ -370,7 +370,8 @@ class EnaCache(CacheDB):
               SELECT
                 genome_accession_id,
                 data_type,
-                list_sort(array_agg(run_accession)) AS run_accession_list
+                -- Multiple datasets in asm_data will duplicate run_accessions
+                list(run_accession).list_distinct().list_sort() AS run_accession_list
               FROM
                 ena_run
                 JOIN asm_data USING (run_accession)
@@ -382,7 +383,7 @@ class EnaCache(CacheDB):
               SELECT
                 dataset_id,
                 dataset_name,
-                list_sort(array_agg(run_accession)) AS run_accession_list
+                list(run_accession).list_sort() AS run_accession_list
               FROM
                 asm_data
               GROUP BY
